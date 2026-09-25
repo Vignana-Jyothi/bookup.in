@@ -13,6 +13,11 @@ export default function Overview() {
   const metrics = calculateMetrics(state.bookings || []);
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Active services check for guard-rail banner
+  const activeServices = (state.services || []).filter(s => s.isActive);
+  const showServicesBanner = activeServices.length === 0 && !bannerDismissed;
 
   // Today's date string
   const todayStr = new Date().toISOString().split('T')[0];
@@ -52,6 +57,58 @@ export default function Overview() {
 
   return (
     <div className="overview-layout-grid animate-fade-in-up">
+      {/* Zero-services onboarding banner */}
+      {showServicesBanner && (
+        <div
+          style={{
+            gridColumn: '1 / -1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            padding: '14px 20px',
+            borderRadius: 'var(--radius-card)',
+            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+            border: '1px solid #F59E0B',
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>🚀</span>
+            <div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '14px', color: '#92400E', marginBottom: '2px' }}>
+                Your booking page isn't ready yet
+              </div>
+              <div style={{ fontSize: '13px', color: '#78350F', lineHeight: 1.4 }}>
+                Add your first service so clients can book appointments through your link.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <PillButton variant="primary" size="sm" onClick={() => navigate('/dashboard/services')}>
+              + Add a Service
+            </PillButton>
+            <button
+              type="button"
+              onClick={() => setBannerDismissed(true)}
+              aria-label="Dismiss banner"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '18px',
+                color: '#92400E',
+                padding: '4px',
+                lineHeight: 1,
+                opacity: 0.7,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
       {/* Left Column: Quick Stats + Today's Schedule */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0, width: '100%' }}>
         {/* Quick Stats Header + 3 Stat Cards */}

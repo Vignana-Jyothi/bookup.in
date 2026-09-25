@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore, formatCurrency } from '../../data/store';
 import { getInitials } from '../../utils/helpers';
 import { getBookingUrl, getBookingDisplayUrl } from '../../utils/url';
@@ -11,6 +12,7 @@ import BrandLogo from '../../components/ui/BrandLogo';
 
 export default function BookingPageManagement() {
   const { state, addToast } = useStore();
+  const navigate = useNavigate();
   const provider = state.provider;
   const slug = provider?.slug || 'my-page';
   const bookingUrl = getBookingUrl(slug);
@@ -33,9 +35,50 @@ export default function BookingPageManagement() {
   };
 
   const activeServices = (state.services || []).filter(s => s.isActive);
+  const hasActiveServices = activeServices.length > 0;
+
+  // Shared disabled-button style when no active services
+  const disabledBtnStyle = {
+    opacity: 0.45,
+    cursor: 'not-allowed',
+    pointerEvents: 'none',
+  };
 
   return (
     <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* No-services warning banner */}
+      {!hasActiveServices && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            padding: '14px 20px',
+            borderRadius: 'var(--radius-card)',
+            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+            border: '1px solid #F59E0B',
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '14px', color: '#92400E', marginBottom: '2px' }}>
+                Sharing disabled — no active services
+              </div>
+              <div style={{ fontSize: '13px', color: '#78350F', lineHeight: 1.4 }}>
+                Add at least one service before sharing your booking link. Without services, clients see an empty page.
+              </div>
+            </div>
+          </div>
+          <PillButton variant="primary" size="sm" onClick={() => navigate('/dashboard/services')}>
+            + Add a Service
+          </PillButton>
+        </div>
+      )}
+
       {/* Link Section Card */}
       <div
         className="card"
@@ -70,23 +113,34 @@ export default function BookingPageManagement() {
                 fontWeight: 600,
                 color: 'var(--color-text)',
                 wordBreak: 'break-all',
+                ...(!hasActiveServices ? { opacity: 0.5 } : {}),
               }}>
                 {bookingUrl}
               </span>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <PillButton variant="primary" size="sm" onClick={copyLink}>
-                  📋 Copy Link
-                </PillButton>
-                <a
-                  href={bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'none' }}
-                >
-                  <PillButton variant="secondary" size="sm">
-                    ↗ Open Page
+                <span style={!hasActiveServices ? disabledBtnStyle : {}}>
+                  <PillButton variant="primary" size="sm" onClick={hasActiveServices ? copyLink : undefined}>
+                    📋 Copy Link
                   </PillButton>
-                </a>
+                </span>
+                {hasActiveServices ? (
+                  <a
+                    href={bookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <PillButton variant="secondary" size="sm">
+                      ↗ Open Page
+                    </PillButton>
+                  </a>
+                ) : (
+                  <span style={disabledBtnStyle}>
+                    <PillButton variant="secondary" size="sm">
+                      ↗ Open Page
+                    </PillButton>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -94,7 +148,8 @@ export default function BookingPageManagement() {
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '6px' }}>
             <button
               type="button"
-              onClick={shareWhatsApp}
+              onClick={hasActiveServices ? shareWhatsApp : undefined}
+              disabled={!hasActiveServices}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -106,18 +161,20 @@ export default function BookingPageManagement() {
                 border: 'none',
                 fontWeight: 600,
                 fontSize: '13px',
-                cursor: 'pointer',
+                cursor: hasActiveServices ? 'pointer' : 'not-allowed',
                 transition: 'transform var(--transition-fast)',
+                ...(!hasActiveServices ? { opacity: 0.45 } : {}),
               }}
             >
               <span>💬</span> Share to WhatsApp
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={hasActiveServices ? () => {
                 copyLink();
                 addToast('Booking link copied! Paste it in your Instagram bio 📸');
-              }}
+              } : undefined}
+              disabled={!hasActiveServices}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -129,7 +186,8 @@ export default function BookingPageManagement() {
                 border: '1px solid var(--theme-border)',
                 fontWeight: 600,
                 fontSize: '13px',
-                cursor: 'pointer',
+                cursor: hasActiveServices ? 'pointer' : 'not-allowed',
+                ...(!hasActiveServices ? { opacity: 0.45 } : {}),
               }}
             >
               <span>📸</span> Instagram Bio Link
@@ -138,147 +196,147 @@ export default function BookingPageManagement() {
         </div>
       </div>
 
-      {/* Live Preview Card */}
-      <div
-        className="card"
-        style={{
-          borderRadius: 'var(--radius-card)',
-          background: 'var(--theme-bg-card)',
-          border: '1px solid var(--theme-border)',
-          boxShadow: 'var(--shadow-card)',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{
-          padding: '18px 24px',
-          borderBottom: '1px solid var(--theme-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
-              Live Client Preview
-            </h3>
-            <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>
-              Interactive view of your customer-facing booking experience
+      {/* Live Preview Card — or "Not Ready" placeholder */}
+      {hasActiveServices ? (
+        <div
+          className="card"
+          style={{
+            borderRadius: 'var(--radius-card)',
+            background: 'var(--theme-bg-card)',
+            border: '1px solid var(--theme-border)',
+            boxShadow: 'var(--shadow-card)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            padding: '18px 24px',
+            borderBottom: '1px solid var(--theme-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div>
+              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
+                Live Client Preview
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>
+                Interactive view of your customer-facing booking experience
+              </span>
+            </div>
+            <span style={{
+              padding: '4px 12px',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--theme-badge-bg)',
+              color: 'var(--theme-badge-text)',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.02em',
+            }}>
+              LIVE PREVIEW
             </span>
           </div>
-          <span style={{
-            padding: '4px 12px',
-            borderRadius: 'var(--radius-pill)',
-            background: 'var(--theme-badge-bg)',
-            color: 'var(--theme-badge-text)',
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '0.02em',
+
+          <div style={{
+            padding: '36px 16px',
+            background: 'var(--theme-canvas-bg)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}>
-            LIVE PREVIEW
-          </span>
-        </div>
+            {/* Mobile phone card frame matching BookingPage.jsx */}
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '390px',
+                background: 'var(--theme-bg-card)',
+                borderRadius: '28px',
+                border: '1px solid var(--theme-border)',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.08)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {/* Customer Booking Header */}
+              <div style={{
+                padding: '18px 20px',
+                borderBottom: '1px solid var(--theme-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    background: 'var(--theme-input-bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    border: '1.5px solid var(--color-lime)',
+                  }}>
+                    {provider?.avatar || provider?.avatarUrl ? (
+                      <img src={provider.avatar || provider.avatarUrl} alt={provider?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      getInitials(provider?.name || 'U')
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>
+                      {provider?.name || 'Your Name'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>
+                      {provider?.businessName || 'Your Studio / Business'}
+                    </div>
+                  </div>
+                </div>
 
-        <div style={{
-          padding: '36px 16px',
-          background: 'var(--theme-canvas-bg)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-          {/* Mobile phone card frame matching BookingPage.jsx */}
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '390px',
-              background: 'var(--theme-bg-card)',
-              borderRadius: '28px',
-              border: '1px solid var(--theme-border)',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.08)',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {/* Customer Booking Header */}
-            <div style={{
-              padding: '18px 20px',
-              borderBottom: '1px solid var(--theme-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <BrandLogo size="sm" />
+              </div>
+
+              {/* Provider Bio / Headline */}
+              <div style={{ padding: '20px 20px 14px' }}>
                 <div style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  background: 'var(--theme-input-bg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                  border: '1.5px solid var(--color-lime)',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  color: 'var(--color-text)',
+                  letterSpacing: '-0.02em',
+                  marginBottom: '6px',
                 }}>
-                  {provider?.avatar || provider?.avatarUrl ? (
-                    <img src={provider.avatar || provider.avatarUrl} alt={provider?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    getInitials(provider?.name || 'U')
-                  )}
+                  Book a session.
                 </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>
-                    {provider?.name || 'Your Name'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>
-                    {provider?.businessName || 'Your Studio / Business'}
-                  </div>
+                <p style={{
+                  fontSize: '12px',
+                  color: 'var(--theme-text-muted)',
+                  lineHeight: 1.4,
+                  margin: 0,
+                }}>
+                  {provider?.bio && provider.bio.trim().length >= 20
+                    ? (provider.bio.substring(0, 110) + (provider.bio.length > 110 ? '...' : ''))
+                    : `Select a service below to view real-time open slots and confirm.`}
+                </p>
+              </div>
+
+              {/* Service Selection list matching BookingPage.jsx */}
+              <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: 'var(--theme-text-muted)',
+                  marginBottom: '2px',
+                }}>
+                  Available Services
                 </div>
-              </div>
 
-              <BrandLogo size="sm" />
-            </div>
-
-            {/* Provider Bio / Headline */}
-            <div style={{ padding: '20px 20px 14px' }}>
-              <div style={{
-                fontFamily: 'var(--font-heading)',
-                fontSize: '20px',
-                fontWeight: 800,
-                color: 'var(--color-text)',
-                letterSpacing: '-0.02em',
-                marginBottom: '6px',
-              }}>
-                Book a session.
-              </div>
-              <p style={{
-                fontSize: '12px',
-                color: 'var(--theme-text-muted)',
-                lineHeight: 1.4,
-                margin: 0,
-              }}>
-                {provider?.bio && provider.bio.trim().length >= 20
-                  ? (provider.bio.substring(0, 110) + (provider.bio.length > 110 ? '...' : ''))
-                  : `Select a service below to view real-time open slots and confirm.`}
-              </p>
-            </div>
-
-            {/* Service Selection list matching BookingPage.jsx */}
-            <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: 'var(--theme-text-muted)',
-                marginBottom: '2px',
-              }}>
-                Available Services
-              </div>
-
-              {activeServices.length > 0 ? (
-                activeServices.map(s => {
+                {activeServices.map(s => {
                   const isSelected = selectedPreviewService === s.id;
                   return (
                     <div
@@ -324,56 +382,77 @@ export default function BookingPageManagement() {
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div style={{ fontSize: '12px', color: 'var(--theme-text-muted)', textAlign: 'center', padding: '16px' }}>
-                  No active services yet.
+                })}
+
+                {/* Call to action pill inside preview */}
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-pill)',
+                      background: '#0E0E0E',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontFamily: 'var(--font-heading)',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    Select Time Slot →
+                  </button>
                 </div>
-              )}
-
-              {/* Call to action pill inside preview */}
-              <div style={{ marginTop: '10px' }}>
-                <button
-                  type="button"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: 'var(--radius-pill)',
-                    background: '#0E0E0E',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    fontFamily: 'var(--font-heading)',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  Select Time Slot →
-                </button>
               </div>
-            </div>
 
-            {/* Card Footer */}
-            <div style={{
-              padding: '10px 16px',
-              borderTop: '1px solid var(--theme-border)',
-              textAlign: 'center',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}>
-              <span style={{ fontSize: '11px', color: 'var(--theme-text-muted)', fontWeight: 500 }}>
-                powered by <strong>calup.</strong>
-              </span>
+              {/* Card Footer */}
+              <div style={{
+                padding: '10px 16px',
+                borderTop: '1px solid var(--theme-border)',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}>
+                <span style={{ fontSize: '11px', color: 'var(--theme-text-muted)', fontWeight: 500 }}>
+                  powered by <strong>calup.</strong>
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* No active services — "Not ready" placeholder instead of Live Preview */
+        <div
+          className="card"
+          style={{
+            borderRadius: 'var(--radius-card)',
+            background: 'var(--theme-bg-card)',
+            border: '1px dashed var(--theme-border)',
+            boxShadow: 'none',
+            padding: '48px 24px',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📋</div>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: '0 0 6px', color: 'var(--color-text)' }}>
+            Your booking page isn't ready yet
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '0 0 20px', maxWidth: '380px', marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+            The live preview will appear here once you add at least one active service.
+            Without services, clients who visit your link will see an empty page.
+          </p>
+          <PillButton variant="primary" onClick={() => navigate('/dashboard/services')}>
+            + Add Your First Service
+          </PillButton>
+        </div>
+      )}
     </div>
   );
 }
