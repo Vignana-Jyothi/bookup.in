@@ -3,16 +3,20 @@
  * Communicates with backend /api/public/bookings/manage/* endpoints.
  */
 
-import { dbService } from '../supabase/dbService';
-import { isSupabaseConfigured } from '../supabase/supabaseClient';
+import { dbService } from '../supabase/dbService.js';
+import { isSupabaseConfigured } from '../supabase/supabaseClient.js';
 
 export function getApiBase() {
-  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
+  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
+                 (typeof process !== 'undefined' && process.env?.VITE_API_URL) || '';
   if (envUrl.trim()) {
     return `${envUrl.trim().replace(/\/$/, '')}/api`;
   }
   if (typeof window !== 'undefined' && window.location?.hostname?.includes('vercel.app')) {
     return 'https://bookup-in.onrender.com/api';
+  }
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    return `http://localhost:${process.env.PORT || 3001}/api`;
   }
   return '/api';
 }

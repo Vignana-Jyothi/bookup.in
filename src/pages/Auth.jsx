@@ -329,27 +329,37 @@ export function Signup() {
           email,
           createdAt: data.user.created_at || new Date().toISOString(),
         };
-        dispatch({ type: ACTIONS.SIGNUP, payload: user });
 
         if (data.session) {
           // Immediately provision provider profile in Supabase so user is always linked
+          let newProv = null;
           try {
             const provSlug = `${generateSlug(form.name.trim())}-${data.user.id.slice(0, 5)}`;
-            const newProv = await dbService.createProviderProfile({
+            newProv = await dbService.createProviderProfile({
               userId: data.user.id,
               name: form.name.trim(),
               slug: provSlug,
               email,
             });
-            if (newProv) {
-              dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: newProv });
-            }
           } catch (_pErr) {
             console.warn('Provider profile pre-provision note:', _pErr.message);
+          }
+
+          dispatch({
+            type: ACTIONS.SIGNUP,
+            payload: {
+              user,
+              provider: newProv || null,
+            },
+          });
+
+          if (newProv) {
+            dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: newProv });
           }
           addToast("Account created! Let's set up your booking page. 🚀");
           navigate('/onboarding');
         } else {
+          dispatch({ type: ACTIONS.SIGNUP, payload: { user, provider: null } });
           addToast('Account created! Please check your email to confirm your account, then log in.', 'info', 6000);
           navigate('/login');
         }

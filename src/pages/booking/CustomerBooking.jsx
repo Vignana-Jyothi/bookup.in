@@ -102,14 +102,19 @@ export default function CustomerBooking() {
     };
   }, [lookupIdentifier, demoBooking, hasBookings, dispatch]);
 
-  const provider = supabaseBookingData?.provider || state.provider || DEMO_PROVIDER;
-  const policies = supabaseBookingData?.policies || supabaseBookingData?.cancellationPolicy || state.policies || DEMO_POLICIES;
-  const availability = supabaseBookingData?.availability || state.availability;
-  const services = useMemo(
-    () => supabaseBookingData?.services || state.services || [],
-    [supabaseBookingData?.services, state.services]
+  const isStateBooking = Boolean(
+    bookingInState &&
+    state.provider &&
+    (!bookingInState.providerId || bookingInState.providerId === state.provider.id)
   );
-  const isGcal = Boolean(state.googleCalendar?.isConnected);
+  const provider = supabaseBookingData?.provider || (isStateBooking ? state.provider : (demoBooking ? DEMO_PROVIDER : null));
+  const policies = supabaseBookingData?.policies || supabaseBookingData?.cancellationPolicy || (isStateBooking ? state.policies : DEMO_POLICIES);
+  const availability = supabaseBookingData?.availability || (isStateBooking ? state.availability : null);
+  const services = useMemo(
+    () => supabaseBookingData?.services || (isStateBooking ? (state.services || []) : []),
+    [supabaseBookingData?.services, isStateBooking, state.services]
+  );
+  const isGcal = Boolean(isStateBooking && state.googleCalendar?.isConnected);
   const providerSlug = provider?.slug || 'alex-johnson';
 
   const managementUrl = buildManagementUrl(resolvedBooking?.managementToken || lookupIdentifier);
@@ -128,13 +133,13 @@ export default function CustomerBooking() {
     return getTimeSlotsDetailedForDate(
       newDate,
       availability,
-      services.length > 0 ? services : (state.services || []),
+      services.length > 0 ? services : (isStateBooking ? (state.services || []) : []),
       resolvedBooking.serviceId,
-      state.bookings || [],
+      isStateBooking ? (state.bookings || []) : [],
       gcalEvents,
       resolvedBooking.id // Exclude self
     );
-  }, [resolvedBooking, newDate, availability, services, state.services, state.bookings, isGcal]);
+  }, [resolvedBooking, newDate, availability, services, isStateBooking, state.services, state.bookings, isGcal]);
 
   // Max advance date
   const maxAdvanceDays = availability?.maxAdvanceBooking ?? 30;
@@ -298,8 +303,8 @@ export default function CustomerBooking() {
   const isCompleted = resolvedBooking.status === 'completed';
 
   const providerName = provider?.name || provider?.businessName || 'Coach';
-  const providerUpiId = supabaseBookingData?.provider?.upiId || provider?.upiId || state.provider?.upiId || null;
-  const providerQrCodeUrl = supabaseBookingData?.provider?.qrCodeUrl || provider?.qrCodeUrl || state.provider?.qrCodeUrl || null;
+  const providerUpiId = supabaseBookingData?.provider?.upiId || null;
+  const providerQrCodeUrl = supabaseBookingData?.provider?.qrCodeUrl || null;
   const showPaymentSection = Boolean(isPaidService && paymentStatus !== 'not_required');
 
   // Compute Headline, Subline, Celebrate Icon, and Status Badge strictly from payment_status and booking state

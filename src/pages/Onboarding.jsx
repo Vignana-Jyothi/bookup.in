@@ -3,11 +3,11 @@
  * 8-step wizard for new providers
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useStore, generateId, formatCurrency } from '../data/store';
 import { ACTIONS } from '../data/actions';
-import { generateSlug, getInitials, DAYS_OF_WEEK, DAY_FULL_LABELS } from '../utils/helpers';
+import { getInitials, DAYS_OF_WEEK, DAY_FULL_LABELS } from '../utils/helpers';
 import { getBookingUrl, getBookingDisplayUrl } from '../utils/url';
 import { supabase, isSupabaseConfigured } from '../services/supabase/supabaseClient';
 import { dbService } from '../services/supabase/dbService';
@@ -44,7 +44,24 @@ export default function Onboarding() {
 
   const [stepError, setStepError] = useState('');
 
-  const slug = generateSlug(providerName || businessName || 'my-page');
+  // Always use the permanent slug saved in the database, never a locally generated slug
+  const slug = state.provider?.slug || 'my-page';
+
+  useEffect(() => {
+    if (!state.provider?.slug && isSupabaseConfigured()) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          dbService.getProviderByUserId(user.id).then(prov => {
+            if (prov) {
+              dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: prov });
+            }
+          });
+        }
+      }).catch(err => {
+        console.warn('Could not hydrate provider in onboarding:', err);
+      });
+    }
+  }, [state.provider?.slug, dispatch]);
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -126,7 +143,6 @@ export default function Onboarding() {
           await dbService.updateProviderProfile(providerId, {
             name: providerName,
             businessName,
-            slug,
             bio,
             bufferTime: bookingRules.bufferTime,
             minNotice: bookingRules.minNotice,
@@ -134,11 +150,14 @@ export default function Onboarding() {
             avatarUrl,
           });
         } else {
+          const provName = providerName || authUser.user_metadata?.name || 'Provider';
+          const baseSlug = (provName || 'provider').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'provider';
+          const provSlug = `${baseSlug}-${authUser.id.slice(0, 5)}`;
           const newProv = await dbService.createProviderProfile({
             userId: authUser.id,
-            name: providerName,
+            name: provName,
             businessName,
-            slug,
+            slug: provSlug,
             email: authUser.email,
             phone: state.provider?.phone || '',
             bio,
@@ -149,8 +168,9 @@ export default function Onboarding() {
         }
 
         // 2. Create Service
-        if (service.name.trim()) {
-          await dbService.createService({
+        let createdServiceRow = null;
+        if (service.name.trim() && providerId) {
+          createdServiceRow = await dbService.createService({
             providerId,
             name: service.name.trim(),
             description: service.description.trim(),
@@ -174,6 +194,12 @@ export default function Onboarding() {
           depositAmount: policies.depositAmount,
           policyText: `Cancel more than ${bookingRules.cancellationWindow} hours before your appointment: full deposit refund. Late cancellation or no-show: deposit forfeited (${formatCurrency(policies.depositAmount)}).`,
         });
+
+        // Refresh provider in state
+        const fullProv = await dbService.getProviderByUserId(authUser.id);
+        if (fullProv) {
+          dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: fullProv });
+        }
       } catch (err) {
         console.error('Failed to persist onboarding to Supabase:', err);
       }
@@ -186,14 +212,13 @@ export default function Onboarding() {
         name: providerName,
         businessName,
         bio,
-        slug,
       }
     });
 
     if (service.name.trim()) {
       dispatch({
         type: ACTIONS.ADD_SERVICE,
-        payload: {
+        payload: createdServiceRow || {
           id: generateId('svc'),
           providerId,
           name: service.name,

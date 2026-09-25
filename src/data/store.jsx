@@ -73,12 +73,18 @@ function reducer(state, action) {
         auth: { isAuthenticated: true, isDemoMode: false, user: action.payload, loading: false },
       };
 
-    case ACTIONS.SIGNUP:
+    case ACTIONS.SIGNUP: {
+      const userObj = action.payload?.user || action.payload;
+      const provObj = action.payload?.provider || (action.payload?.slug ? action.payload : state.provider);
       return {
         ...state,
-        auth: { isAuthenticated: true, isDemoMode: false, user: action.payload, loading: false },
-        provider: action.payload,
+        auth: { isAuthenticated: true, isDemoMode: false, user: userObj, loading: false },
+        provider: provObj,
       };
+    }
+
+    case ACTIONS.SET_SERVICES:
+      return { ...state, services: Array.isArray(action.payload) ? action.payload : [] };
 
     case ACTIONS.LOGOUT:
       localStorage.removeItem(STORAGE_KEY);

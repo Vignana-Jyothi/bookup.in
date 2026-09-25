@@ -40,6 +40,7 @@ export default function PublicBookingPage() {
 
   const [supabaseData, setSupabaseData] = useState(null);
   const [isLoadingPublic, setIsLoadingPublic] = useState(!isDemo);
+  const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,14 +51,23 @@ export default function PublicBookingPage() {
 
     if (slug) {
       setIsLoadingPublic(true);
+      setFetchError(null);
       dbService.getPublicBookingData(slug).then(data => {
         if (isMounted) {
-          if (data) setSupabaseData(data);
+          if (data) {
+            setSupabaseData(data);
+            if (data.error) {
+              setFetchError(data.error);
+            }
+          }
           setIsLoadingPublic(false);
         }
       }).catch(err => {
         console.warn('Could not load public provider data from Supabase:', err.message);
-        if (isMounted) setIsLoadingPublic(false);
+        if (isMounted) {
+          setFetchError(err.message || 'Database error');
+          setIsLoadingPublic(false);
+        }
       });
     }
     return () => { isMounted = false; };
@@ -197,9 +207,26 @@ export default function PublicBookingPage() {
         <div className="janjiyuk-phone-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 480 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚡</div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Loading booking page...</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Loading services...</h3>
             <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)' }}>Please wait</p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="janjiyuk-booking-canvas">
+        <div className="janjiyuk-phone-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '8px' }}>Unable to load services</h3>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '14px', lineHeight: 1.5 }}>
+            Unable to load services. Please try again.
+          </p>
+          <PillButton variant="primary" onClick={() => window.location.reload()}>
+            Retry
+          </PillButton>
         </div>
       </div>
     );
@@ -213,6 +240,53 @@ export default function PublicBookingPage() {
           <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '8px' }}>Booking page not found</h3>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '14px', lineHeight: 1.5 }}>
             The booking link <strong>/book/{slug}</strong> doesn't exist or hasn't been configured yet.
+          </p>
+          <PillButton variant="primary" onClick={() => navigate('/')}>
+            Go to CalUp
+          </PillButton>
+        </div>
+      </div>
+    );
+  }
+
+  if (services.length === 0) {
+    return (
+      <div className="janjiyuk-booking-canvas">
+        <div className="janjiyuk-phone-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '20px' }}>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                overflow: 'hidden',
+                background: '#252525',
+                color: '#FFFFFF',
+                border: '2px solid var(--color-lime)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: '14px',
+                flexShrink: 0,
+              }}
+            >
+              {provider?.avatar || provider?.avatarUrl ? (
+                <img src={provider.avatar || provider.avatarUrl} alt={provider.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                getInitials(provider?.name || 'User')
+              )}
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <h2 className="header-provider-name" style={{ fontSize: '1.1rem', margin: 0 }}>
+                {provider.businessName || provider.name}
+              </h2>
+            </div>
+          </div>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⏳</div>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '8px' }}>This provider hasn't added any services yet</h3>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '14px', lineHeight: 1.5 }}>
+            This coach is still setting up their page. Please check back soon.
           </p>
           <PillButton variant="primary" onClick={() => navigate('/')}>
             Go to CalUp

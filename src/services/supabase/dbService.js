@@ -81,6 +81,18 @@ export const dbService = {
     };
   },
 
+  async getCurrentProvider() {
+    if (!isSupabaseConfigured()) return null;
+    try {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) return null;
+      return await this.getProviderByUserId(user.id);
+    } catch (err) {
+      console.error('[dbService] getCurrentProvider error:', err);
+      return null;
+    }
+  },
+
   async createProviderProfile({ userId, name, businessName, slug, email, phone, bio }) {
     if (!isSupabaseConfigured()) return null;
 
@@ -288,7 +300,11 @@ export const dbService = {
     }
 
     const { data, error } = await query;
-    if (error || !data) return [];
+    if (error) {
+      console.error('[dbService] Error fetching services from Supabase:', error);
+      throw error;
+    }
+    if (!data) return [];
 
     return data.map(s => ({
       id: s.id,
@@ -306,12 +322,37 @@ export const dbService = {
   async createService(service) {
     if (!isSupabaseConfigured()) return null;
 
+    let targetProviderId = service.providerId;
+
+    // 1. If providerId missing, resolve authoritative provider from current auth user
+    if (!targetProviderId) {
+      const currentProvider = await this.getCurrentProvider();
+      targetProviderId = currentProvider?.id;
+    } else {
+      // 2. Guard against auth.users.id being accidentally passed as providerId
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && targetProviderId === user.id) {
+          const currentProvider = await this.getCurrentProvider();
+          if (currentProvider?.id) {
+            targetProviderId = currentProvider.id;
+          }
+        }
+      } catch (err) {
+        console.warn('[dbService] Provider identity check error in createService:', err);
+      }
+    }
+
+    if (!targetProviderId) {
+      throw new Error('Authoritative provider identity could not be resolved. Please log in again.');
+    }
+
     const { data, error } = await supabase
       .from('services')
       .insert({
-        provider_id: service.providerId,
-        name: service.name,
-        description: service.description || '',
+        provider_id: targetProviderId,
+        name: service.name.trim(),
+        description: (service.description || '').trim(),
         duration: Number(service.duration) || 60,
         price: Number(service.price) || 0,
         deposit_amount: Number(service.depositAmount) || 0,
@@ -321,7 +362,7 @@ export const dbService = {
       .single();
 
     if (error) {
-      console.error('Error creating service:', error);
+      console.error('[dbService] Error creating service in Supabase:', error);
       throw error;
     }
 
@@ -959,27 +1000,40 @@ export const dbService = {
     const provider = await this.getProviderBySlug(slug);
     if (!provider) return null;
 
-    // Parallel fetch services, availability, and policies (NO customer PII or bookings)
-    const [services, availabilitySchedule, policy] = await Promise.all([
-      this.getServices(provider.id, true),
-      this.getAvailability(provider.id),
-      this.getPolicy(provider.id),
-    ]);
+    try {
+      // Parallel fetch services, availability, and policies (NO customer PII or bookings)
+      const [services, availabilitySchedule, policy] = await Promise.all([
+        this.getServices(provider.id, true),
+        this.getAvailability(provider.id),
+        this.getPolicy(provider.id),
+      ]);
 
-    const availability = {
-      schedule: availabilitySchedule,
-      bufferTime: provider.bufferTime ?? 15,
-      minNotice: provider.minNotice ?? 2,
-      maxAdvanceBooking: provider.maxAdvanceBooking ?? 30,
-    };
+      const availability = {
+        schedule: availabilitySchedule,
+        bufferTime: provider.bufferTime ?? 15,
+        minNotice: provider.minNotice ?? 2,
+        maxAdvanceBooking: provider.maxAdvanceBooking ?? 30,
+      };
 
-    return {
-      provider,
-      services,
-      availability,
-      bookings: [],
-      policies: policy,
-    };
+      return {
+        provider,
+        services,
+        availability,
+        bookings: [],
+        policies: policy,
+        error: null,
+      };
+    } catch (err) {
+      console.error('[dbService] getPublicBookingData error:', err);
+      return {
+        provider,
+        services: [],
+        availability: null,
+        bookings: [],
+        policies: null,
+        error: err.message || 'Database error loading services',
+      };
+    }
   },
 
   // ===========================================================================
@@ -992,12 +1046,17 @@ export const dbService = {
     const provider = await this.getProviderByUserId(userId);
     if (!provider) return null;
 
-    const [services, availabilitySchedule, bookings, policy] = await Promise.all([
+    const [servicesRes, availRes, bookingsRes, policyRes] = await Promise.allSettled([
       this.getServices(provider.id, false),
       this.getAvailability(provider.id),
       this.getBookings(provider.id),
       this.getPolicy(provider.id),
     ]);
+
+    const services = servicesRes.status === 'fulfilled' ? servicesRes.value : [];
+    const availabilitySchedule = availRes.status === 'fulfilled' ? availRes.value : null;
+    const bookings = bookingsRes.status === 'fulfilled' ? bookingsRes.value : [];
+    const policy = policyRes.status === 'fulfilled' ? policyRes.value : null;
 
     const availability = {
       schedule: availabilitySchedule,

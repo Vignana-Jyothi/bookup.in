@@ -3,7 +3,7 @@
  * Enhanced with input validation and content quality nudges
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useStore, generateId, formatCurrency } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
@@ -26,11 +26,48 @@ export default function Services() {
   const [editingService, setEditingService] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', price: '', duration: 60 });
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [servicesError, setServicesError] = useState(null);
+
+  // Authoritative database hydration on mount
+  const fetchServices = useCallback(async () => {
+    if (state.auth?.isDemoMode || !isSupabaseConfigured()) return;
+
+    let provId = state.provider?.id;
+    if (!provId) {
+      const prov = await dbService.getCurrentProvider();
+      if (prov?.id) {
+        provId = prov.id;
+        dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: prov });
+      }
+    }
+
+    if (provId) {
+      try {
+        setLoadingServices(true);
+        setServicesError(null);
+        const svcs = await dbService.getServices(provId, false);
+        dispatch({ type: ACTIONS.SET_SERVICES, payload: svcs });
+      } catch (err) {
+        console.error('[Services] Failed to load services:', err);
+        setServicesError('Failed to load services from server. Please refresh.');
+      } finally {
+        setLoadingServices(false);
+      }
+    }
+  }, [state.auth?.isDemoMode, state.provider?.id, dispatch]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
   const openCreate = () => {
     setForm({ name: '', description: '', price: '1000', duration: 60 });
     setEditingService(null);
     setErrors({});
+    setSubmitError('');
     setShowForm(true);
   };
 
@@ -43,6 +80,7 @@ export default function Services() {
     });
     setEditingService(service);
     setErrors({});
+    setSubmitError('');
     setShowForm(true);
   };
 
@@ -73,38 +111,58 @@ export default function Services() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validateForm() || submitting) return;
 
-    if (editingService) {
-      if (!state.auth?.isDemoMode && isSupabaseConfigured() && !editingService.id.startsWith('svc-')) {
-        dbService.updateService(editingService.id, {
-          name: form.name.trim(),
-          description: form.description.trim(),
-          price: Number(form.price),
-          duration: Number(form.duration),
-          depositAmount: 0,
-        }).catch(err => console.error('Failed to update service in Supabase:', err));
-      }
+    setSubmitError('');
+    setSubmitting(true);
 
-      dispatch({
-        type: ACTIONS.UPDATE_SERVICE,
-        payload: {
-          id: editingService.id,
-          name: form.name.trim(),
-          description: form.description.trim(),
-          price: Number(form.price),
-          duration: Number(form.duration),
-          depositAmount: 0,
+    try {
+      if (editingService) {
+        if (!state.auth?.isDemoMode && isSupabaseConfigured() && !editingService.id.startsWith('svc-')) {
+          await dbService.updateService(editingService.id, {
+            name: form.name.trim(),
+            description: form.description.trim(),
+            price: Number(form.price),
+            duration: Number(form.duration),
+            depositAmount: 0,
+          });
         }
-      });
-      addToast('Service updated ✓');
-    } else {
-      let newServiceId = generateId('svc');
 
-      if (!state.auth?.isDemoMode && isSupabaseConfigured() && state.provider?.id) {
-        try {
-          const created = await dbService.createService({
-            providerId: state.provider.id,
+        dispatch({
+          type: ACTIONS.UPDATE_SERVICE,
+          payload: {
+            id: editingService.id,
+            name: form.name.trim(),
+            description: form.description.trim(),
+            price: Number(form.price),
+            duration: Number(form.duration),
+            depositAmount: 0,
+          }
+        });
+        addToast('Service updated ✓');
+        setShowForm(false);
+      } else {
+        let createdService = null;
+
+        if (!state.auth?.isDemoMode && isSupabaseConfigured()) {
+          // 1. Resolve authoritative provider identity
+          let authoritativeProviderId = state.provider?.id;
+
+          const currentProvider = await dbService.getCurrentProvider();
+          if (currentProvider?.id) {
+            authoritativeProviderId = currentProvider.id;
+            if (state.provider?.id !== currentProvider.id) {
+              dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: currentProvider });
+            }
+          }
+
+          if (!authoritativeProviderId) {
+            throw new Error('Could not resolve provider profile. Please check your connection or log in again.');
+          }
+
+          // 2. Insert service into Supabase
+          createdService = await dbService.createService({
+            providerId: authoritativeProviderId,
             name: form.name.trim(),
             description: form.description.trim(),
             price: Number(form.price),
@@ -112,18 +170,16 @@ export default function Services() {
             depositAmount: 0,
             isActive: true,
           });
-          if (created?.id) {
-            newServiceId = created.id;
-          }
-        } catch (err) {
-          console.error('Failed to create service in Supabase:', err);
-        }
-      }
 
-      dispatch({
-        type: ACTIONS.ADD_SERVICE,
-        payload: {
-          id: newServiceId,
+          // Confirm the insert succeeded
+          if (!createdService || !createdService.id) {
+            throw new Error('Database insert did not return a valid service.');
+          }
+        }
+
+        // 3. ONLY THEN update local application state
+        const newServicePayload = createdService || {
+          id: generateId('svc'),
           providerId: state.provider?.id,
           name: form.name.trim(),
           description: form.description.trim(),
@@ -132,28 +188,54 @@ export default function Services() {
           depositAmount: 0,
           isActive: true,
           createdAt: new Date().toISOString(),
-        }
-      });
-      addToast('Service created ✓');
+        };
+
+        dispatch({
+          type: ACTIONS.ADD_SERVICE,
+          payload: newServicePayload,
+        });
+
+        // 4. ONLY THEN show success toast and close modal
+        addToast('Service created ✓');
+        setShowForm(false);
+      }
+    } catch (err) {
+      console.error('[Services] Service operation failed:', err);
+      const friendlyMsg = err.message || 'Failed to save service. Please try again.';
+      setSubmitError(friendlyMsg);
+      addToast(friendlyMsg, 'error');
+    } finally {
+      setSubmitting(false);
     }
-    setShowForm(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('svc-')) {
-      dbService.deleteService(id).catch(err => console.error('Failed to delete service in Supabase:', err));
+      try {
+        await dbService.deleteService(id);
+      } catch (err) {
+        console.error('[Services] Failed to delete service in Supabase:', err);
+        addToast('Failed to delete service from database.', 'error');
+        return;
+      }
     }
 
     dispatch({ type: ACTIONS.DELETE_SERVICE, payload: id });
     addToast('Service deleted');
   };
 
-  const handleToggle = (id) => {
+  const handleToggle = async (id) => {
     const service = state.services.find(s => s.id === id);
     const nextState = !service?.isActive;
 
     if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('svc-')) {
-      dbService.toggleService(id, nextState).catch(err => console.error('Failed to toggle service in Supabase:', err));
+      try {
+        await dbService.toggleService(id, nextState);
+      } catch (err) {
+        console.error('[Services] Failed to toggle service in Supabase:', err);
+        addToast('Failed to update service status in database.', 'error');
+        return;
+      }
     }
 
     dispatch({ type: ACTIONS.TOGGLE_SERVICE, payload: id });
@@ -176,6 +258,29 @@ export default function Services() {
           + Add Service
         </PillButton>
       </div>
+
+      {servicesError && (
+        <div style={{
+          padding: '12px 16px',
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '12px',
+          color: '#b91c1c',
+          fontSize: '13px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <span>⚠️ {servicesError}</span>
+          <button
+            type="button"
+            onClick={fetchServices}
+            style={{ background: 'transparent', border: 'none', color: '#b91c1c', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {state.services.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '18px' }}>
@@ -339,6 +444,19 @@ export default function Services() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: '24px' }}>
+                {submitError && (
+                  <div style={{
+                    padding: '10px 14px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '12px',
+                    color: '#b91c1c',
+                    fontSize: '13px',
+                    lineHeight: 1.4,
+                  }}>
+                    ⚠️ {submitError}
+                  </div>
+                )}
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service name</label>
@@ -433,8 +551,8 @@ export default function Services() {
                 >
                   Cancel
                 </button>
-                <PillButton type="submit" variant="primary" size="sm">
-                  {editingService ? 'Save Changes' : 'Create Service'}
+                <PillButton type="submit" variant="primary" size="sm" disabled={submitting}>
+                  {submitting ? 'Saving...' : (editingService ? 'Save Changes' : 'Create Service')}
                 </PillButton>
               </div>
             </form>
