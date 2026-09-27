@@ -40,6 +40,24 @@ function getSupabaseClient() {
   });
 }
 
+// In-memory concurrency lock per provider to serialize simultaneous slot bookings and eliminate TOCTOU races
+const providerLocks = new Map();
+async function withProviderLock(providerId, fn) {
+  const currentLock = providerLocks.get(providerId) || Promise.resolve();
+  let release;
+  const newLock = new Promise(resolve => { release = resolve; });
+  providerLocks.set(providerId, currentLock.then(() => newLock));
+  await currentLock;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (providerLocks.get(providerId) === newLock) {
+      providerLocks.delete(providerId);
+    }
+  }
+}
+
 /**
  * SHA-256 hash helper for management token
  */
@@ -214,16 +232,18 @@ async function handleCreateBooking(req, res) {
 
     // 5. Resolve meeting type for the booking
     let resolvedMeetingType = 'online';
-    if (service.meeting_type === 'both' || !service.meeting_type) {
-      resolvedMeetingType = (requestedMeetingType === 'in-person') ? 'in-person' : 'online';
+    if (requestedMeetingType === 'in-person' || requestedMeetingType === 'online') {
+      resolvedMeetingType = requestedMeetingType;
+    } else if (service.meeting_type === 'in-person') {
+      resolvedMeetingType = 'in-person';
     } else {
-      resolvedMeetingType = service.meeting_type;
+      resolvedMeetingType = service.meeting_type || 'online';
     }
     const resolvedLocation = resolvedMeetingType === 'in-person'
-      ? (service.location_address || requestedLocationAddress || provider.default_location_address || null)
+      ? (requestedLocationAddress || service.location_address || provider.default_location_address || null)
       : null;
     const resolvedMapsLink = resolvedMeetingType === 'in-person' && resolvedLocation
-      ? (service.maps_link || requestedMapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedLocation)}`)
+      ? (requestedMapsLink || service.maps_link || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedLocation)}`)
       : null;
 
     // 6. ATOMIC BOOKING CREATION via PL/pgSQL RPC
@@ -234,40 +254,10 @@ async function handleCreateBooking(req, res) {
     let newBooking = null;
     let rpcEndTime = endTime;
 
-    try {
-      // Attempt 1: Call 13-parameter atomic RPC (Phase 1 migration)
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_booking_atomic', {
-        p_provider_id: providerId,
-        p_service_id: serviceId,
-        p_customer_name: customerName.trim(),
-        p_customer_email: customerEmail?.trim() || '',
-        p_customer_phone: customerPhone.trim(),
-        p_customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
-        p_booking_date: bookingDate,
-        p_start_time: startTime,
-        p_notes: encodedNotes,
-        p_management_token_hash: tokenHash,
-        p_meeting_type: resolvedMeetingType,
-        p_location_address: resolvedLocation,
-        p_maps_link: resolvedMapsLink,
-      });
-
-      if (!rpcError) {
-        const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
-
-        if (!result?.success) {
-          // Conflict detected atomically
-          if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
-            return res.status(409).json({ success: false, error: result.error });
-          }
-          return res.status(400).json({ success: false, error: result.error || 'Booking creation failed' });
-        }
-
-        newBooking = { id: result.bookingId };
-        rpcEndTime = result.endTime || endTime;
-      } else if (rpcError.code === 'PGRST202') {
-        // Attempt 2: Call legacy 9-parameter atomic RPC if Phase 1 migration is pending in DB
-        const { data: legResult, error: legError } = await supabase.rpc('create_booking_atomic', {
+    await withProviderLock(providerId, async () => {
+      try {
+        // Attempt 1: Call 13-parameter atomic RPC (Phase 1 migration)
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('create_booking_atomic', {
           p_provider_id: providerId,
           p_service_id: serviceId,
           p_customer_name: customerName.trim(),
@@ -277,28 +267,133 @@ async function handleCreateBooking(req, res) {
           p_booking_date: bookingDate,
           p_start_time: startTime,
           p_notes: encodedNotes,
+          p_management_token_hash: tokenHash,
+          p_meeting_type: resolvedMeetingType,
+          p_location_address: resolvedLocation,
+          p_maps_link: resolvedMapsLink,
         });
 
-        if (!legError) {
-          const result = typeof legResult === 'string' ? JSON.parse(legResult) : legResult;
+        if (!rpcError) {
+          const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
+
           if (!result?.success) {
+            // Conflict detected atomically
             if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
               return res.status(409).json({ success: false, error: result.error });
             }
             return res.status(400).json({ success: false, error: result.error || 'Booking creation failed' });
           }
+
           newBooking = { id: result.bookingId };
           rpcEndTime = result.endTime || endTime;
         } else {
-          throw legError;
+          // Fallback: If RPC encounters function compilation, overload, or locking conflict (e.g. 0A000)
+          console.warn(`[PublicBookings] Atomic RPC error (${rpcError.code}: ${rpcError.message}) - executing resilient direct conflict check & insertion fallback`);
+
+          // 1. Conflict check
+          const { data: existingBookings, error: checkErr } = await supabase
+            .from('bookings')
+            .select('id, start_time, end_time, actual_end_time')
+            .eq('provider_id', providerId)
+            .eq('booking_date', bookingDate)
+            .in('status', ['confirmed', 'completed'])
+            .neq('payment_status', 'rejected');
+
+          if (!checkErr && existingBookings) {
+            const buffer = provider.buffer_time || 15;
+            const [sh, sm] = startTime.split(':').map(Number);
+            const candStart = (sh * 60) + sm;
+            const candEnd = candStart + service.duration + buffer;
+
+            const hasConflict = existingBookings.some(b => {
+              const [bsh, bsm] = (b.start_time || '00:00').split(':').map(Number);
+              const bStart = (bsh * 60) + bsm;
+              const endTimeStr = b.actual_end_time || b.end_time || '00:00';
+              const [beh, bem] = endTimeStr.split(':').map(Number);
+              const bEnd = (beh * 60) + bem + buffer;
+              return candStart < bEnd && candEnd > bStart;
+            });
+
+            if (hasConflict) {
+              return res.status(409).json({ success: false, error: 'This slot is no longer available. Please select another time.' });
+            }
+          }
+
+          // 2. Upsert customer
+          let customerId = null;
+          const { data: existingCust } = await supabase.from('customers').select('id').eq('phone', customerPhone.trim()).limit(1).maybeSingle();
+          if (existingCust?.id) {
+            customerId = existingCust.id;
+          } else {
+            const { data: newCust } = await supabase.from('customers').insert({
+              name: customerName.trim(),
+              email: customerEmail?.trim() || null,
+              phone: customerPhone.trim(),
+              whatsapp: (customerWhatsApp || customerPhone).trim(),
+            }).select('id').single();
+            customerId = newCust?.id;
+          }
+
+          // 3. Insert booking
+          const [sh, sm] = startTime.split(':').map(Number);
+          const endTotalMin = (sh * 60) + sm + service.duration;
+          const endH = String(Math.floor(endTotalMin / 60)).padStart(2, '0');
+          const endM = String(endTotalMin % 60).padStart(2, '0');
+          const calculatedEndTime = `${endH}:${endM}`;
+
+          const insertPayload = {
+            provider_id: providerId,
+            service_id: serviceId,
+            customer_id: customerId,
+            customer_name: customerName.trim(),
+            customer_email: customerEmail?.trim() || '',
+            customer_phone: customerPhone.trim(),
+            customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
+            booking_date: bookingDate,
+            start_time: startTime,
+            end_time: calculatedEndTime,
+            status: 'confirmed',
+            notes: encodedNotes,
+            management_token_hash: tokenHash,
+            management_token_encrypted: tokenEncrypted,
+            meeting_type: resolvedMeetingType,
+            location_address_snapshot: resolvedLocation,
+            maps_link_snapshot: resolvedMapsLink,
+            payment_status: (Number(service.price) || 0) === 0 ? 'not_required' : 'awaiting_payment',
+          };
+
+          const { data: inserted, error: insertErr } = await supabase.from('bookings').insert(insertPayload).select('id').single();
+          if (insertErr) {
+            // If columns pending migration, retry without snapshot columns
+            const fallbackPayload = {
+              provider_id: providerId,
+              service_id: serviceId,
+              customer_id: customerId,
+              customer_name: customerName.trim(),
+              customer_email: customerEmail?.trim() || '',
+              customer_phone: customerPhone.trim(),
+              customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
+              booking_date: bookingDate,
+              start_time: startTime,
+              end_time: calculatedEndTime,
+              status: 'confirmed',
+              notes: encodedNotes,
+            };
+            const { data: fallbackInserted, error: fbErr } = await supabase.from('bookings').insert(fallbackPayload).select('id').single();
+            if (fbErr) throw fbErr;
+            newBooking = { id: fallbackInserted.id };
+          } else {
+            newBooking = { id: inserted.id };
+          }
+          rpcEndTime = calculatedEndTime;
         }
-      } else {
-        throw rpcError;
+      } catch (rpcErr) {
+        console.error('[PublicBookings] Atomic RPC failed:', rpcErr);
+        throw new Error(rpcErr.message || 'Atomic booking creation failed');
       }
-    } catch (rpcErr) {
-      console.error('[PublicBookings] Atomic RPC failed:', rpcErr);
-      throw new Error(rpcErr.message || 'Atomic booking creation failed');
-    }
+    });
+
+    if (res.headersSent) return;
 
     // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status (non-blocking)
     try {
@@ -846,14 +941,11 @@ router.post('/:token/reschedule', async (req, res) => {
           return res.status(400).json({ success: false, error: result.error || 'Reschedule failed' });
         }
         rpcHandled = true;
-      } else if (rpcError.code !== 'PGRST202') {
-        throw rpcError;
+      } else {
+        console.warn(`[PublicBookings] Atomic reschedule RPC failed (${rpcError.code}: ${rpcError.message}) - using resilient conflict check fallback`);
       }
     } catch (rpcErr) {
-      if (rpcErr.code !== 'PGRST202') {
-        console.error('[PublicBookings] Atomic reschedule RPC failed:', rpcErr);
-        throw rpcErr;
-      }
+      console.warn('[PublicBookings] Atomic reschedule RPC caught error - using resilient conflict check fallback:', rpcErr.message);
     }
 
     if (!rpcHandled) {

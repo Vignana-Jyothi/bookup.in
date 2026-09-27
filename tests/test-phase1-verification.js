@@ -64,12 +64,52 @@ async function run() {
 
   const baseOffset = 30 + Math.floor(Math.random() * 200);
   const getOffsetDate = (days) => new Date(Date.now() + (baseOffset + days) * 86400000).toISOString().split('T')[0];
+  const onlineDate = getOffsetDate(0);
   const date1 = getOffsetDate(1);
   const conflictDate = getOffsetDate(2);
   const futureDate = getOffsetDate(3);
   const newFutureDate = getOffsetDate(4);
 
   try {
+    // ------------------------------------------------------------------------
+    // VERIFY 0: Normal Online Booking Creation End-to-End
+    // ------------------------------------------------------------------------
+    console.log('\n--- [VERIFY 0] NORMAL ONLINE BOOKING END-TO-END ---');
+    const onlineToken = crypto.randomBytes(24).toString('hex');
+    const onlineTime = '10:00';
+
+    const onlineRes = await fetch(`${API_BASE}/public/bookings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        providerId: provider.id,
+        serviceId: service.id,
+        customerName: 'Priya Sharma',
+        customerEmail: 'priya.test@example.com',
+        customerPhone: '+919876543219',
+        bookingDate: onlineDate,
+        startTime: onlineTime,
+        managementToken: onlineToken,
+        meetingType: 'online',
+      }),
+    });
+
+    const onlineData = await onlineRes.json();
+    assert(onlineRes.status === 201, `Online booking created with status 201 (got ${onlineRes.status})`);
+    assert(onlineData.success === true, 'Online booking response reports success');
+    assert(onlineData.meetingType === 'online', `Online booking meetingType is 'online' (got '${onlineData.meetingType}')`);
+    cleanupIds.push(onlineData.bookingId);
+
+    const { data: onlineRow } = await supabase.from('bookings').select('*').eq('id', onlineData.bookingId).single();
+    const onlineSnapshot = onlineRow.meeting_type || (onlineRow.notes?.match(/\[mode:([^\]]+)\]/)?.[1]);
+    assert(onlineSnapshot === 'online', `Database row confirms meeting_type is 'online' (got '${onlineSnapshot}')`);
+
+    const onlineMgmtRes = await fetch(`${API_BASE}/public/bookings/manage/${onlineToken}`);
+    const onlineMgmtData = await onlineMgmtRes.json();
+    assert(onlineMgmtRes.status === 200, 'Online management endpoint returned 200');
+    assert(onlineMgmtData.booking.mode === 'Online', `Projection mode is Online (got '${onlineMgmtData.booking.mode}')`);
+    console.log('  ✓ Normal Online Booking created and verified successfully');
+
     // ------------------------------------------------------------------------
     // VERIFY 1: In-Person Booking with Location & Directions Link Snapshot
     // ------------------------------------------------------------------------

@@ -72,6 +72,11 @@ COMMENT ON COLUMN public.bookings.maps_link_snapshot IS
 -- inside a single transaction with row-level locking.
 -- =============================================================================
 
+-- Drop previous overloads to eliminate ambiguity in PostgREST
+DROP FUNCTION IF EXISTS public.create_booking_atomic(uuid, uuid, text, text, text, text, date, text, text);
+DROP FUNCTION IF EXISTS public.create_booking_atomic(uuid, uuid, text, text, text, text, date, text, text, text);
+DROP FUNCTION IF EXISTS public.create_booking_atomic(uuid, uuid, text, text, text, text, date, text, text, text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.create_booking_atomic(
   p_provider_id uuid,
   p_service_id uuid,
@@ -97,7 +102,7 @@ DECLARE
   v_end_time text;
   v_customer_id uuid;
   v_booking_id uuid;
-  v_conflict_count integer;
+  v_conflict_count integer := 0;
   v_cand_start integer;
   v_cand_end integer;
   v_buffer integer;
@@ -113,8 +118,9 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Invalid or inactive service');
   END IF;
 
-  -- 2. Fetch Authoritative Provider Details (buffer time + default location)
-  SELECT * INTO v_provider FROM public.providers WHERE id = p_provider_id;
+  -- 2. Fetch Authoritative Provider Details and acquire exclusive row lock
+  -- Serializes concurrent booking attempts for this provider to eliminate TOCTOU races
+  SELECT * INTO v_provider FROM public.providers WHERE id = p_provider_id FOR UPDATE;
   IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Provider not found');
   END IF;
@@ -151,9 +157,9 @@ BEGIN
   v_cand_end := v_end_min + v_buffer;
 
   -- 5. Authoritative Conflict Check with row-level lock:
-  -- Lock all confirmed/completed bookings for this provider+date to prevent TOCTOU races.
-  -- This SELECT ... FOR UPDATE ensures concurrent transactions serialize on the same rows.
-  SELECT count(*) INTO v_conflict_count
+  -- Lock conflicting rows to prevent TOCTOU races.
+  -- Separated from aggregate function (no COUNT inside FOR UPDATE) to avoid Postgres error 0A000.
+  PERFORM id
   FROM public.bookings
   WHERE provider_id = p_provider_id
     AND booking_date = p_booking_date
@@ -171,6 +177,8 @@ BEGIN
       )
     )
   FOR UPDATE;
+
+  GET DIAGNOSTICS v_conflict_count = ROW_COUNT;
 
   IF v_conflict_count > 0 THEN
     RETURN json_build_object(
@@ -255,6 +263,9 @@ $$;
 -- 5. ATOMIC RESCHEDULE FUNCTION (eliminates TOCTOU race for reschedule)
 -- =============================================================================
 
+-- Drop previous versions to prevent overload ambiguity
+DROP FUNCTION IF EXISTS public.reschedule_booking_atomic(uuid, date, text);
+
 CREATE OR REPLACE FUNCTION public.reschedule_booking_atomic(
   p_booking_id uuid,
   p_new_date date,
@@ -271,10 +282,10 @@ DECLARE
   v_buffer integer;
   v_cand_start integer;
   v_cand_end integer;
-  v_conflict_count integer;
+  v_conflict_count integer := 0;
 BEGIN
-  -- 1. Fetch the booking
-  SELECT * INTO v_booking FROM public.bookings WHERE id = p_booking_id;
+  -- 1. Fetch the booking and lock it
+  SELECT * INTO v_booking FROM public.bookings WHERE id = p_booking_id FOR UPDATE;
   IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Booking not found');
   END IF;
@@ -286,8 +297,8 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Completed appointments cannot be rescheduled.');
   END IF;
 
-  -- 2. Fetch provider for buffer time
-  SELECT * INTO v_provider FROM public.providers WHERE id = v_booking.provider_id;
+  -- 2. Fetch provider for buffer time and serialize concurrent reschedule attempts
+  SELECT * INTO v_provider FROM public.providers WHERE id = v_booking.provider_id FOR UPDATE;
   v_buffer := COALESCE(v_provider.buffer_time, 15);
 
   -- 3. Compute new end time
@@ -300,8 +311,9 @@ BEGIN
   v_cand_start := v_start_min;
   v_cand_end := v_end_min + v_buffer;
 
-  -- 4. Lock + conflict check (excluding this booking)
-  SELECT count(*) INTO v_conflict_count
+  -- 4. Lock conflicting rows + conflict check (excluding this booking)
+  -- Separated from aggregate function (no COUNT inside FOR UPDATE) to avoid Postgres error 0A000.
+  PERFORM id
   FROM public.bookings
   WHERE provider_id = v_booking.provider_id
     AND booking_date = p_new_date
@@ -320,6 +332,8 @@ BEGIN
       )
     )
   FOR UPDATE;
+
+  GET DIAGNOSTICS v_conflict_count = ROW_COUNT;
 
   IF v_conflict_count > 0 THEN
     RETURN json_build_object('success', false, 'error', 'Selected time slot is no longer available. Please select another slot.');
