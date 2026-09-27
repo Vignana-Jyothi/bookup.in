@@ -413,8 +413,8 @@ export default function CustomerBooking() {
   const meetUrl = resolvedBooking?.meetLink || resolvedBooking?.meet_link;
   const meetingType = resolvedBooking?.meetingType || resolvedBooking?.meeting_type || (resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot ? 'in-person' : 'online');
   const isInPerson = meetingType === 'in-person';
-  const locationAddress = resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot || resolvedBooking?.locationAddress || null;
-  const mapsLink = resolvedBooking?.mapsLinkSnapshot || resolvedBooking?.maps_link_snapshot || resolvedBooking?.mapsLink || (locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null);
+  const locationAddress = resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot || resolvedBooking?.locationAddress || resolvedBooking?.location_address || null;
+  const mapsLink = locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null;
 
   return (
     <div className="janjiyuk-booking-canvas">
@@ -525,13 +525,15 @@ export default function CustomerBooking() {
               <p style={{ fontSize: '13.5px', color: '#334155', margin: '8px 0 16px', lineHeight: 1.5 }}>
                 {locationAddress || 'Address will be confirmed by your coach.'}
               </p>
-              {locationAddress && (
+              {locationAddress && mapsLink && (
                 <PillButton
-                  variant="primary"
-                  onClick={() => window.open(mapsLink, '_blank', 'noopener,noreferrer')}
+                  variant="secondary"
+                  href={mapsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{ width: '100%', justifyContent: 'center' }}
                 >
-                  Get Directions ↗
+                  📍 Get Directions
                 </PillButton>
               )}
             </div>
@@ -868,6 +870,18 @@ export default function CustomerBooking() {
                 <div style={{ fontSize: '11.5px', color: 'var(--color-text-tertiary, #64748b)', textAlign: 'center', marginTop: '-4px' }}>
                   Rescheduling closed within {cancellationWindow}h cutoff window.
                 </div>
+              )}
+
+              {isInPerson && locationAddress && mapsLink && (
+                <PillButton
+                  variant="secondary"
+                  href={mapsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  📍 Get Directions
+                </PillButton>
               )}
 
               <PillButton

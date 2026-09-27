@@ -3,6 +3,7 @@ import path from 'path';
 
 const testFiles = [
   'tests/test-customer-booking-management.js',
+  'tests/test-phase1-verification.js',
   'tests/test-phase4-whatsapp.js',
   'tests/test-phase4b-email.js',
   'tests/test-verified-domain.js',
@@ -10,6 +11,7 @@ const testFiles = [
   'tests/test-email-flow.js',
   'tests/test-reject-payment-flow.js',
   'tests/test-public-busy-slots.js',
+  'tests/test-slot-granularity-and-directions.js',
   'tests/test-onboarding-slug-and-zero-services.js',
   'tests/test-complete-real-user-flow.js',
   'tests/test-upi-scoping.js',

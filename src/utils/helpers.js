@@ -64,7 +64,7 @@ export function formatTimeAmPm(timeStr) {
 /**
  * Central Dynamic Slot Generation Engine
  *
- * Generates candidate start times stepping by fixed granularity (15 mins)
+ * Generates candidate start times stepping by fixed granularity (30 mins)
  * Validates each candidate [candStart, candEnd) against:
  *  - Confirmed and Completed bookings (accounting for actualEndTime and buffer)
  *  - External calendar busy times (e.g. Google Calendar)
@@ -89,7 +89,7 @@ export function generateTimeSlotsDetailed(
   blockedTimes = [],
   minNotice = 0,
   dateStr = null,
-  granularity = 15,
+  granularity = 30,
   excludeBookingId = null
 ) {
   const slots = [];
@@ -165,7 +165,7 @@ export function generateTimeSlotsDetailed(
     });
   }
 
-  // 3. Step through candidate start times with fixed granularity (15 mins)
+  // 3. Step through candidate start times with fixed granularity (30 mins)
   for (let T = startMin; T < endMin; T += granularity) {
     const timeStr = minutesToTime(T);
 
@@ -215,7 +215,7 @@ export function generateTimeSlotsDetailed(
 }
 
 /**
- * Returns available start time strings ["09:00", "09:15", ...]
+ * Returns available start time strings ["09:00", "09:30", ...]
  */
 export function generateTimeSlots(
   start,
@@ -226,7 +226,7 @@ export function generateTimeSlots(
   blockedTimes = [],
   minNotice = 0,
   dateStr = null,
-  granularity = 15,
+  granularity = 30,
   excludeBookingId = null
 ) {
   const detailed = generateTimeSlotsDetailed(
@@ -260,7 +260,8 @@ export function getTimeSlotsDetailedForDate(
   serviceId,
   allBookings = [],
   calendarBusyTimes = [],
-  excludeBookingId = null
+  excludeBookingId = null,
+  granularity = 30
 ) {
   if (!availability || !isDateAvailable(dateStr, availability)) return [];
 
@@ -302,7 +303,7 @@ export function getTimeSlotsDetailedForDate(
     calendarBusyTimes,
     notice,
     dateStr,
-    15,
+    granularity,
     excludeBookingId
   );
 }
@@ -317,7 +318,8 @@ export function getAvailableTimeSlotsForDate(
   serviceId,
   allBookings = [],
   calendarBusyTimes = [],
-  excludeBookingId = null
+  excludeBookingId = null,
+  granularity = 30
 ) {
   const detailed = getTimeSlotsDetailedForDate(
     dateStr,
@@ -326,7 +328,8 @@ export function getAvailableTimeSlotsForDate(
     serviceId,
     allBookings,
     calendarBusyTimes,
-    excludeBookingId
+    excludeBookingId,
+    granularity
   );
   return detailed.filter(s => s.available).map(s => s.time);
 }

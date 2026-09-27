@@ -11,8 +11,12 @@ export default function PillButton({
   type = 'button',
   className = '',
   style = {},
+  href,
+  target,
+  rel,
   ...props
 }) {
+  const Component = href ? 'a' : 'button';
   const variantClass =
     variant === 'lime'
       ? 'btn-lime'
@@ -27,9 +31,12 @@ export default function PillButton({
   const sizeClass = size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : '';
 
   return (
-    <button
-      type={type}
-      disabled={disabled || loading}
+    <Component
+      type={href ? undefined : type}
+      href={href}
+      target={target}
+      rel={rel}
+      disabled={href ? undefined : (disabled || loading)}
       onClick={onClick}
       className={`btn ${variantClass} ${sizeClass} ${className}`}
       style={{
@@ -38,6 +45,7 @@ export default function PillButton({
         justifyContent: 'center',
         gap: '10px',
         borderRadius: 'var(--radius-pill)',
+        textDecoration: 'none',
         ...style,
       }}
       {...props}
@@ -78,6 +86,6 @@ export default function PillButton({
           →
         </span>
       )}
-    </button>
+    </Component>
   );
 }

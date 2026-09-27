@@ -746,6 +746,29 @@ export default function Appointments() {
               <span>View details</span>
             </button>
 
+            {/* Get Directions for in-person bookings */}
+            {(() => {
+              const itemMeetingType = booking.meetingType || booking.meeting_type || (booking.locationAddressSnapshot || booking.location_address_snapshot ? 'in-person' : 'online');
+              const itemIsInPerson = itemMeetingType === 'in-person';
+              const itemAddress = booking.locationAddressSnapshot || booking.location_address_snapshot || booking.locationAddress || booking.location_address || (itemIsInPerson ? (state.services?.find(s => s.id === booking.serviceId)?.locationAddress || state.provider?.defaultLocationAddress || null) : null);
+              if (itemIsInPerson && itemAddress) {
+                return (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemAddress)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="actions-dropdown-item"
+                    style={{ textDecoration: 'none' }}
+                    onClick={() => setOpenDropdownId(null)}
+                  >
+                    <span className="item-icon">📍</span>
+                    <span>Get Directions</span>
+                  </a>
+                );
+              }
+              return null;
+            })()}
+
             {/* Payment verification actions */}
             {booking.paymentStatus === 'verification_pending' && (
               <>
@@ -860,6 +883,15 @@ export default function Appointments() {
     const selectedEndMin = timeToMinutes(completionEndTime || b.endTime);
     const freedPreviewMin = Math.max(0, scheduledEndMin - selectedEndMin);
 
+    const bMeetingType = b.meetingType || b.meeting_type || (b.locationAddressSnapshot || b.location_address_snapshot ? 'in-person' : 'online');
+    const bIsInPerson = bMeetingType === 'in-person';
+    const bLocationAddress = b.locationAddressSnapshot ||
+      b.location_address_snapshot ||
+      b.locationAddress ||
+      b.location_address ||
+      (bIsInPerson ? (state.services?.find(s => s.id === b.serviceId)?.locationAddress || state.provider?.defaultLocationAddress || state.provider?.default_location_address || null) : null);
+    const bMapsUrl = bLocationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bLocationAddress)}` : null;
+
     // WhatsApp message preview text
     let waPreviewText = '';
     if (b.status === 'confirmed') {
@@ -934,6 +966,30 @@ export default function Appointments() {
                 <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Date & Scheduled Time</div>
                 <div>{formatDate(b.date)} · {formatTime(b.startTime)} – {formatTime(b.endTime)}</div>
               </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Mode</div>
+                <div>{bIsInPerson ? '📍 In-person' : '🌐 Online'}</div>
+              </div>
+              {bIsInPerson && (
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Location</div>
+                  <div style={{ marginBottom: (bLocationAddress && bMapsUrl) ? '8px' : '0', color: 'var(--color-text)', fontSize: 'var(--font-size-sm)' }}>
+                    {bLocationAddress || 'No address specified'}
+                  </div>
+                  {bLocationAddress && bMapsUrl && (
+                    <PillButton
+                      variant="secondary"
+                      size="sm"
+                      href={bMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Get Directions ↗
+                    </PillButton>
+                  )}
+                </div>
+              )}
               {b.actualEndTime && (
                 <div>
                   <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-success-700)', fontWeight: 600 }}>
@@ -1046,6 +1102,18 @@ export default function Appointments() {
               <button className="btn btn-success btn-sm" onClick={() => handleOpenComplete(b)}>
                 ✓ Mark Completed
               </button>
+              {bIsInPerson && bLocationAddress && bMapsUrl && (
+                <PillButton
+                  variant="secondary"
+                  size="sm"
+                  href={bMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                  📍 Get Directions
+                </PillButton>
+              )}
               <button className="btn btn-secondary btn-sm" onClick={() => handleOpenReschedule(b)}>
                 📅 Reschedule
               </button>

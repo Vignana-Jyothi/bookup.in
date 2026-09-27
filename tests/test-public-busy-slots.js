@@ -51,28 +51,31 @@ async function runTests() {
     [], // no external gcal
     0,  // minNotice
     testDate,
-    15  // 15-minute granularity
+    30  // 30-minute granularity
   );
 
   const slotMap = Object.fromEntries(slots.map(s => [s.time, s]));
+
+  // Verify only 30-min candidate slots are generated
+  assert.strictEqual(slotMap['09:15'], undefined, '09:15 must not be generated on 30-min grid');
+  assert.strictEqual(slotMap['09:45'], undefined, '09:45 must not be generated on 30-min grid');
+  assert.strictEqual(slotMap['10:15'], undefined, '10:15 must not be generated on 30-min grid');
 
   // Verify 09:00 through 10:00 are unavailable
   assert.strictEqual(slotMap['09:00']?.available, false, '09:00 must be unavailable');
   assert.strictEqual(slotMap['09:00']?.reason, 'booked', '09:00 marked as booked');
 
-  assert.strictEqual(slotMap['09:15']?.available, false, '09:15 must be unavailable (collides with 09:00-10:00)');
   assert.strictEqual(slotMap['09:30']?.available, false, '09:30 must be unavailable (collides with 09:00-10:00)');
-  assert.strictEqual(slotMap['09:45']?.available, false, '09:45 must be unavailable (collides with 09:00-10:00)');
 
   // 10:00 is within the 15-minute buffer after the 09:00-10:00 appointment (buffer ends at 10:15)
   assert.strictEqual(slotMap['10:00']?.available, false, '10:00 must be unavailable due to 15-min coach buffer');
 
-  // 10:15 is past the buffer and fully available
-  assert.strictEqual(slotMap['10:15']?.available, true, '10:15 must be available');
+  // 10:30 is past the buffer and fully available
   assert.strictEqual(slotMap['10:30']?.available, true, '10:30 must be available');
+  assert.strictEqual(slotMap['11:00']?.available, true, '11:00 must be available');
 
-  console.log('  ✓ 09:00, 09:15, 09:30, 09:45, and 10:00 are unavailable');
-  console.log('  ✓ 10:15 is available');
+  console.log('  ✓ 09:00, 09:30, and 10:00 are unavailable');
+  console.log('  ✓ 10:30 and 11:00 are available');
 
   // ---------------------------------------------------------------------------
   // TEST 2: Cancelled booking blocks nothing
@@ -96,16 +99,14 @@ async function runTests() {
     [],
     0,
     testDate,
-    15
+    30
   );
   const cancelledMap = Object.fromEntries(cancelledSlots.map(s => [s.time, s]));
 
   assert.strictEqual(cancelledMap['09:00']?.available, true, 'Cancelled booking leaves 09:00 available');
-  assert.strictEqual(cancelledMap['09:15']?.available, true, 'Cancelled booking leaves 09:15 available');
   assert.strictEqual(cancelledMap['09:30']?.available, true, 'Cancelled booking leaves 09:30 available');
-  assert.strictEqual(cancelledMap['09:45']?.available, true, 'Cancelled booking leaves 09:45 available');
   assert.strictEqual(cancelledMap['10:00']?.available, true, 'Cancelled booking leaves 10:00 available');
-  assert.strictEqual(cancelledMap['10:15']?.available, true, 'Cancelled booking leaves 10:15 available');
+  assert.strictEqual(cancelledMap['10:30']?.available, true, 'Cancelled booking leaves 10:30 available');
   console.log('  ✓ Cancelled booking does not block any slot');
 
   // ---------------------------------------------------------------------------
@@ -131,16 +132,14 @@ async function runTests() {
     [],
     0,
     testDate,
-    15
+    30
   );
   const rejectedMap = Object.fromEntries(rejectedSlots.map(s => [s.time, s]));
 
   assert.strictEqual(rejectedMap['09:00']?.available, true, 'Rejected booking leaves 09:00 available');
-  assert.strictEqual(rejectedMap['09:15']?.available, true, 'Rejected booking leaves 09:15 available');
   assert.strictEqual(rejectedMap['09:30']?.available, true, 'Rejected booking leaves 09:30 available');
-  assert.strictEqual(rejectedMap['09:45']?.available, true, 'Rejected booking leaves 09:45 available');
   assert.strictEqual(rejectedMap['10:00']?.available, true, 'Rejected booking leaves 10:00 available');
-  assert.strictEqual(rejectedMap['10:15']?.available, true, 'Rejected booking leaves 10:15 available');
+  assert.strictEqual(rejectedMap['10:30']?.available, true, 'Rejected booking leaves 10:30 available');
   console.log('  ✓ Payment rejected booking does not block any slot');
 
   // ---------------------------------------------------------------------------
@@ -252,20 +251,20 @@ async function runTests() {
   const integratedMap = Object.fromEntries(detailedSlots.map(s => [s.time, s]));
 
   assert.strictEqual(integratedMap['09:00']?.available, false, '09:00 unavailable');
-  assert.strictEqual(integratedMap['09:15']?.available, false, '09:15 unavailable');
   assert.strictEqual(integratedMap['09:30']?.available, false, '09:30 unavailable');
-  assert.strictEqual(integratedMap['09:45']?.available, false, '09:45 unavailable');
   assert.strictEqual(integratedMap['10:00']?.available, false, '10:00 unavailable');
-  assert.strictEqual(integratedMap['10:15']?.available, true, '10:15 available');
+  assert.strictEqual(integratedMap['10:30']?.available, true, '10:30 available');
+  assert.strictEqual(integratedMap['11:00']?.available, true, '11:00 available');
+  assert.strictEqual(integratedMap['09:15'], undefined, '09:15 not generated on 30-min grid');
 
-  console.log('  ✓ getTimeSlotsDetailedForDate integrates busy slots faithfully');
+  console.log('  ✓ getTimeSlotsDetailedForDate integrates busy slots faithfully on 30-min grid');
 
   // ---------------------------------------------------------------------------
   // TEST 6: Exact Scenario Reproduction - 60-min booking at 5:15 PM (17:15-18:15)
   // Verifies candidate interval [T, T + duration + buffer) vs [17:15, 18:15 + buffer)
   // Ensures 5:00 PM is NOT offered for services whose duration runs into 5:15 PM.
   // ---------------------------------------------------------------------------
-  console.log('\n--- [TEST 6] 60-MIN BOOKING AT 5:15 PM (17:15 - 18:15) REPRODUCTION ---');
+  console.log('\n--- [TEST 6] 60-MIN BOOKING AT 5:15 PM (17:15 - 18:15) WITH 30-MIN GRID ---');
 
   const booking515 = {
     id: 'booking-515-pm',
@@ -276,7 +275,7 @@ async function runTests() {
     status: 'confirmed',
   };
 
-  // Case A: 60-minute service, 0 buffer
+  // Case A: 60-minute service, 0 buffer on 30-min candidate grid
   const slots60 = generateTimeSlotsDetailed(
     '09:00',
     '21:00',
@@ -286,41 +285,41 @@ async function runTests() {
     [],
     0,
     testDate,
-    15
+    30
   );
   const map60 = Object.fromEntries(slots60.map(s => [s.time, s]));
 
+  // Grid step confirmation: only :00 and :30 generated
+  assert.strictEqual(map60['16:15'], undefined, '16:15 is not on the 30-min grid');
+  assert.strictEqual(map60['16:45'], undefined, '16:45 is not on the 30-min grid');
+  assert.strictEqual(map60['17:15'], undefined, '17:15 is not on the 30-min grid');
+  assert.strictEqual(map60['17:45'], undefined, '17:45 is not on the 30-min grid');
+  assert.strictEqual(map60['18:15'], undefined, '18:15 is not on the 30-min grid');
+  assert.strictEqual(map60['18:45'], undefined, '18:45 is not on the 30-min grid');
+
   // Clearly before the booked range:
-  assert.strictEqual(map60['16:00']?.available, true, '16:00 must be available (finishes 17:00)');
-  assert.strictEqual(map60['16:15']?.available, true, '16:15 must be available (finishes exactly at 17:15)');
+  assert.strictEqual(map60['16:00']?.available, true, '16:00 must be available (finishes 17:00, before 17:15)');
 
   // Colliding candidates before start:
   assert.strictEqual(map60['16:30']?.available, false, '16:30 must be unavailable (runs 16:30-17:30, overlaps 17:15)');
-  assert.strictEqual(map60['16:45']?.available, false, '16:45 must be unavailable (runs 16:45-17:45, overlaps 17:15)');
   assert.strictEqual(map60['17:00']?.available, false, '5:00 PM (17:00) must NOT be offered (runs 17:00-18:00, overlaps 17:15)');
 
   // Inside booked range:
-  assert.strictEqual(map60['17:15']?.available, false, '17:15 must be unavailable (booked)');
-  assert.strictEqual(map60['17:15']?.reason, 'booked', '17:15 marked booked');
   assert.strictEqual(map60['17:30']?.available, false, '17:30 must be unavailable (booked)');
   assert.strictEqual(map60['17:30']?.reason, 'booked', '17:30 marked booked');
-  assert.strictEqual(map60['17:45']?.available, false, '17:45 must be unavailable (booked)');
-  assert.strictEqual(map60['17:45']?.reason, 'booked', '17:45 marked booked');
   assert.strictEqual(map60['18:00']?.available, false, '18:00 must be unavailable (booked)');
   assert.strictEqual(map60['18:00']?.reason, 'booked', '18:00 marked booked');
 
   // Clearly after the booked range:
-  assert.strictEqual(map60['18:15']?.available, true, '18:15 must be available (starts right at 18:15 when session ends)');
-  assert.strictEqual(map60['18:30']?.available, true, '18:30 must be available');
-  assert.strictEqual(map60['18:45']?.available, true, '18:45 must be available');
+  assert.strictEqual(map60['18:30']?.available, true, '18:30 must be available (starts after 18:15)');
   assert.strictEqual(map60['19:00']?.available, true, '19:00 must be available');
 
-  console.log('  ✓ 60-min service: 16:00 and 16:15 are available');
-  console.log('  ✓ 60-min service: 16:30, 16:45, and 17:00 (5:00 PM) are correctly filtered out as unavailable');
-  console.log('  ✓ 60-min service: 17:15 through 18:00 are marked as booked');
-  console.log('  ✓ 60-min service: 18:15, 18:30, 18:45, and 19:00 are available');
+  console.log('  ✓ 60-min service: 16:00 is available');
+  console.log('  ✓ 60-min service: 16:30 and 17:00 (5:00 PM) are correctly filtered out as unavailable');
+  console.log('  ✓ 60-min service: 17:30 and 18:00 are marked as booked');
+  console.log('  ✓ 60-min service: 18:30 and 19:00 are available');
 
-  // Case B: 30-minute service, 0 buffer
+  // Case B: 30-minute service, 0 buffer on 30-min grid
   const slots30 = generateTimeSlotsDetailed(
     '09:00',
     '21:00',
@@ -330,18 +329,18 @@ async function runTests() {
     [],
     0,
     testDate,
-    15
+    30
   );
   const map30 = Object.fromEntries(slots30.map(s => [s.time, s]));
 
-  assert.strictEqual(map30['16:45']?.available, true, '16:45 must be available for 30m service (finishes 17:15)');
-  assert.strictEqual(map30['17:00']?.available, false, '17:00 must NOT be available for 30m service (finishes 17:30, overlaps 17:15)');
-  assert.strictEqual(map30['17:15']?.available, false, '17:15 must be unavailable for 30m service');
-  assert.strictEqual(map30['18:00']?.available, false, '18:00 must be unavailable for 30m service (runs 18:00-18:30, overlaps 18:15)');
-  assert.strictEqual(map30['18:15']?.available, true, '18:15 must be available for 30m service');
-  console.log('  ✓ 30-min service: 16:45 and 18:15 available; 17:00 through 18:00 unavailable');
+  assert.strictEqual(map30['16:30']?.available, true, '16:30 available for 30m service (finishes 17:00, before 17:15)');
+  assert.strictEqual(map30['17:00']?.available, false, '17:00 unavailable for 30m service (finishes 17:30, overlaps 17:15)');
+  assert.strictEqual(map30['17:30']?.available, false, '17:30 unavailable for 30m service (inside booking)');
+  assert.strictEqual(map30['18:00']?.available, false, '18:00 unavailable for 30m service (runs 18:00-18:30, overlaps 18:15)');
+  assert.strictEqual(map30['18:30']?.available, true, '18:30 available for 30m service (starts after 18:15)');
+  console.log('  ✓ 30-min service: 16:30 and 18:30 available; 17:00, 17:30, and 18:00 unavailable');
 
-  // Case C: 60-minute service with 15-minute provider buffer
+  // Case C: 60-minute service with 15-minute provider buffer on 30-min grid
   const slots60Buf = generateTimeSlotsDetailed(
     '09:00',
     '21:00',
@@ -351,22 +350,23 @@ async function runTests() {
     [],
     0,
     testDate,
-    15
+    30
   );
   const map60Buf = Object.fromEntries(slots60Buf.map(s => [s.time, s]));
 
   assert.strictEqual(map60Buf['16:00']?.available, true, '16:00 available with 15m buffer (finishes 17:00 + 15m buffer = 17:15)');
-  assert.strictEqual(map60Buf['16:15']?.available, false, '16:15 unavailable with 15m buffer (finishes 17:15 + 15m buffer = 17:30, overlaps 17:15)');
+  assert.strictEqual(map60Buf['16:30']?.available, false, '16:30 unavailable with 15m buffer');
   assert.strictEqual(map60Buf['17:00']?.available, false, '17:00 unavailable with 15m buffer');
-  assert.strictEqual(map60Buf['18:15']?.available, false, '18:15 unavailable with 15m buffer (within post-appointment buffer ending 18:30)');
-  assert.strictEqual(map60Buf['18:30']?.available, true, '18:30 available with 15m buffer');
-  console.log('  ✓ 15-min buffer: 16:00 and 18:30 available; 16:15, 17:00, 18:15 unavailable');
+  assert.strictEqual(map60Buf['17:30']?.available, false, '17:30 unavailable with 15m buffer');
+  assert.strictEqual(map60Buf['18:00']?.available, false, '18:00 unavailable with 15m buffer');
+  assert.strictEqual(map60Buf['18:30']?.available, true, '18:30 available with 15m buffer (buffer ends at 18:30)');
+  console.log('  ✓ 15-min buffer: 16:00 and 18:30 available; 16:30, 17:00, 17:30, 18:00 unavailable');
 
   // Case D: Meeting type consistency - online vs in-person
   const onlineBooking = { ...booking515, meeting_type: 'online' };
   const inPersonBooking = { ...booking515, meeting_type: 'in-person' };
-  const onlineSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [onlineBooking], [], 0, testDate);
-  const inPersonSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [inPersonBooking], [], 0, testDate);
+  const onlineSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [onlineBooking], [], 0, testDate, 30);
+  const inPersonSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [inPersonBooking], [], 0, testDate, 30);
   assert.strictEqual(
     JSON.stringify(onlineSlots),
     JSON.stringify(inPersonSlots),
