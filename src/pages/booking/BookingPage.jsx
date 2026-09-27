@@ -345,6 +345,10 @@ export default function PublicBookingPage() {
     const endMinutes = h * 60 + m + service.duration;
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
+    let realBookingId = generateId('bk');
+    let authoritativePrice = service.price || 0;
+    let authoritativeDeposit = service.depositAmount || 0;
+
     const managementToken = generateManagementToken();
     let tokenHash = '';
     try {
