@@ -484,6 +484,23 @@
   padding: var(--space-6);
 }
 
+.modal-body.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--theme-border, #cbd5e1);
+  border-radius: var(--radius-full);
+}
+
+.modal-body.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-text-muted, #94a3b8);
+}
+
 .modal-footer {
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--color-border);

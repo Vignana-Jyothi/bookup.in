@@ -3,7 +3,7 @@
  * Enhanced with input validation and content quality nudges
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore, generateId, formatCurrency } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
@@ -22,6 +22,7 @@ function isGibberish(str) {
 
 export default function Services() {
   const { state, dispatch, addToast } = useStore();
+  const modalBodyRef = useRef(null);
   const [showForm, setShowForm] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', price: '', duration: 60 });
@@ -473,21 +474,40 @@ export default function Services() {
             className="modal modal-lg"
             onClick={e => e.stopPropagation()}
             style={{
-              borderRadius: '26px',
-              overflow: 'hidden',
+              borderRadius: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 'min(90vh, 720px)',
               background: 'var(--theme-bg-card)',
               border: '1px solid var(--theme-border)',
               boxShadow: 'var(--shadow-xl)',
+              overflow: 'hidden',
+              width: '100%',
+              maxWidth: '580px',
             }}
           >
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--theme-border)', padding: '20px 24px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--theme-border)', padding: '18px 24px', flexShrink: 0 }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0 }}>
                 {editingService ? 'Edit Service' : 'Create Service'}
               </h3>
               <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: '24px' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div 
+                ref={modalBodyRef}
+                className="modal-body custom-scrollbar" 
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: 'var(--space-4)', 
+                  padding: '24px',
+                  overflowY: 'auto',
+                  flex: 1,
+                  minHeight: 0,
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'var(--theme-border, #cbd5e1) transparent',
+                }}
+              >
                 {submitError && (
                   <div style={{
                     padding: '10px 14px',
@@ -590,7 +610,19 @@ export default function Services() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setForm({ ...form, meetingType: opt.value })}
+                          onClick={() => {
+                            setForm({ ...form, meetingType: opt.value });
+                            if (opt.value === 'in-person' || opt.value === 'both') {
+                              setTimeout(() => {
+                                if (modalBodyRef.current) {
+                                  modalBodyRef.current.scrollTo({
+                                    top: modalBodyRef.current.scrollHeight,
+                                    behavior: 'smooth',
+                                  });
+                                }
+                              }, 60);
+                            }
+                          }}
                           style={{
                             padding: '10px 8px',
                             borderRadius: '12px',
@@ -653,7 +685,7 @@ export default function Services() {
                 )}
               </div>
 
-              <div className="modal-footer" style={{ borderTop: '1px solid var(--theme-border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--theme-border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexShrink: 0, background: 'var(--theme-bg-card)' }}>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
