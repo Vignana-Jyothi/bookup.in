@@ -64,7 +64,15 @@ export default function Services() {
   }, [fetchServices]);
 
   const openCreate = () => {
-    setForm({ name: '', description: '', price: '1000', duration: 60 });
+    setForm({
+      name: '',
+      description: '',
+      price: '1000',
+      duration: 60,
+      meetingType: 'online',
+      locationAddress: state.provider?.defaultLocationAddress || '',
+      mapsLink: '',
+    });
     setEditingService(null);
     setErrors({});
     setSubmitError('');
@@ -77,6 +85,9 @@ export default function Services() {
       description: service.description || '',
       price: service.price,
       duration: service.duration,
+      meetingType: service.meetingType || 'online',
+      locationAddress: service.locationAddress || '',
+      mapsLink: service.mapsLink || '',
     });
     setEditingService(service);
     setErrors({});
@@ -105,6 +116,10 @@ export default function Services() {
       errs.price = 'Please enter a valid price.';
     }
 
+    if (form.meetingType === 'in-person' && !form.locationAddress?.trim() && !state.provider?.defaultLocationAddress) {
+      errs.locationAddress = 'Please enter a location address for in-person appointments.';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -117,6 +132,13 @@ export default function Services() {
     setSubmitting(true);
 
     try {
+      const resolvedAddress = form.meetingType === 'online'
+        ? null
+        : (form.locationAddress?.trim() || state.provider?.defaultLocationAddress || null);
+      const resolvedMaps = form.meetingType === 'online'
+        ? null
+        : (form.mapsLink?.trim() || (resolvedAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedAddress)}` : null));
+
       if (editingService) {
         if (!state.auth?.isDemoMode && isSupabaseConfigured() && !editingService.id.startsWith('svc-')) {
           await dbService.updateService(editingService.id, {
@@ -125,6 +147,9 @@ export default function Services() {
             price: Number(form.price),
             duration: Number(form.duration),
             depositAmount: 0,
+            meetingType: form.meetingType || 'online',
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
           });
         }
 
@@ -137,6 +162,9 @@ export default function Services() {
             price: Number(form.price),
             duration: Number(form.duration),
             depositAmount: 0,
+            meetingType: form.meetingType || 'online',
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
           }
         });
         addToast('Service updated ✓');
@@ -169,6 +197,9 @@ export default function Services() {
             duration: Number(form.duration),
             depositAmount: 0,
             isActive: true,
+            meetingType: form.meetingType || 'online',
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
           });
 
           // Confirm the insert succeeded
@@ -187,6 +218,9 @@ export default function Services() {
           duration: Number(form.duration),
           depositAmount: 0,
           isActive: true,
+          meetingType: form.meetingType || 'online',
+          locationAddress: resolvedAddress,
+          mapsLink: resolvedMaps,
           createdAt: new Date().toISOString(),
         };
 
@@ -340,6 +374,16 @@ export default function Services() {
                     color: 'var(--theme-text-muted)',
                   }}>
                     ⏱ {service.duration} min
+                  </span>
+                  <span style={{
+                    padding: '3px 10px',
+                    borderRadius: 'var(--radius-pill)',
+                    background: 'var(--theme-bg-card-subtle)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--theme-text-muted)',
+                  }}>
+                    {service.meetingType === 'in-person' ? '📍 In-person' : (service.meetingType === 'both' ? '🔀 Online / In-person' : '🌐 Online')}
                   </span>
                 </div>
               </div>
@@ -532,6 +576,81 @@ export default function Services() {
                     />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Meeting Mode</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {[
+                      { value: 'online', label: '🌐 Online', desc: 'Google Meet' },
+                      { value: 'in-person', label: '📍 In-person', desc: 'Physical location' },
+                      { value: 'both', label: '🔀 Both', desc: 'Customer chooses' },
+                    ].map(opt => {
+                      const isSel = (form.meetingType || 'online') === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setForm({ ...form, meetingType: opt.value })}
+                          style={{
+                            padding: '10px 8px',
+                            borderRadius: '12px',
+                            border: isSel ? '2px solid var(--color-lime, #22c55e)' : '1px solid var(--theme-border, #e2e8f0)',
+                            background: isSel ? 'var(--theme-bg-subtle, #f0fdf4)' : 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '3px',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>{opt.label}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(form.meetingType === 'in-person' || form.meetingType === 'both') && (
+                  <div className="form-group animate-fade-in-up">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '13px', margin: 0 }}>Location Address</label>
+                      {state.provider?.defaultLocationAddress && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, locationAddress: state.provider.defaultLocationAddress })}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--color-primary, #2563eb)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: 0,
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Use my default address
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      className={`form-input ${errors.locationAddress ? 'form-input-error' : ''}`}
+                      placeholder="e.g. 42 MG Road, Koramangala, Bengaluru"
+                      value={form.locationAddress || ''}
+                      onChange={e => {
+                        setForm({ ...form, locationAddress: e.target.value });
+                        if (errors.locationAddress) setErrors({ ...errors, locationAddress: null });
+                      }}
+                      style={{ borderRadius: '12px' }}
+                    />
+                    {errors.locationAddress && (
+                      <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.locationAddress}</span>
+                    )}
+                    <span className="form-hint">Physical location where in-person sessions take place. Clients will get a Google Maps directions link.</span>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer" style={{ borderTop: '1px solid var(--theme-border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>

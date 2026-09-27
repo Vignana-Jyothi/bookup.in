@@ -43,6 +43,7 @@ export const dbService = {
       avatarUrl: data.avatar_url || data.avatar || null,
       upiId: data.upi_id || null,
       qrCodeUrl: data.qr_code_url || null,
+      defaultLocationAddress: data.default_location_address || null,
       createdAt: data.created_at,
     };
   },
@@ -77,6 +78,7 @@ export const dbService = {
       avatarUrl: data.avatar_url || data.avatar || null,
       upiId: data.upi_id || null,
       qrCodeUrl: data.qr_code_url || null,
+      defaultLocationAddress: data.default_location_address || null,
       createdAt: data.created_at,
     };
   },
@@ -224,6 +226,7 @@ export const dbService = {
     if (fields.avatar !== undefined && fields.avatarUrl === undefined) updatePayload.avatar_url = fields.avatar;
     if (fields.upiId !== undefined) updatePayload.upi_id = fields.upiId;
     if (fields.qrCodeUrl !== undefined) updatePayload.qr_code_url = fields.qrCodeUrl;
+    if (fields.defaultLocationAddress !== undefined) updatePayload.default_location_address = fields.defaultLocationAddress;
 
     const { error } = await supabase
       .from('providers')
@@ -315,6 +318,9 @@ export const dbService = {
       price: Number(s.price) || 0,
       depositAmount: Number(s.deposit_amount) || 0,
       isActive: Boolean(s.active),
+      meetingType: s.meeting_type || 'online',
+      locationAddress: s.location_address || null,
+      mapsLink: s.maps_link || null,
       createdAt: s.created_at,
     }));
   },
@@ -357,6 +363,9 @@ export const dbService = {
         price: Number(service.price) || 0,
         deposit_amount: Number(service.depositAmount) || 0,
         active: service.isActive !== undefined ? service.isActive : true,
+        meeting_type: service.meetingType || 'online',
+        location_address: service.locationAddress || null,
+        maps_link: service.mapsLink || null,
       })
       .select()
       .single();
@@ -375,6 +384,9 @@ export const dbService = {
       price: Number(data.price),
       depositAmount: Number(data.deposit_amount),
       isActive: Boolean(data.active),
+      meetingType: data.meeting_type || 'online',
+      locationAddress: data.location_address || null,
+      mapsLink: data.maps_link || null,
       createdAt: data.created_at,
     };
   },
@@ -389,6 +401,9 @@ export const dbService = {
     if (service.price !== undefined) updatePayload.price = Number(service.price);
     if (service.depositAmount !== undefined) updatePayload.deposit_amount = Number(service.depositAmount);
     if (service.isActive !== undefined) updatePayload.active = Boolean(service.isActive);
+    if (service.meetingType !== undefined) updatePayload.meeting_type = service.meetingType;
+    if (service.locationAddress !== undefined) updatePayload.location_address = service.locationAddress;
+    if (service.mapsLink !== undefined) updatePayload.maps_link = service.mapsLink;
 
     const { error } = await supabase
       .from('services')

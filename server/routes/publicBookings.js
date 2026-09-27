@@ -104,6 +104,9 @@ async function handleCreateBooking(req, res) {
     startTime,
     notes = '',
     managementToken: providedToken,
+    meetingType: requestedMeetingType,
+    locationAddress: requestedLocationAddress,
+    mapsLink: requestedMapsLink,
   } = req.body;
 
   if (!providerId || !serviceId || !customerName || !customerPhone || !bookingDate || !startTime) {
@@ -174,62 +177,13 @@ async function handleCreateBooking(req, res) {
     }
 
     const duration = Number(service.duration) || 60;
-    const buffer = provider.buffer_time ?? 15;
 
     const [h, m] = startTime.split(':').map(Number);
     const startMin = h * 60 + m;
     const endMin = startMin + duration;
     const endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 
-    const candStart = startMin;
-    const candEnd = endMin + buffer;
-
-    // 3. Authoritative Overlap Conflict Check
-    let existingBookings = [];
-    try {
-      const { data: ebData, error: ebErr } = await supabase
-        .from('bookings')
-        .select('id, start_time, end_time, actual_end_time, status, payment_status')
-        .eq('provider_id', providerId)
-        .eq('booking_date', bookingDate)
-        .in('status', ['confirmed', 'completed']);
-
-      if (!ebErr && Array.isArray(ebData)) {
-        existingBookings = ebData.filter(b => b.payment_status !== 'rejected');
-      } else if (ebErr) {
-        console.warn('[PublicBookings] Direct bookings table select restricted, trying get_provider_busy_slots RPC:', ebErr.message);
-      }
-    } catch (_e) {}
-
-    // Fallback to security-definer RPC function if direct SELECT on bookings is restricted for anon
-    if (!existingBookings || existingBookings.length === 0) {
-      try {
-        const { data: rpcSlots, error: rpcErr } = await supabase.rpc('get_provider_busy_slots', {
-          p_provider_id: providerId,
-          p_booking_date: bookingDate,
-        });
-        if (!rpcErr && Array.isArray(rpcSlots)) {
-          existingBookings = rpcSlots.filter(b => b.payment_status !== 'rejected');
-        }
-      } catch (_rpcErr) {}
-    }
-
-    const conflict = existingBookings.some(eb => {
-      const ebStart = eb.start_time ? Number(eb.start_time.split(':')[0]) * 60 + Number(eb.start_time.split(':')[1]) : 0;
-      const ebEndRaw = eb.actual_end_time || eb.end_time;
-      const ebEnd = ebEndRaw ? Number(ebEndRaw.split(':')[0]) * 60 + Number(ebEndRaw.split(':')[1]) : ebStart + 60;
-      const ebEndWithBuf = ebEnd + buffer;
-      return candStart < ebEndWithBuf && candEnd > ebStart;
-    });
-
-    if (conflict) {
-      return res.status(409).json({
-        success: false,
-        error: 'This slot is no longer available. Please select another time.',
-      });
-    }
-
-    // 4. Google Calendar busy intervals conflict check
+    // 3. Google Calendar busy intervals conflict check (pre-RPC, non-blocking)
     try {
       const tz = provider.timezone || 'Asia/Kolkata';
       const gcalBusy = await googleCalendarService.getBusyIntervals(providerId, bookingDate, tz);
@@ -251,106 +205,125 @@ async function handleCreateBooking(req, res) {
       // Non-blocking fallback if calendar provider service is unreachable
     }
 
-    // 5. Generate or use management token
+    // 4. Generate or use management token
     const rawToken = (providedToken && typeof providedToken === 'string' && providedToken.trim().length >= 16)
       ? providedToken.trim()
       : crypto.randomBytes(24).toString('hex');
     const tokenHash = hashToken(rawToken);
     const tokenEncrypted = encryptToken(rawToken);
 
-    // 6. Upsert Customer Record
-    let customerId = null;
-    const { data: existingCustomer } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('phone', customerPhone.trim())
-      .maybeSingle();
-
-    if (existingCustomer?.id) {
-      customerId = existingCustomer.id;
-      try {
-        await supabase
-          .from('customers')
-          .update({
-            name: customerName.trim(),
-            email: customerEmail?.trim() || '',
-            whatsapp: (customerWhatsApp || customerPhone).trim(),
-          })
-          .eq('id', customerId);
-      } catch (_e) {}
+    // 5. Resolve meeting type for the booking
+    let resolvedMeetingType = 'online';
+    if (service.meeting_type === 'both' || !service.meeting_type) {
+      resolvedMeetingType = (requestedMeetingType === 'in-person') ? 'in-person' : 'online';
     } else {
-      const { data: newCustomer, error: custErr } = await supabase
-        .from('customers')
-        .insert({
-          name: customerName.trim(),
-          email: customerEmail?.trim() || '',
-          phone: customerPhone.trim(),
-          whatsapp: (customerWhatsApp || customerPhone).trim(),
-        })
-        .select('id')
-        .single();
-      if (!custErr && newCustomer) {
-        customerId = newCustomer.id;
+      resolvedMeetingType = service.meeting_type;
+    }
+    const resolvedLocation = resolvedMeetingType === 'in-person'
+      ? (service.location_address || requestedLocationAddress || provider.default_location_address || null)
+      : null;
+    const resolvedMapsLink = resolvedMeetingType === 'in-person' && resolvedLocation
+      ? (service.maps_link || requestedMapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedLocation)}`)
+      : null;
+
+    // 6. ATOMIC BOOKING CREATION via PL/pgSQL RPC
+    // Eliminates the TOCTOU race: conflict check + insert happen inside a single
+    // Postgres transaction with row-level locking (SELECT ... FOR UPDATE).
+    const baseNotes = notes ? notes.trim() : '';
+    const encodedNotes = `${baseNotes}\n[mgmt_hash:${tokenHash}]\n[mgmt_enc:${tokenEncrypted}]\n[mode:${resolvedMeetingType}]\n[loc:${resolvedLocation || ''}]\n[maps:${resolvedMapsLink || ''}]`.trim();
+    let newBooking = null;
+    let rpcEndTime = endTime;
+
+    try {
+      // Attempt 1: Call 13-parameter atomic RPC (Phase 1 migration)
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_booking_atomic', {
+        p_provider_id: providerId,
+        p_service_id: serviceId,
+        p_customer_name: customerName.trim(),
+        p_customer_email: customerEmail?.trim() || '',
+        p_customer_phone: customerPhone.trim(),
+        p_customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
+        p_booking_date: bookingDate,
+        p_start_time: startTime,
+        p_notes: encodedNotes,
+        p_management_token_hash: tokenHash,
+        p_meeting_type: resolvedMeetingType,
+        p_location_address: resolvedLocation,
+        p_maps_link: resolvedMapsLink,
+      });
+
+      if (!rpcError) {
+        const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
+
+        if (!result?.success) {
+          // Conflict detected atomically
+          if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
+            return res.status(409).json({ success: false, error: result.error });
+          }
+          return res.status(400).json({ success: false, error: result.error || 'Booking creation failed' });
+        }
+
+        newBooking = { id: result.bookingId };
+        rpcEndTime = result.endTime || endTime;
+      } else if (rpcError.code === 'PGRST202') {
+        // Attempt 2: Call legacy 9-parameter atomic RPC if Phase 1 migration is pending in DB
+        const { data: legResult, error: legError } = await supabase.rpc('create_booking_atomic', {
+          p_provider_id: providerId,
+          p_service_id: serviceId,
+          p_customer_name: customerName.trim(),
+          p_customer_email: customerEmail?.trim() || '',
+          p_customer_phone: customerPhone.trim(),
+          p_customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
+          p_booking_date: bookingDate,
+          p_start_time: startTime,
+          p_notes: encodedNotes,
+        });
+
+        if (!legError) {
+          const result = typeof legResult === 'string' ? JSON.parse(legResult) : legResult;
+          if (!result?.success) {
+            if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
+              return res.status(409).json({ success: false, error: result.error });
+            }
+            return res.status(400).json({ success: false, error: result.error || 'Booking creation failed' });
+          }
+          newBooking = { id: result.bookingId };
+          rpcEndTime = result.endTime || endTime;
+        } else {
+          throw legError;
+        }
+      } else {
+        throw rpcError;
       }
+    } catch (rpcErr) {
+      console.error('[PublicBookings] Atomic RPC failed:', rpcErr);
+      throw new Error(rpcErr.message || 'Atomic booking creation failed');
     }
 
-    // 7. Assemble insert payload with dual persistence (columns + notes fallback)
-    const baseNotes = notes ? notes.trim() : '';
-    const encodedNotes = `${baseNotes}\n[mgmt_hash:${tokenHash}]\n[mgmt_enc:${tokenEncrypted}]`.trim();
+    // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status (non-blocking)
+    try {
+      const postInsertPayload = {
+        management_token_encrypted: tokenEncrypted,
+        management_token_hash: tokenHash,
+        meeting_type: resolvedMeetingType,
+        location_address_snapshot: resolvedLocation,
+        maps_link_snapshot: resolvedMapsLink,
+      };
+      const paymentStatus = (Number(service.price) || 0) === 0 ? 'not_required' : 'awaiting_payment';
+      postInsertPayload.payment_status = paymentStatus;
+      await supabase.from('bookings').update(postInsertPayload).eq('id', newBooking.id);
+    } catch (_postErr) {
+      // Non-blocking: columns may be pending migration
+    }
 
     const insertPayload = {
-      provider_id: providerId,
-      service_id: service.id,
-      customer_id: customerId,
       customer_name: customerName.trim(),
       customer_email: customerEmail?.trim() || '',
       customer_phone: customerPhone.trim(),
       customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
-      booking_date: bookingDate,
-      start_time: startTime,
-      end_time: endTime,
-      duration,
       price: Number(service.price) || 0,
-      deposit_amount: Number(service.deposit_amount) || 0,
       deposit_status: 'na',
-      status: 'confirmed',
-      notes: encodedNotes,
     };
-
-    // Attempt insert with migration columns first
-    let newBooking = null;
-    let insertErr = null;
-
-    try {
-      const fullPayload = {
-        ...insertPayload,
-        management_token_hash: tokenHash,
-        management_token_encrypted: tokenEncrypted,
-      };
-      const res = await supabase.from('bookings').insert(fullPayload).select().single();
-      newBooking = res.data;
-      insertErr = res.error;
-    } catch (err) {
-      insertErr = err;
-    }
-
-    // If column doesn't exist yet (pre-migration), fall back to insert without columns
-    if (insertErr || !newBooking) {
-      const fallbackRes = await supabase.from('bookings').insert(insertPayload).select().single();
-      if (fallbackRes.error || !fallbackRes.data) {
-        throw new Error(fallbackRes.error?.message || insertErr?.message || 'Failed to insert booking');
-      }
-      newBooking = fallbackRes.data;
-    }
-
-    // 7a. Set payment_status based on service price
-    // Free bookings (price = 0) -> 'not_required', paid bookings -> 'awaiting_payment' (already default)
-    try {
-      const paymentStatus = (Number(service.price) || 0) === 0 ? 'not_required' : 'awaiting_payment';
-      await supabase.from('bookings').update({ payment_status: paymentStatus }).eq('id', newBooking.id);
-    } catch (_paymentStatusErr) {
-      // Non-blocking: payment_status column may not exist yet (pre-migration)
-    }
 
     // 7b. SYNCHRONOUS GOOGLE MEET LINK & CALENDAR EVENT GENERATION
     // Synchronously generate calendar event + Google Meet link before confirmation emails are sent.
@@ -527,12 +500,15 @@ async function handleCreateBooking(req, res) {
     return res.status(201).json({
       success: true,
       bookingId: newBooking.id,
-      endTime,
+      endTime: rpcEndTime,
       price: service.price,
       depositAmount: service.deposit_amount || 0,
       managementToken: rawToken,
       managementUrl,
       meetLink: meetLink || null,
+      meetingType: resolvedMeetingType,
+      locationAddress: resolvedLocation,
+      mapsLink: resolvedMapsLink,
       email: {
         customerSent: Boolean(customerEmailMsgId),
         customerMessageId: customerEmailMsgId,
@@ -663,11 +639,23 @@ router.get('/:token', async (req, res) => {
       });
     }
 
+    const extractTag = (text, tag) => {
+      const match = (text || '').match(new RegExp(`\\[${tag}:([^\\]]*)\\]`));
+      return match && match[1]?.trim() ? match[1].trim() : null;
+    };
+
     const cleanNotes = (bookingRow.notes || '')
       .replace(/\[mgmt_hash:[^\]]+\]/g, '')
       .replace(/\[mgmt_enc:[^\]]+\]/g, '')
+      .replace(/\[mode:[^\]]+\]/g, '')
+      .replace(/\[loc:[^\]]*\]/g, '')
+      .replace(/\[maps:[^\]]*\]/g, '')
       .trim();
     const managementUrl = `${(config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '')}/manage/${encodeURIComponent(token)}`;
+
+    const effectiveMeetingType = bookingRow.meeting_type || extractTag(bookingRow.notes, 'mode') || 'online';
+    const effectiveLocation = bookingRow.location_address_snapshot || extractTag(bookingRow.notes, 'loc') || null;
+    const effectiveMapsLink = bookingRow.maps_link_snapshot || extractTag(bookingRow.notes, 'maps') || (effectiveLocation ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(effectiveLocation)}` : null);
 
     // Return sanitized customer-facing projection (no internal keys or user IDs)
     return res.json({
@@ -689,7 +677,10 @@ router.get('/:token', async (req, res) => {
         notes: cleanNotes,
         managementUrl,
         meetLink: bookingRow.meet_link || null,
-        mode: 'In-person / Online',
+        mode: effectiveMeetingType === 'in-person' ? 'In-person' : (effectiveMeetingType === 'online' ? 'Online' : 'In-person / Online'),
+        meetingType: effectiveMeetingType,
+        locationAddress: effectiveLocation,
+        mapsLink: effectiveMapsLink,
         paymentStatus: bookingRow.payment_status || null,
         paymentScreenshotUrl: bookingRow.payment_screenshot_url || null,
         paymentMarkedPaidAt: bookingRow.payment_marked_paid_at || null,
@@ -781,42 +772,43 @@ router.post('/:token/reschedule', async (req, res) => {
     const providerId = booking.provider_id;
     const duration = Number(booking.duration) || 60;
     const provider = booking.providers || {};
-    const buffer = provider.buffer_time ?? 15;
+    const service = booking.services || {};
 
-    const [h, m] = newTime.split(':').map(Number);
-    const startMin = h * 60 + m;
+    // PART 5: Enforce cancellation_window on reschedule (same check as cancel)
+    // Product decision: BLOCK reschedule within the window (simpler, safer default).
+    // To switch to fee-based, change this block to match the cancel handler's fee logic.
+    const { data: policy } = await supabase
+      .from('cancellation_policies')
+      .select('cancellation_window, fee')
+      .eq('provider_id', providerId)
+      .maybeSingle();
+
+    const cancellationWindow = policy?.cancellation_window ?? 12;
+    try {
+      const aptTime = new Date(`${booking.booking_date}T${booking.start_time}`).getTime();
+      const hoursNotice = (aptTime - Date.now()) / (1000 * 60 * 60);
+      if (hoursNotice < cancellationWindow) {
+        return res.status(400).json({
+          success: false,
+          error: `Rescheduling is not allowed within ${cancellationWindow} hours of the appointment. Please contact your provider directly.`,
+          hoursRemaining: Math.max(0, Math.round(hoursNotice * 10) / 10),
+          cancellationWindow,
+        });
+      }
+    } catch (_e) {
+      // If date parsing fails, allow reschedule (fail-open for data issues)
+    }
+
+    // Save old date/time for notification emails
+    const oldDate = booking.booking_date;
+    const oldTime = booking.start_time;
+
+    // 1. Google Calendar busy intervals check when connected
+    const [hh, mm] = newTime.split(':').map(Number);
+    const startMin = hh * 60 + mm;
     const endMin = startMin + duration;
     const newEndTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 
-    // 1. Authoritative overlap conflict check against other confirmed bookings
-    const { data: existingBookings, error: ebErr } = await supabase
-      .from('bookings')
-      .select('id, start_time, end_time, actual_end_time, status, payment_status')
-      .eq('provider_id', providerId)
-      .eq('booking_date', newDate)
-      .neq('id', booking.id)
-      .in('status', ['confirmed', 'completed']);
-
-    if (ebErr) throw ebErr;
-
-    const validExistingBookings = (existingBookings || []).filter(b => b.payment_status !== 'rejected');
-
-    const candStart = startMin;
-    const candEnd = endMin + buffer;
-
-    const hasConflict = validExistingBookings.some(eb => {
-      const ebStart = eb.start_time ? Number(eb.start_time.split(':')[0]) * 60 + Number(eb.start_time.split(':')[1]) : 0;
-      const ebEndRaw = eb.actual_end_time || eb.end_time;
-      const ebEnd = ebEndRaw ? Number(ebEndRaw.split(':')[0]) * 60 + Number(ebEndRaw.split(':')[1]) : ebStart + 60;
-      const ebEndWithBuf = ebEnd + buffer;
-      return candStart < ebEndWithBuf && candEnd > ebStart;
-    });
-
-    if (hasConflict) {
-      return res.status(409).json({ success: false, error: 'Selected time slot is no longer available. Please select another slot.' });
-    }
-
-    // 2. Google Calendar busy intervals check when connected
     try {
       const tz = provider.timezone || 'Asia/Kolkata';
       const gcalBusy = await googleCalendarService.getBusyIntervals(providerId, newDate, tz);
@@ -832,42 +824,139 @@ router.post('/:token/reschedule', async (req, res) => {
         }
       }
     } catch (_gcalErr) {
-      // Non-blocking fallback if calendar provider service is unreachable
+      // Non-blocking fallback
     }
 
-    // 3. Persist update in Supabase (resetting reminder tracking fields)
-    const updatePayload = {
-      booking_date: newDate,
-      start_time: newTime,
-      end_time: newEndTime,
-      updated_at: new Date().toISOString(),
-    };
+    // 2. ATOMIC RESCHEDULE via PL/pgSQL RPC (eliminates TOCTOU race)
+    let rpcHandled = false;
+    try {
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('reschedule_booking_atomic', {
+        p_booking_id: booking.id,
+        p_new_date: newDate,
+        p_new_time: newTime,
+      });
 
-    // Attempt to reset reminder tracking columns if they exist
-    const fullUpdatePayload = {
-      ...updatePayload,
-      reminder_sent_at: null,
-      reminder_msg_id: null,
-      reminder_error: null,
-    };
+      if (!rpcError) {
+        const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
 
-    const { error: fullUpdateErr } = await supabase
-      .from('bookings')
-      .update(fullUpdatePayload)
-      .eq('id', booking.id);
+        if (!result?.success) {
+          if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
+            return res.status(409).json({ success: false, error: result.error });
+          }
+          return res.status(400).json({ success: false, error: result.error || 'Reschedule failed' });
+        }
+        rpcHandled = true;
+      } else if (rpcError.code !== 'PGRST202') {
+        throw rpcError;
+      }
+    } catch (rpcErr) {
+      if (rpcErr.code !== 'PGRST202') {
+        console.error('[PublicBookings] Atomic reschedule RPC failed:', rpcErr);
+        throw rpcErr;
+      }
+    }
 
-    if (fullUpdateErr) {
-      // Fallback if columns pending migration: update base fields and reset reminder tag in notes
-      const cleanedNotes = (booking.notes || '').replace(/\[rem_sent:[^\]]+\]/g, '').trim();
+    if (!rpcHandled) {
+      // Fallback if reschedule_booking_atomic is pending migration in DB
+      const buffer = provider.buffer_time ?? 15;
+      const candStart = startMin;
+      const candEnd = endMin + buffer;
+
+      const { data: ebData } = await supabase
+        .from('bookings')
+        .select('id, start_time, end_time, actual_end_time, status, payment_status')
+        .eq('provider_id', providerId)
+        .eq('booking_date', newDate)
+        .neq('id', booking.id)
+        .in('status', ['confirmed', 'completed']);
+
+      const hasConflict = (ebData || [])
+        .filter(b => b.payment_status !== 'rejected')
+        .some(eb => {
+          const ebStart = eb.start_time ? Number(eb.start_time.split(':')[0]) * 60 + Number(eb.start_time.split(':')[1]) : 0;
+          const ebEndRaw = eb.actual_end_time || eb.end_time;
+          const ebEnd = ebEndRaw ? Number(ebEndRaw.split(':')[0]) * 60 + Number(ebEndRaw.split(':')[1]) : ebStart + 60;
+          const ebEndWithBuf = ebEnd + buffer;
+          return candStart < ebEndWithBuf && candEnd > ebStart;
+        });
+
+      if (hasConflict) {
+        return res.status(409).json({ success: false, error: 'Selected time slot is no longer available. Please select another slot.' });
+      }
+
+      const updatePayload = {
+        booking_date: newDate,
+        start_time: newTime,
+        end_time: newEndTime,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error: baseUpdateErr } = await supabase
         .from('bookings')
-        .update({
-          ...updatePayload,
-          notes: cleanedNotes,
-        })
+        .update(updatePayload)
         .eq('id', booking.id);
 
       if (baseUpdateErr) throw baseUpdateErr;
+    }
+
+    // 3. Update Google Calendar event (non-blocking)
+    try {
+      const googleEventId = booking.google_event_id;
+      if (googleEventId) {
+        await googleCalendarService.updateEvent(providerId, googleEventId, {
+          id: booking.id,
+          date: newDate,
+          startTime: newTime,
+          endTime: newEndTime,
+          duration,
+          serviceName: service.name || 'Session',
+          customerName: booking.customer_name,
+          customerEmail: booking.customer_email,
+        }, provider.timezone || 'Asia/Kolkata');
+      }
+    } catch (_gcalUpdateErr) {
+      console.warn('[PublicBookings] Google Calendar update on reschedule failed (non-blocking):', _gcalUpdateErr.message);
+    }
+
+    // 4. Send reschedule notification emails (non-blocking)
+    try {
+      const providerName = provider.name || provider.business_name || 'Coach';
+      const serviceName = service.name || 'Session';
+
+      await Promise.allSettled([
+        booking.customer_email
+          ? emailService.sendRescheduleEmail({
+              to: booking.customer_email,
+              recipientName: booking.customer_name,
+              customerName: booking.customer_name,
+              serviceName,
+              providerName,
+              oldDate,
+              oldTime,
+              newDate,
+              newTime,
+              duration,
+              isProvider: false,
+            })
+          : Promise.resolve({ success: false, skipped: true }),
+        provider.email
+          ? emailService.sendRescheduleEmail({
+              to: provider.email,
+              recipientName: providerName,
+              customerName: booking.customer_name,
+              serviceName,
+              providerName,
+              oldDate,
+              oldTime,
+              newDate,
+              newTime,
+              duration,
+              isProvider: true,
+            })
+          : Promise.resolve({ success: false, skipped: true }),
+      ]);
+    } catch (_emailErr) {
+      console.warn('[PublicBookings] Reschedule notification emails failed (non-blocking):', _emailErr.message);
     }
 
     return res.json({
@@ -919,6 +1008,9 @@ router.post('/:token/cancel', async (req, res) => {
       });
     }
 
+    const provider = booking.providers || {};
+    const service = booking.services || {};
+
     // Evaluate policy window
     const { data: policy } = await supabase
       .from('cancellation_policies')
@@ -948,6 +1040,55 @@ router.post('/:token/cancel', async (req, res) => {
       .eq('id', booking.id);
 
     if (updateErr) throw updateErr;
+
+    // PART 5: Delete Google Calendar event on cancellation (non-blocking)
+    try {
+      const googleEventId = booking.google_event_id;
+      if (googleEventId) {
+        await googleCalendarService.deleteEvent(booking.provider_id, googleEventId);
+      }
+    } catch (_gcalDelErr) {
+      console.warn('[PublicBookings] Google Calendar delete on cancel failed (non-blocking):', _gcalDelErr.message);
+    }
+
+    // PART 6: Send cancellation notification emails (non-blocking)
+    try {
+      const providerName = provider.name || provider.business_name || 'Coach';
+      const serviceName = service.name || 'Session';
+
+      await Promise.allSettled([
+        booking.customer_email
+          ? emailService.sendCancellationEmail({
+              to: booking.customer_email,
+              recipientName: booking.customer_name,
+              customerName: booking.customer_name,
+              serviceName,
+              providerName,
+              bookingDate: booking.booking_date,
+              startTime: booking.start_time,
+              duration: Number(booking.duration) || 60,
+              cancellationStatus: newStatus,
+              isProvider: false,
+            })
+          : Promise.resolve({ success: false, skipped: true }),
+        provider.email
+          ? emailService.sendCancellationEmail({
+              to: provider.email,
+              recipientName: providerName,
+              customerName: booking.customer_name,
+              serviceName,
+              providerName,
+              bookingDate: booking.booking_date,
+              startTime: booking.start_time,
+              duration: Number(booking.duration) || 60,
+              cancellationStatus: newStatus,
+              isProvider: true,
+            })
+          : Promise.resolve({ success: false, skipped: true }),
+      ]);
+    } catch (_emailErr) {
+      console.warn('[PublicBookings] Cancellation notification emails failed (non-blocking):', _emailErr.message);
+    }
 
     return res.json({
       success: true,

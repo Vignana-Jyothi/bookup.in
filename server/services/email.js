@@ -1052,6 +1052,170 @@ Please contact ${providerName} directly:
       return { success: false, error: err.message };
     }
   }
+  /**
+   * 6. Send Cancellation Notification Email (to customer or provider)
+   */
+  async sendCancellationEmail({
+    to,
+    recipientName,
+    customerName,
+    serviceName,
+    providerName,
+    bookingDate,
+    startTime,
+    duration,
+    cancellationStatus = 'cancelled',
+    isProvider = false,
+  }) {
+    if (!to || !to.includes('@')) {
+      return { success: false, skipped: true, error: 'Missing or invalid email address' };
+    }
+
+    if (!this.isConfigured()) {
+      return { success: false, skipped: true, error: 'Resend API key not configured' };
+    }
+
+    try {
+      const client = this.getClient();
+      const isLate = cancellationStatus === 'late-cancellation';
+      const statusLabel = isLate ? 'Late Cancellation' : 'Cancelled';
+      const subject = isProvider
+        ? `Appointment Cancelled: ${customerName} — ${serviceName}`
+        : `Your appointment with ${providerName} has been cancelled`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 32px 16px; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <span style="font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">Calup</span>
+            <h1 style="font-size: 22px; font-weight: 700; color: #dc2626; margin: 24px 0 12px;">Appointment ${statusLabel}</h1>
+            <p style="font-size: 15px; line-height: 1.5; color: #334155; margin: 0 0 20px;">
+              Hi ${recipientName || 'there'}, ${isProvider
+                ? `${customerName} has cancelled their appointment.`
+                : `your appointment with <strong>${providerName}</strong> has been cancelled.`}
+            </p>
+            <div style="background-color: #fef2f2; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border: 1px solid #fecaca;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr><td style="padding: 6px 0; color: #64748b; width: 30%;">Service</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${serviceName}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Date</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${bookingDate}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Time</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${startTime} (${duration} mins)</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Status</td><td style="padding: 6px 0; color: #dc2626; font-weight: 600;">${statusLabel}</td></tr>
+              </table>
+            </div>
+            ${isLate ? '<p style="font-size: 13px; color: #dc2626; margin: 16px 0;">⚠️ This is a late cancellation. Cancellation policy fees may apply.</p>' : ''}
+          </div>
+        </body>
+        </html>
+      `;
+
+      const text = `Appointment ${statusLabel}\n\nHi ${recipientName || 'there'},\n\nService: ${serviceName}\nDate: ${bookingDate}\nTime: ${startTime} (${duration} mins)\nStatus: ${statusLabel}\n${isLate ? '\n⚠️ Late cancellation — fees may apply.' : ''}`;
+
+      const { data, error } = await client.emails.send({
+        from: this.fromEmail,
+        to: [to.trim()],
+        subject,
+        text,
+        html,
+      });
+
+      if (error) {
+        console.error(`[EmailService] Cancellation email failed. Recipient: "${to}", Error: ${error.message || JSON.stringify(error)}`);
+        return { success: false, error: error.message || String(error) };
+      }
+
+      return { success: true, messageId: data?.id || null };
+    } catch (err) {
+      console.error(`[EmailService] Cancellation email exception. Recipient: "${to}", Error: ${err.message || err}`);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 7. Send Reschedule Notification Email (to customer or provider)
+   */
+  async sendRescheduleEmail({
+    to,
+    recipientName,
+    customerName,
+    serviceName,
+    providerName,
+    oldDate,
+    oldTime,
+    newDate,
+    newTime,
+    duration,
+    isProvider = false,
+  }) {
+    if (!to || !to.includes('@')) {
+      return { success: false, skipped: true, error: 'Missing or invalid email address' };
+    }
+
+    if (!this.isConfigured()) {
+      return { success: false, skipped: true, error: 'Resend API key not configured' };
+    }
+
+    try {
+      const client = this.getClient();
+      const subject = isProvider
+        ? `Appointment Rescheduled: ${customerName} — ${serviceName}`
+        : `Your appointment with ${providerName} has been rescheduled`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 32px 16px; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <span style="font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">Calup</span>
+            <h1 style="font-size: 22px; font-weight: 700; color: #2563eb; margin: 24px 0 12px;">Appointment Rescheduled</h1>
+            <p style="font-size: 15px; line-height: 1.5; color: #334155; margin: 0 0 20px;">
+              Hi ${recipientName || 'there'}, ${isProvider
+                ? `${customerName} has rescheduled their ${serviceName} appointment.`
+                : `your appointment with <strong>${providerName}</strong> has been rescheduled.`}
+            </p>
+            <div style="background-color: #fef2f2; border-radius: 8px; padding: 14px 18px; margin: 16px 0; border: 1px solid #fecaca;">
+              <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: #dc2626; margin-bottom: 8px;">Previous</div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr><td style="padding: 4px 0; color: #64748b; width: 30%;">Date</td><td style="padding: 4px 0; color: #64748b; text-decoration: line-through;">${oldDate}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Time</td><td style="padding: 4px 0; color: #64748b; text-decoration: line-through;">${oldTime}</td></tr>
+              </table>
+            </div>
+            <div style="background-color: #f0fdf4; border-radius: 8px; padding: 14px 18px; margin: 16px 0; border: 1px solid #bbf7d0;">
+              <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: #16a34a; margin-bottom: 8px;">New Schedule</div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr><td style="padding: 4px 0; color: #64748b; width: 30%;">Service</td><td style="padding: 4px 0; color: #0f172a; font-weight: 600;">${serviceName}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Date</td><td style="padding: 4px 0; color: #0f172a; font-weight: 600;">${newDate}</td></tr>
+                <tr><td style="padding: 4px 0; color: #64748b;">Time</td><td style="padding: 4px 0; color: #0f172a; font-weight: 600;">${newTime} (${duration} mins)</td></tr>
+              </table>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const text = `Appointment Rescheduled\n\nHi ${recipientName || 'there'},\n\nService: ${serviceName}\n\nPrevious: ${oldDate} at ${oldTime}\nNew: ${newDate} at ${newTime} (${duration} mins)`;
+
+      const { data, error } = await client.emails.send({
+        from: this.fromEmail,
+        to: [to.trim()],
+        subject,
+        text,
+        html,
+      });
+
+      if (error) {
+        console.error(`[EmailService] Reschedule email failed. Recipient: "${to}", Error: ${error.message || JSON.stringify(error)}`);
+        return { success: false, error: error.message || String(error) };
+      }
+
+      return { success: true, messageId: data?.id || null };
+    } catch (err) {
+      console.error(`[EmailService] Reschedule email exception. Recipient: "${to}", Error: ${err.message || err}`);
+      return { success: false, error: err.message };
+    }
+  }
 }
 
 export const emailService = new EmailService();

@@ -56,6 +56,52 @@ const ARTICLES = [
   },
 ];
 
+/* ---- Feature highlights data ---- */
+const FEATURES = [
+  {
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+      </svg>
+    ),
+    title: "Share Your Link",
+    desc: "Give clients one simple booking link.",
+  },
+  {
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+    title: "Get Booked",
+    desc: "Clients choose a time that works for them.",
+  },
+  {
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 01-3.46 0" />
+      </svg>
+    ),
+    title: "Stay Organized",
+    desc: "Manage everything in one place.",
+  },
+  {
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </svg>
+    ),
+    title: "Grow Your Business",
+    desc: "Less back-and-forth. More clients.",
+  },
+];
+
 export default function Landing() {
   const navigate = useNavigate();
   const { dispatch } = useStore();
@@ -92,117 +138,162 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* --- HERO SECTION --- */}
+      {/* --- HERO SECTION (Redesigned two-column) --- */}
       <section className="landing-hero-section">
-        <div className="hero-lime-container animate-fade-in-up">
-          {/* Social Proof Avatar Pill */}
-          <div className="hero-social-proof">
-            <div className="avatar-stack">
-              <span className="avatar-mini">🧑🏽‍💼</span>
-              <span className="avatar-mini">👩🏻‍⚕️</span>
-              <span className="avatar-mini">💈</span>
-              <span className="avatar-mini">💇🏼‍♀️</span>
-            </div>
-            <span>Loved by tons of Business Owners</span>
-          </div>
+        {/* Organic lime decorative shapes */}
+        <div className="hero-blob hero-blob-1" aria-hidden="true" />
+        <div className="hero-blob hero-blob-2" aria-hidden="true" />
+        <div className="hero-blob hero-blob-3" aria-hidden="true" />
 
-          {/* Bold Sans Headline with Italic-Serif Accent Phrase */}
-          <h1 className="hero-headline">
-            A Friendly Way to <br className="hide-mobile" />
-            <em className="headline-accent">Book Your Day</em>
-          </h1>
-
-          <p className="hero-subline">
-            Simple scheduling for service businesses. Share your personal booking link,
-            accept clients in seconds, and stay organized without the back-and-forth.
-          </p>
-
-          <div className="hero-cta-row">
-            <PillButton variant="primary" size="lg" arrow onClick={handleStartTrial}>
-              Start Free Trial
-            </PillButton>
-            <button className="hero-ghost-btn" onClick={handleStartTrial}>
-              ⚡ View Live Demo
-            </button>
-          </div>
-
-          {/* Hero Flanked Preview Cards + Dashboard Mockup Container */}
-          <div className="hero-mockup-wrapper">
-            {/* Left Flanking Card (Dark Booking Preview) */}
-            <div className="flank-card flank-left hide-mobile animate-scale-in">
-              <div className="flank-card-header">
-                <span className="flank-badge">Booking page</span>
+        <div className="hero-two-col">
+          {/* LEFT COLUMN — text content */}
+          <div className="hero-text-col animate-fade-in-up">
+            {/* Social Proof Avatar Pill */}
+            <div className="hero-social-proof">
+              <div className="avatar-stack">
+                <span className="avatar-mini">🧑🏽‍💼</span>
+                <span className="avatar-mini">👩🏻‍⚕️</span>
+                <span className="avatar-mini">💈</span>
+                <span className="avatar-mini">💇🏼‍♀️</span>
               </div>
-              <div className="flank-sun-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C6F135" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" />
-                  <line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              </div>
-              <div className="flank-card-title">Photo & Studio</div>
-              <div className="flank-card-desc">Fast, familiar booking for clients</div>
+              <span>Loved by tons of Business Owners</span>
             </div>
 
-            {/* Center Device Frame Holding the Dashboard View */}
-            <div className="center-device-frame" onClick={handleStartTrial} title="Click to launch interactive dashboard">
-              <div className="device-top-bar">
-                <span className="device-dot red" />
-                <span className="device-dot yellow" />
-                <span className="device-dot green" />
-                <span className="device-address">calup.in/dashboard</span>
-              </div>
-              <div className="device-screen-content">
-                {/* Mini Dashboard representation */}
-                <div className="mini-dash-layout">
-                  <div className="mini-sidebar">
-                    <span className="mini-logo-dot" />
-                    <span className="mini-nav-dot active" />
-                    <span className="mini-nav-dot" />
-                    <span className="mini-nav-dot" />
-                    <span className="mini-nav-dot" />
+            {/* Bold Sans Headline with Italic-Serif Accent Phrase */}
+            <h1 className="hero-headline">
+              A Friendly Way to <br className="hide-mobile" />
+              <em className="headline-accent">Book Your Day</em>
+            </h1>
+
+            <p className="hero-subline">
+              Simple scheduling for service businesses. Share your personal booking link,
+              accept clients in seconds, and stay organized without the back-and-forth.
+            </p>
+
+            <div className="hero-cta-row">
+              <PillButton variant="primary" size="lg" arrow onClick={handleStartTrial}>
+                Start Free Trial
+              </PillButton>
+              <button className="hero-ghost-btn" onClick={handleStartTrial}>
+                ⚡ View Live Demo
+              </button>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN — mockups */}
+          <div className="hero-mockups-col">
+            {/* Handwritten annotations */}
+            <div className="hero-annotation annotation-top" aria-hidden="true">
+              <span>Your bookings.</span>
+              <span>One simple link.</span>
+            </div>
+            <div className="hero-annotation annotation-right" aria-hidden="true">
+              <span>Less chaos.</span>
+              <span>More clients.</span>
+            </div>
+
+            {/* LAPTOP MOCKUP */}
+            <div className="laptop-mockup">
+              <div className="laptop-screen">
+                {/* Browser chrome */}
+                <div className="laptop-chrome">
+                  <div className="chrome-dots">
+                    <span className="dot dot-red" />
+                    <span className="dot dot-yellow" />
+                    <span className="dot dot-green" />
                   </div>
-                  <div className="mini-main">
-                    <div className="mini-topbar">
-                      <span className="mini-chip">Dashboard</span>
-                      <span className="mini-search-bar" />
+                  <div className="chrome-address">calup.in/dashboard</div>
+                </div>
+
+                {/* Dashboard content */}
+                <div className="dash-content">
+                  {/* Dashboard top bar */}
+                  <div className="dash-topbar">
+                    <div className="dash-topbar-left">
+                      <div className="dash-logo-sm">
+                        <div className="dash-logo-icon" />
+                        <span>calup</span>
+                      </div>
+                      <div className="dash-nav-items">
+                        <span className="dash-nav-active">Dashboard</span>
+                        <span>Bookings</span>
+                        <span>Services</span>
+                        <span>Clients</span>
+                        <span>Settings</span>
+                      </div>
                     </div>
-                    <div className="mini-grid">
-                      <div className="mini-stat-card">
-                        <div className="mini-label">Bookings</div>
-                        <div className="mini-val">12 ↑</div>
-                      </div>
-                      <div className="mini-stat-card">
-                        <div className="mini-label">Active Staff</div>
-                        <div className="mini-val">4 / 5</div>
-                      </div>
-                      <div className="mini-cal-card">
-                        <div className="mini-cal-title">October</div>
-                        <div className="mini-cal-dots" />
-                      </div>
+                    <div className="dash-avatar">S</div>
+                  </div>
+
+                  {/* Dashboard title */}
+                  <div className="dash-title">Dashboard</div>
+
+                  {/* Stat cards row */}
+                  <div className="dash-stats-row">
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-label">Total Bookings</div>
+                      <div className="dash-stat-number">24</div>
+                      <div className="dash-stat-change positive">▲ +12%</div>
                     </div>
-                    <div className="mini-schedule-strip">
-                      <div className="mini-schedule-row highlighted">14:00 · Rendy · Haircut · +91 98765...</div>
-                      <div className="mini-schedule-row">15:00 · Vincent · Styling · +91 98765...</div>
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-label">Active Clients</div>
+                      <div className="dash-stat-number">18</div>
+                      <div className="dash-stat-change positive">▲ +8%</div>
+                    </div>
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-label">This Month</div>
+                      <div className="dash-stat-number">₹24,500</div>
+                      <div className="dash-stat-change positive">▲ +20%</div>
+                    </div>
+                  </div>
+
+                  {/* Upcoming Appointments table */}
+                  <div className="dash-appointments">
+                    <div className="appt-header">
+                      <span className="appt-title">Upcoming Appointments</span>
+                      <span className="appt-view-all">View All &gt;</span>
+                    </div>
+                    <div className="appt-date-label">● Today, Sep 25</div>
+                    <div className="appt-table">
+                      <div className="appt-row">
+                        <span className="appt-time">10:00 AM</span>
+                        <span className="appt-service">1-on-1 Coaching</span>
+                        <span className="appt-client">Aarav Sharma</span>
+                        <span className="appt-status confirmed">Confirmed</span>
+                      </div>
+                      <div className="appt-row">
+                        <span className="appt-time">11:30 AM</span>
+                        <span className="appt-service">Consultation Call</span>
+                        <span className="appt-client">Priya Mehta</span>
+                        <span className="appt-status confirmed">Confirmed</span>
+                      </div>
+                      <div className="appt-row">
+                        <span className="appt-time">2:00 PM</span>
+                        <span className="appt-service">Strategy Session</span>
+                        <span className="appt-client">Rohan Verma</span>
+                        <span className="appt-status pending">Pending</span>
+                      </div>
+                      <div className="appt-row">
+                        <span className="appt-time">4:00 PM</span>
+                        <span className="appt-service">Follow Up</span>
+                        <span className="appt-client">Neha Kapoor</span>
+                        <span className="appt-status confirmed">Confirmed</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+              {/* Laptop base */}
+              <div className="laptop-base" />
             </div>
 
-            {/* Right Flanking Card (White Booking Preview) */}
-            <div className="flank-card flank-right hide-mobile animate-scale-in">
-              <div className="flank-card-header">
-                <span className="flank-badge light">Booking page</span>
+            {/* FLOATING BOOKING CARD (dark) — overlapping the laptop */}
+            <div className="floating-booking-card animate-scale-in">
+              <div className="fbc-header">
+                <span className="fbc-badge">Booking page</span>
               </div>
-              <div className="flank-sun-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2.5">
+              <div className="fbc-sun-icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#C6F135" strokeWidth="2.5">
                   <circle cx="12" cy="12" r="5" />
                   <line x1="12" y1="1" x2="12" y2="3" />
                   <line x1="12" y1="21" x2="12" y2="23" />
@@ -214,10 +305,109 @@ export default function Landing() {
                   <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                 </svg>
               </div>
-              <div className="flank-card-title">Consultation</div>
-              <div className="flank-card-desc">Google Meet & calendar sync</div>
+              <div className="fbc-title">Photo & Studio</div>
+              <div className="fbc-desc">Fast, familiar booking<br/>for clients.</div>
+            </div>
+
+            {/* PHONE MOCKUP */}
+            <div className="phone-mockup animate-scale-in">
+              <div className="phone-notch" />
+              <div className="phone-url-bar">calup.in/book/marcus-lee</div>
+              <div className="phone-content">
+                {/* Provider profile */}
+                <div className="phone-profile">
+                  <div className="phone-avatar-circle">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M20 21a8 8 0 10-16 0" />
+                    </svg>
+                  </div>
+                  <div className="phone-profile-info">
+                    <div className="phone-profile-name">Marcus Lee <span className="phone-verified">●</span></div>
+                    <div className="phone-profile-role">1-on-1 Coaching</div>
+                  </div>
+                </div>
+
+                {/* Select a Service */}
+                <div className="phone-section-title">Select a Service</div>
+                <div className="phone-services">
+                  <div className="phone-service selected">
+                    <div className="phone-service-radio active" />
+                    <div className="phone-service-info">
+                      <div className="phone-service-name">1-on-1 Coaching</div>
+                      <div className="phone-service-meta">60 min · ₹1,200</div>
+                    </div>
+                  </div>
+                  <div className="phone-service">
+                    <div className="phone-service-radio" />
+                    <div className="phone-service-info">
+                      <div className="phone-service-name">Group Session</div>
+                      <div className="phone-service-meta">90 min · ₹1,000</div>
+                    </div>
+                  </div>
+                  <div className="phone-service">
+                    <div className="phone-service-radio" />
+                    <div className="phone-service-info">
+                      <div className="phone-service-name">Nutrition Consultation</div>
+                      <div className="phone-service-meta">30 min · ₹800</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Select a Date */}
+                <div className="phone-section-title">Select a Date</div>
+                <div className="phone-calendar">
+                  <div className="phone-cal-month">September 2026</div>
+                  <div className="phone-cal-grid">
+                    <span className="cal-day-header">Sun</span>
+                    <span className="cal-day-header">Mon</span>
+                    <span className="cal-day-header">Tue</span>
+                    <span className="cal-day-header">Wed</span>
+                    <span className="cal-day-header">Thu</span>
+                    <span className="cal-day-header">Fri</span>
+                    <span className="cal-day-header">Sat</span>
+                    <span className="cal-day">21</span>
+                    <span className="cal-day">22</span>
+                    <span className="cal-day">23</span>
+                    <span className="cal-day active">24</span>
+                    <span className="cal-day today">25</span>
+                    <span className="cal-day">26</span>
+                    <span className="cal-day">27</span>
+                  </div>
+                </div>
+
+                {/* Available Slots */}
+                <div className="phone-section-title">Available Slots</div>
+                <div className="phone-slots">
+                  <span className="phone-slot">9:00 AM</span>
+                  <span className="phone-slot selected">10:00 AM</span>
+                  <span className="phone-slot">11:00 AM</span>
+                </div>
+
+                {/* Confirm button */}
+                <button className="phone-confirm-btn">Confirm Booking</button>
+              </div>
+            </div>
+
+            {/* "Built for service businesses." annotation */}
+            <div className="hero-annotation annotation-bottom" aria-hidden="true">
+              <span>Built for</span>
+              <span>service <em>businesses.</em></span>
             </div>
           </div>
+        </div>
+
+        {/* Feature Highlights Strip */}
+        <div className="hero-features-strip" id="features">
+          {FEATURES.map((f, i) => (
+            <div key={i} className="hero-feature-item">
+              <div className="hero-feature-icon">{f.icon}</div>
+              <div className="hero-feature-text">
+                <div className="hero-feature-title">{f.title}</div>
+                <div className="hero-feature-desc">{f.desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -328,8 +518,8 @@ export default function Landing() {
           <div className="trust-card">
             <div className="trust-quote-col">
               <p className="trust-quote">
-                “Before using CalUp, we struggled with missed appointments and chaotic back-and-forth messaging.
-                Now clients book instantly through one link, and our schedule stays 100% full.”
+                "Before using CalUp, we struggled with missed appointments and chaotic back-and-forth messaging.
+                Now clients book instantly through one link, and our schedule stays 100% full."
               </p>
               <div className="trust-author">
                 <strong>Riko & Maya</strong> — Studio Co-founders
@@ -383,7 +573,7 @@ export default function Landing() {
           <div className="testimonial-grid">
             {TESTIMONIALS.map((t, idx) => (
               <div key={idx} className={`testimonial-card ${t.bg}`}>
-                <p className="testimonial-quote">“{t.quote}”</p>
+                <p className="testimonial-quote">"{t.quote}"</p>
                 <div className="testimonial-meta">
                   <div className="avatar-circle">{t.author.charAt(0)}</div>
                   <div>

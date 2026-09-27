@@ -44,9 +44,13 @@ export class MockWhatsAppProvider extends NotificationProvider {
         ? (typeof window !== 'undefined' ? `${window.location.origin}/manage/${booking.managementToken}` : `https://calup-in.vercel.app/manage/${booking.managementToken}`)
         : '');
 
+    const resolvedMode = booking.meetingType === 'in-person'
+      ? 'In-person'
+      : (booking.meetingType === 'online' ? 'Online' : 'In-person / Online');
+
     const manageSection = manageLink
       ? `\n\nManage your booking:\n${manageLink}\n\nYou can use this link to reschedule or cancel your appointment.`
-      : '\n\n📍 Mode: In-person / Online\n⚠️ Reply CANCEL to cancel (free cancellation up to 12 hrs before).';
+      : `\n\n📍 Mode: ${resolvedMode}\n⚠️ Reply CANCEL to cancel (free cancellation up to 12 hrs before).`;
 
     return `Hi ${custName}! 👋\n\nYour ${svcName} with ${provName} is confirmed.\n\n📅 ${dateFormatted}\n⏰ ${startFormatted}–${endFormatted}${depositNote}${manageSection}\n\nSee you soon!`;
   }

@@ -197,6 +197,10 @@ export default function CustomerBooking() {
   }
 
   const handleOpenReschedule = () => {
+    if (!isWithinFreeCancellation) {
+      addToast(`Rescheduling is not allowed within ${cancellationWindow} hours of the appointment. Please contact your provider directly.`, 'error');
+      return;
+    }
     setNewDate(resolvedBooking.date >= today ? resolvedBooking.date : today);
     setNewTime('');
     setShowRescheduleModal(true);
@@ -407,6 +411,10 @@ export default function CustomerBooking() {
   };
 
   const meetUrl = resolvedBooking?.meetLink || resolvedBooking?.meet_link;
+  const meetingType = resolvedBooking?.meetingType || resolvedBooking?.meeting_type || (resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot ? 'in-person' : 'online');
+  const isInPerson = meetingType === 'in-person';
+  const locationAddress = resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot || resolvedBooking?.locationAddress || null;
+  const mapsLink = resolvedBooking?.mapsLinkSnapshot || resolvedBooking?.maps_link_snapshot || resolvedBooking?.mapsLink || (locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null);
 
   return (
     <div className="janjiyuk-booking-canvas">
@@ -486,6 +494,18 @@ export default function CustomerBooking() {
               <span className="manage-detail-val">{resolvedBooking.duration} min</span>
             </div>
             <div className="manage-detail-row">
+              <span className="manage-detail-label">Mode</span>
+              <span className="manage-detail-val">{isInPerson ? '📍 In-person' : '🌐 Online'}</span>
+            </div>
+            {isInPerson && locationAddress && (
+              <div className="manage-detail-row">
+                <span className="manage-detail-label">Location</span>
+                <span className="manage-detail-val" style={{ textAlign: 'right', maxWidth: '60%' }}>
+                  {locationAddress}
+                </span>
+              </div>
+            )}
+            <div className="manage-detail-row">
               <span className="manage-detail-label">Status</span>
               <span
                 className={`badge ${statusBadgeStyle ? '' : 'badge-active'}`}
@@ -496,30 +516,50 @@ export default function CustomerBooking() {
             </div>
           </div>
 
-          {/* Google Meet Block */}
-          {meetUrl ? (
-            <div className="manage-meet-block animate-fade-in-up">
-              <div className="manage-meet-title">Virtual Session via Google Meet</div>
-              <PillButton
-                variant="primary"
-                onClick={() => window.open(meetUrl, '_blank', 'noopener,noreferrer')}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                Join Google Meet →
-              </PillButton>
-              <a
-                href={meetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="manage-meet-link"
-              >
-                {meetUrl}
-              </a>
+          {/* Meeting Mode Block: Directions for In-Person or Google Meet for Online */}
+          {isInPerson ? (
+            <div className="manage-meet-block animate-fade-in-up" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px' }}>
+              <div className="manage-meet-title" style={{ color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📍</span> In-Person Meeting Location
+              </div>
+              <p style={{ fontSize: '13.5px', color: '#334155', margin: '8px 0 16px', lineHeight: 1.5 }}>
+                {locationAddress || 'Address will be confirmed by your coach.'}
+              </p>
+              {locationAddress && (
+                <PillButton
+                  variant="primary"
+                  onClick={() => window.open(mapsLink, '_blank', 'noopener,noreferrer')}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  Get Directions ↗
+                </PillButton>
+              )}
             </div>
           ) : (
-            <div className="manage-meet-pending">
-              Meet link will be sent before your session.
-            </div>
+            meetUrl ? (
+              <div className="manage-meet-block animate-fade-in-up">
+                <div className="manage-meet-title">Virtual Session via Google Meet</div>
+                <PillButton
+                  variant="primary"
+                  onClick={() => window.open(meetUrl, '_blank', 'noopener,noreferrer')}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  Join Google Meet →
+                </PillButton>
+                <a
+                  href={meetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="manage-meet-link"
+                >
+                  {meetUrl}
+                </a>
+              </div>
+            ) : (
+              <div className="manage-meet-pending">
+                Meet link will be sent before your session.
+              </div>
+            )
           )}
 
           {/* Payment Verification Section */}
@@ -811,12 +851,24 @@ export default function CustomerBooking() {
           {isConfirmed && (
             <div className="manage-actions-stack">
               <PillButton
-                variant="primary"
+                variant={isWithinFreeCancellation ? "primary" : "secondary"}
                 onClick={handleOpenReschedule}
-                style={{ width: '100%', justifyContent: 'center' }}
+                disabled={!isWithinFreeCancellation}
+                title={!isWithinFreeCancellation ? `Rescheduling is not allowed within ${cancellationWindow} hours of appointment.` : ''}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  opacity: !isWithinFreeCancellation ? 0.6 : 1,
+                  cursor: !isWithinFreeCancellation ? 'not-allowed' : 'pointer',
+                }}
               >
                 Reschedule Appointment
               </PillButton>
+              {!isWithinFreeCancellation && (
+                <div style={{ fontSize: '11.5px', color: 'var(--color-text-tertiary, #64748b)', textAlign: 'center', marginTop: '-4px' }}>
+                  Rescheduling closed within {cancellationWindow}h cutoff window.
+                </div>
+              )}
 
               <PillButton
                 variant="secondary"

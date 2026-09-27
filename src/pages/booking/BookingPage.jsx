@@ -106,6 +106,7 @@ export default function PublicBookingPage() {
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
+  const [customerMeetingType, setCustomerMeetingType] = useState('online');
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '', notes: '' });
   const [policyAgreed, setPolicyAgreed] = useState(true);
   const [submittingBooking, setSubmittingBooking] = useState(false);
@@ -353,9 +354,17 @@ export default function PublicBookingPage() {
     }
     const managementUrl = buildManagementUrl(managementToken);
 
-    let realBookingId = generateId('booking');
-    let authoritativePrice = service.price;
-    let authoritativeDeposit = service.depositAmount || 0;
+    const resolvedMeetingType = selectedService.meetingType === 'both'
+      ? customerMeetingType
+      : (selectedService.meetingType || 'online');
+
+    const resolvedLocation = resolvedMeetingType === 'in-person'
+      ? (selectedService.locationAddress || provider?.defaultLocationAddress || null)
+      : null;
+
+    const resolvedMapsLink = resolvedMeetingType === 'in-person' && resolvedLocation
+      ? (selectedService.mapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedLocation)}`)
+      : null;
 
     if (!isDemo && isSupabaseConfigured() && provider?.id) {
       try {
@@ -371,6 +380,9 @@ export default function PublicBookingPage() {
           notes: customerInfo.notes?.trim() || '',
           managementToken,
           managementTokenHash: tokenHash,
+          meetingType: resolvedMeetingType,
+          locationAddress: resolvedLocation,
+          mapsLink: resolvedMapsLink,
         });
 
         if (result?.bookingId) realBookingId = result.bookingId;
@@ -442,6 +454,9 @@ export default function PublicBookingPage() {
         notes: customerInfo.notes || '',
         managementToken,
         managementUrl,
+        meetingType: resolvedMeetingType,
+        locationAddress: resolvedLocation,
+        mapsLink: resolvedMapsLink,
         createdAt: new Date().toISOString(),
       };
 
@@ -540,7 +555,10 @@ export default function PublicBookingPage() {
                     key={svc.id}
                     type="button"
                     className={`service-select-row ${isSelected ? 'selected' : ''}`}
-                    onClick={() => setSelectedService(svc)}
+                    onClick={() => {
+                      setSelectedService(svc);
+                      setCustomerMeetingType(svc.meetingType === 'in-person' ? 'in-person' : 'online');
+                    }}
                   >
                     <div className="service-row-left">
                       <div className="service-row-radio">
@@ -549,7 +567,7 @@ export default function PublicBookingPage() {
                       <div className="service-row-info">
                         <span className="service-row-title">{svc.name}</span>
                         <span className="service-row-meta">
-                          {svc.duration} min · {formatCurrency(svc.price)}
+                          {svc.duration} min · {formatCurrency(svc.price)} · {svc.meetingType === 'in-person' ? '📍 In-person' : (svc.meetingType === 'both' ? '🔀 Online / In-person' : '🌐 Online')}
                         </span>
                       </div>
                     </div>
@@ -692,7 +710,74 @@ export default function PublicBookingPage() {
                 <span className="summary-chip">📅 {formatDate(selectedDate)}</span>
                 <span className="summary-chip">⏰ {formatTime(selectedTime)}</span>
                 <span className="summary-chip">💰 {formatCurrency(selectedService?.price)}</span>
+                <span className="summary-chip">
+                  {(selectedService?.meetingType === 'both' ? customerMeetingType : (selectedService?.meetingType || 'online')) === 'in-person' ? '📍 In-person' : '🌐 Online'}
+                </span>
               </div>
+            </div>
+
+            {/* Meeting Mode Selection or Display */}
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>Meeting Mode</label>
+              {selectedService?.meetingType === 'both' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerMeetingType('online')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      border: customerMeetingType === 'online' ? '2px solid var(--color-lime, #22c55e)' : '1px solid var(--theme-border, #e2e8f0)',
+                      background: customerMeetingType === 'online' ? 'var(--theme-bg-subtle, #f0fdf4)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text)' }}>🌐 Online Session</div>
+                    <div style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>Google Meet link provided</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerMeetingType('in-person')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      border: customerMeetingType === 'in-person' ? '2px solid var(--color-lime, #22c55e)' : '1px solid var(--theme-border, #e2e8f0)',
+                      background: customerMeetingType === 'in-person' ? 'var(--theme-bg-subtle, #f0fdf4)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text)' }}>📍 In-person Session</div>
+                    <div style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>At physical location</div>
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  background: 'var(--theme-bg-subtle, #f8fafc)',
+                  border: '1px solid var(--theme-border, #e2e8f0)',
+                  fontSize: '13px',
+                  color: 'var(--color-text)',
+                }}>
+                  {selectedService?.meetingType === 'in-person' ? (
+                    <div>
+                      <strong>📍 In-Person Session:</strong>{' '}
+                      {selectedService.locationAddress || provider?.defaultLocationAddress || 'Address will be provided after booking'}
+                    </div>
+                  ) : (
+                    <div>
+                      <strong>🌐 Online Session:</strong> Google Meet link will be provided upon confirmation.
+                    </div>
+                  )}
+                </div>
+              )}
+              {customerMeetingType === 'in-person' && selectedService?.meetingType === 'both' && (
+                <div style={{ fontSize: '12px', color: 'var(--theme-text-muted)', marginTop: '6px' }}>
+                  📍 Location: {selectedService.locationAddress || provider?.defaultLocationAddress || 'Address provided upon booking'}
+                </div>
+              )}
             </div>
 
             {/* Input fields with 16px radius */}

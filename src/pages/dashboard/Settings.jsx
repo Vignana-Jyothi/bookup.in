@@ -27,6 +27,7 @@ export default function Settings() {
   const [email, setEmail] = useState(provider.email || '');
   const [phone, setPhone] = useState(provider.phone || '');
   const [avatar, setAvatar] = useState(provider.avatar || provider.avatarUrl || null);
+  const [defaultLocationAddress, setDefaultLocationAddress] = useState(provider.defaultLocationAddress || '');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
   const [bioError, setBioError] = useState('');
@@ -49,6 +50,9 @@ export default function Settings() {
       if (state.provider.phone && !phone) setPhone(state.provider.phone);
       if ((state.provider.avatar || state.provider.avatarUrl) && !avatar) {
         setAvatar(state.provider.avatar || state.provider.avatarUrl);
+      }
+      if (state.provider.defaultLocationAddress && !defaultLocationAddress) {
+        setDefaultLocationAddress(state.provider.defaultLocationAddress);
       }
       if (state.provider.upiId && !upiId) setUpiId(state.provider.upiId);
       if (state.provider.qrCodeUrl && !qrCodeUrl) setQrCodeUrl(state.provider.qrCodeUrl);
@@ -174,6 +178,7 @@ export default function Settings() {
               bio,
               email: email || authUser.email,
               phone,
+              defaultLocationAddress: defaultLocationAddress.trim() || null,
             });
             savedProv = {
               ...existingProv,
@@ -182,6 +187,7 @@ export default function Settings() {
               bio,
               email: email || authUser.email,
               phone,
+              defaultLocationAddress: defaultLocationAddress.trim() || null,
             };
           } else {
             const baseSlug = generateSlug(businessName || name || 'provider');
@@ -194,6 +200,7 @@ export default function Settings() {
               email: email || authUser.email,
               phone,
               bio,
+              defaultLocationAddress: defaultLocationAddress.trim() || null,
             });
           }
 
@@ -211,12 +218,12 @@ export default function Settings() {
     }
 
     if (state.auth?.isDemoMode) {
-      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone } });
+      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone, defaultLocationAddress: defaultLocationAddress.trim() || null } });
       addToast('Profile updated ✓ (Demo Mode)');
       return;
     }
 
-    dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone } });
+    dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone, defaultLocationAddress: defaultLocationAddress.trim() || null } });
     addToast('Profile updated ✓');
   };
 
@@ -477,6 +484,19 @@ export default function Settings() {
               <input className="form-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Business Address (Default Meeting Location)</label>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="e.g. 42 MG Road, Koramangala, Bengaluru, Karnataka"
+              value={defaultLocationAddress}
+              onChange={e => setDefaultLocationAddress(e.target.value)}
+            />
+            <span className="form-hint">Default physical address used for in-person appointments across your services.</span>
+          </div>
+
             <div style={{ marginTop: '8px' }}>
               <PillButton variant="primary" size="sm" onClick={handleSaveProfile}>
                 Save Profile
