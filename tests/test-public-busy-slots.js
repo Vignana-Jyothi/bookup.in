@@ -260,6 +260,120 @@ async function runTests() {
 
   console.log('  ✓ getTimeSlotsDetailedForDate integrates busy slots faithfully');
 
+  // ---------------------------------------------------------------------------
+  // TEST 6: Exact Scenario Reproduction - 60-min booking at 5:15 PM (17:15-18:15)
+  // Verifies candidate interval [T, T + duration + buffer) vs [17:15, 18:15 + buffer)
+  // Ensures 5:00 PM is NOT offered for services whose duration runs into 5:15 PM.
+  // ---------------------------------------------------------------------------
+  console.log('\n--- [TEST 6] 60-MIN BOOKING AT 5:15 PM (17:15 - 18:15) REPRODUCTION ---');
+
+  const booking515 = {
+    id: 'booking-515-pm',
+    date: testDate,
+    startTime: '17:15',
+    endTime: '18:15',
+    duration: 60,
+    status: 'confirmed',
+  };
+
+  // Case A: 60-minute service, 0 buffer
+  const slots60 = generateTimeSlotsDetailed(
+    '09:00',
+    '21:00',
+    60,
+    0,
+    [booking515],
+    [],
+    0,
+    testDate,
+    15
+  );
+  const map60 = Object.fromEntries(slots60.map(s => [s.time, s]));
+
+  // Clearly before the booked range:
+  assert.strictEqual(map60['16:00']?.available, true, '16:00 must be available (finishes 17:00)');
+  assert.strictEqual(map60['16:15']?.available, true, '16:15 must be available (finishes exactly at 17:15)');
+
+  // Colliding candidates before start:
+  assert.strictEqual(map60['16:30']?.available, false, '16:30 must be unavailable (runs 16:30-17:30, overlaps 17:15)');
+  assert.strictEqual(map60['16:45']?.available, false, '16:45 must be unavailable (runs 16:45-17:45, overlaps 17:15)');
+  assert.strictEqual(map60['17:00']?.available, false, '5:00 PM (17:00) must NOT be offered (runs 17:00-18:00, overlaps 17:15)');
+
+  // Inside booked range:
+  assert.strictEqual(map60['17:15']?.available, false, '17:15 must be unavailable (booked)');
+  assert.strictEqual(map60['17:15']?.reason, 'booked', '17:15 marked booked');
+  assert.strictEqual(map60['17:30']?.available, false, '17:30 must be unavailable (booked)');
+  assert.strictEqual(map60['17:30']?.reason, 'booked', '17:30 marked booked');
+  assert.strictEqual(map60['17:45']?.available, false, '17:45 must be unavailable (booked)');
+  assert.strictEqual(map60['17:45']?.reason, 'booked', '17:45 marked booked');
+  assert.strictEqual(map60['18:00']?.available, false, '18:00 must be unavailable (booked)');
+  assert.strictEqual(map60['18:00']?.reason, 'booked', '18:00 marked booked');
+
+  // Clearly after the booked range:
+  assert.strictEqual(map60['18:15']?.available, true, '18:15 must be available (starts right at 18:15 when session ends)');
+  assert.strictEqual(map60['18:30']?.available, true, '18:30 must be available');
+  assert.strictEqual(map60['18:45']?.available, true, '18:45 must be available');
+  assert.strictEqual(map60['19:00']?.available, true, '19:00 must be available');
+
+  console.log('  ✓ 60-min service: 16:00 and 16:15 are available');
+  console.log('  ✓ 60-min service: 16:30, 16:45, and 17:00 (5:00 PM) are correctly filtered out as unavailable');
+  console.log('  ✓ 60-min service: 17:15 through 18:00 are marked as booked');
+  console.log('  ✓ 60-min service: 18:15, 18:30, 18:45, and 19:00 are available');
+
+  // Case B: 30-minute service, 0 buffer
+  const slots30 = generateTimeSlotsDetailed(
+    '09:00',
+    '21:00',
+    30,
+    0,
+    [booking515],
+    [],
+    0,
+    testDate,
+    15
+  );
+  const map30 = Object.fromEntries(slots30.map(s => [s.time, s]));
+
+  assert.strictEqual(map30['16:45']?.available, true, '16:45 must be available for 30m service (finishes 17:15)');
+  assert.strictEqual(map30['17:00']?.available, false, '17:00 must NOT be available for 30m service (finishes 17:30, overlaps 17:15)');
+  assert.strictEqual(map30['17:15']?.available, false, '17:15 must be unavailable for 30m service');
+  assert.strictEqual(map30['18:00']?.available, false, '18:00 must be unavailable for 30m service (runs 18:00-18:30, overlaps 18:15)');
+  assert.strictEqual(map30['18:15']?.available, true, '18:15 must be available for 30m service');
+  console.log('  ✓ 30-min service: 16:45 and 18:15 available; 17:00 through 18:00 unavailable');
+
+  // Case C: 60-minute service with 15-minute provider buffer
+  const slots60Buf = generateTimeSlotsDetailed(
+    '09:00',
+    '21:00',
+    60,
+    15,
+    [booking515],
+    [],
+    0,
+    testDate,
+    15
+  );
+  const map60Buf = Object.fromEntries(slots60Buf.map(s => [s.time, s]));
+
+  assert.strictEqual(map60Buf['16:00']?.available, true, '16:00 available with 15m buffer (finishes 17:00 + 15m buffer = 17:15)');
+  assert.strictEqual(map60Buf['16:15']?.available, false, '16:15 unavailable with 15m buffer (finishes 17:15 + 15m buffer = 17:30, overlaps 17:15)');
+  assert.strictEqual(map60Buf['17:00']?.available, false, '17:00 unavailable with 15m buffer');
+  assert.strictEqual(map60Buf['18:15']?.available, false, '18:15 unavailable with 15m buffer (within post-appointment buffer ending 18:30)');
+  assert.strictEqual(map60Buf['18:30']?.available, true, '18:30 available with 15m buffer');
+  console.log('  ✓ 15-min buffer: 16:00 and 18:30 available; 16:15, 17:00, 18:15 unavailable');
+
+  // Case D: Meeting type consistency - online vs in-person
+  const onlineBooking = { ...booking515, meeting_type: 'online' };
+  const inPersonBooking = { ...booking515, meeting_type: 'in-person' };
+  const onlineSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [onlineBooking], [], 0, testDate);
+  const inPersonSlots = generateTimeSlotsDetailed('09:00', '21:00', 60, 0, [inPersonBooking], [], 0, testDate);
+  assert.strictEqual(
+    JSON.stringify(onlineSlots),
+    JSON.stringify(inPersonSlots),
+    'Meeting type (online vs in-person) must NOT affect slot overlap math'
+  );
+  console.log('  ✓ Meeting type consistency verified: online and in-person yield identical overlap slots');
+
   console.log('\n================================================================');
   console.log('✅ ALL PUBLIC BUSY SLOTS & DOUBLE-BOOKING TESTS PASSED');
   console.log('================================================================');

@@ -36,6 +36,18 @@ async function runTests() {
   console.log('--- Starting UPI/QR Isolation & Fallback Verification ---');
   assert(isSupabaseConfigured(), 'Supabase must be configured for this test');
 
+  // Ensure backend server is running for API test
+  try {
+    const health = await new Promise((resolve) => {
+      http.get('http://localhost:3001/health', (res) => resolve(res.statusCode === 200)).on('error', () => resolve(false));
+    });
+    if (!health) {
+      console.log('Starting backend server for testing...');
+      await import('../server/index.js');
+      await new Promise(r => setTimeout(r, 600));
+    }
+  } catch (_e) {}
+
   // 1. Verify Coach A and Coach B provider records in DB
   const coachAProfile = await dbService.getProviderBySlug('prateek-d6578');
   const coachBProfile = await dbService.getProviderBySlug('praacchi-shah-bhaannsali-e61b3');
@@ -120,6 +132,7 @@ async function runTests() {
   console.log('   ✓ Coach A own manage page correctly displays Coach A\'s configured UPI ID.\n');
 
   console.log('--- ALL UPI/QR SCOPING TESTS PASSED ---');
+  process.exit(0);
 }
 
 runTests().catch(err => {

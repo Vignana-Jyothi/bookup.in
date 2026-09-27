@@ -377,6 +377,12 @@ async function runPhase4bSuite() {
 
   // --- [TEST 9] RESCHEDULE RESETS REMINDER; CANCEL ABORTS REMINDER ---
   console.log('\n--- [TEST 9] RESCHEDULE & CANCELLATION HANDLING ---');
+  // Move appointment outside 12-hour cutoff window so policy allows reschedule
+  await supabase
+    .from('bookings')
+    .update({ booking_date: testDate, start_time: testTime })
+    .eq('id', createData.bookingId);
+
   const rescheduleRes = await fetch(`${API_BASE}/public/bookings/manage/${customToken}/reschedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

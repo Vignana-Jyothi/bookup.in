@@ -72,7 +72,11 @@ export function formatTimeAmPm(timeStr) {
  *  - Provider closing time (session must finish by day end)
  *
  * Interval overlap rule:
- * candidateStart < existingEnd AND candidateEnd > existingStart
+ * Two intervals [startA, endA) and [startB, endB) overlap iff:
+ * Math.max(startA, startB) < Math.min(endA, endB)
+ *
+ * Candidate range: [T, T + currentService.duration + buffer)
+ * Existing range:  [existing_start, existing_end + buffer)
  *
  * @returns {Array<{time: string, available: boolean, reason?: 'booked'|'unavailable'}>}
  */
@@ -108,13 +112,13 @@ export function generateTimeSlotsDetailed(
   // 2. Build array of all blocked intervals for this day
   const blockedIntervals = [];
 
-  // Existing bookings
+  // Existing bookings (confirmed or completed; online and in-person treated identically)
   for (const b of existingBookings) {
     // Exclude current appointment when rescheduling
     if (excludeBookingId && b.id === excludeBookingId) {
       continue;
     }
-    // Cancelled, no-show, and payment rejected bookings do not block calendar time
+    // Cancelled, late-cancellation, no-show, and payment rejected bookings do not block calendar time
     if (
       b.status === 'cancelled' ||
       b.status === 'late-cancellation' ||
@@ -129,7 +133,7 @@ export function generateTimeSlotsDetailed(
     let bEnd;
 
     if (b.status === 'completed' && (b.actualEndTime || b.actual_end_time)) {
-      // Early completion auto-release: use actual end time + buffer
+      // Early completion auto-release: use actual end time
       bEnd = timeToMinutes(b.actualEndTime || b.actual_end_time);
     } else if (b.endTime || b.end_time) {
       bEnd = timeToMinutes(b.endTime || b.end_time);
@@ -137,12 +141,13 @@ export function generateTimeSlotsDetailed(
       bEnd = bStart + (Number(b.duration) || durationNum);
     }
 
-    // Interval blocked by this existing booking (including buffer)
+    // Existing booking interval: [existing_start, existing_end + buffer)
     blockedIntervals.push({
       id: b.id,
       start: bStart,
       end: bEnd + bufferNum,
       exactStart: bStart,
+      exactEnd: bEnd,
       label: b.serviceName || 'Booking',
     });
   }
@@ -155,6 +160,7 @@ export function generateTimeSlotsDetailed(
       start: blkStart,
       end: blkEnd,
       exactStart: blkStart,
+      exactEnd: blkEnd,
       label: blk.title || 'Busy',
     });
   }
@@ -175,19 +181,21 @@ export function generateTimeSlotsDetailed(
       continue;
     }
 
-    // Candidate reservation interval [T, T + D + B)
+    // Candidate reservation interval [T, T + duration + buffer)
     const candStart = T;
     const candEnd = T + durationNum + bufferNum;
 
-    // Check collision with any blocked interval:
-    // candidateStart < existingEnd AND candidateEnd > existingStart -> CONFLICT
+    // Check interval collision with every blocked interval:
+    // Proper interval overlap: max(startA, startB) < min(endA, endB)
     let isBlocked = false;
     let blockReason = 'unavailable';
 
     for (const interval of blockedIntervals) {
-      if (candStart < interval.end && candEnd > interval.start) {
+      const hasOverlap = Math.max(candStart, interval.start) < Math.min(candEnd, interval.end);
+      if (hasOverlap) {
         isBlocked = true;
-        if (interval.exactStart !== undefined && interval.exactStart === candStart) {
+        // If candidate start falls at or inside the existing booking interval, mark 'booked'
+        if (candStart >= interval.start && candStart < (interval.exactEnd || interval.end)) {
           blockReason = 'booked';
         } else {
           blockReason = 'unavailable';
@@ -264,16 +272,35 @@ export function getTimeSlotsDetailedForDate(
   if (!service) return [];
 
   // Filter bookings for this date (support .date, .booking_date, or pre-filtered date-specific busy slots)
-  const dayBookings = allBookings.filter(b => (!b.date && !b.booking_date) ? true : (b.date === dateStr || b.booking_date === dateStr));
+  const dayBookings = allBookings.filter(b => {
+    if (!b.date && !b.booking_date) return true;
+    const bDate = String(b.date || b.booking_date).split('T')[0];
+    return bDate === dateStr;
+  });
+
+  // Enrich any booking missing endTime/duration if its service is in services array
+  const enrichedBookings = dayBookings.map(b => {
+    if (!b.endTime && !b.end_time && !b.duration) {
+      const bSvcId = b.serviceId || b.service_id;
+      const svc = services.find(s => s.id === bSvcId);
+      if (svc?.duration) {
+        return { ...b, duration: svc.duration };
+      }
+    }
+    return b;
+  });
+
+  const buffer = availability.bufferTime ?? availability.buffer_time ?? 0;
+  const notice = availability.minNotice ?? availability.min_notice ?? 0;
 
   return generateTimeSlotsDetailed(
     daySchedule.start,
     daySchedule.end,
     service.duration,
-    availability.bufferTime ?? 0,
-    dayBookings,
+    buffer,
+    enrichedBookings,
     calendarBusyTimes,
-    availability.minNotice ?? 0,
+    notice,
     dateStr,
     15,
     excludeBookingId

@@ -288,6 +288,7 @@ async function runTests() {
   console.log('\n================================================================');
   console.log('ALL TESTS PASSED SUCCESSFULLY! ✓');
   console.log('================================================================');
+  process.exit(0);
 }
 
 runTests().catch(err => {

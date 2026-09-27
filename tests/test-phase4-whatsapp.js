@@ -105,9 +105,12 @@ async function runPhase4Suite() {
   const service = services?.[0];
   assert(Boolean(service), 'Test service exists in Supabase');
 
-  const testDate = '2026-11-20';
+  const testDate = new Date(Date.now() + 55 * 86400000).toISOString().split('T')[0];
   const testTime = '11:00';
   const customToken = crypto.randomBytes(24).toString('hex');
+
+  // Pre-cleanup in case of previous interrupted test run
+  await supabase.from('bookings').delete().eq('booking_date', testDate).eq('start_time', testTime);
 
   // Call server booking creation endpoint
   const createRes = await fetch(`${API_BASE}/public/bookings`, {
@@ -192,6 +195,12 @@ async function runPhase4Suite() {
 
   // --- [TEST 7] RESCHEDULE RESETS REMINDER STATE ---
   console.log('\n--- [TEST 7] RESCHEDULE RESETS REMINDER STATE ---');
+  // Move appointment outside 12-hour cutoff window so policy allows reschedule
+  await supabase
+    .from('bookings')
+    .update({ booking_date: testDate, start_time: testTime })
+    .eq('id', createData.bookingId);
+
   const rescheduleRes = await fetch(`${API_BASE}/public/bookings/manage/${customToken}/reschedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
