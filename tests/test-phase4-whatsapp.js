@@ -149,7 +149,7 @@ async function runPhase4Suite() {
 
   // --- [TEST 4] WHATSAPP FAILURE NEVER CANCELS OR BLOCKS BOOKING ---
   console.log('\n--- [TEST 4] WHATSAPP FAILURE NEVER BLOCKS BOOKING ---');
-  assert(dbBooking.status === 'confirmed', 'Booking status is confirmed despite live WhatsApp credentials being dummy/mock');
+  assert(dbBooking.status === 'pending_payment' || dbBooking.status === 'confirmed', 'Booking status is not cancelled or errored despite live WhatsApp credentials being dummy/mock');
 
   // --- [TEST 5] ENCRYPTED MANAGEMENT TOKEN STORAGE & OFFLINE DECRYPTION ---
   console.log('\n--- [TEST 5] ENCRYPTED TOKEN STORAGE & OFFLINE DECRYPTION ---');

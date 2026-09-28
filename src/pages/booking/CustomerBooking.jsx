@@ -133,7 +133,7 @@ export default function CustomerBooking() {
             };
           });
 
-          if (newRow.status === 'confirmed' || newRow.payment_status === 'confirmed') {
+          if (newRow.status === 'confirmed' && (newRow.payment_status === 'confirmed' || newRow.payment_status === 'not_required')) {
             addToast('Payment confirmed! Your session is set ✓');
           } else if (newRow.status === 'rejected' || newRow.payment_status === 'rejected') {
             addToast('Payment could not be verified. Please contact your coach.', 'error');
@@ -347,74 +347,98 @@ export default function CustomerBooking() {
     paymentStatus = 'awaiting_payment';
   }
 
-  const isConfirmed = resolvedBooking.status === 'confirmed' && paymentStatus !== 'rejected';
-  const isCancelled = resolvedBooking.status === 'cancelled' || resolvedBooking.status === 'late-cancellation';
-  const isCompleted = resolvedBooking.status === 'completed';
+  // A booking is only truly confirmed if:
+  // - For a paid service: Supabase status is 'confirmed' AND paymentStatus is 'confirmed'
+  // - For a free service: Supabase status is 'confirmed'
+  const isConfirmed = isPaidService
+    ? (resolvedBooking?.status === 'confirmed' && paymentStatus === 'confirmed')
+    : (resolvedBooking?.status === 'confirmed');
+
+  const isCancelled = resolvedBooking?.status === 'cancelled' || resolvedBooking?.status === 'late-cancellation';
+  const isCompleted = resolvedBooking?.status === 'completed';
 
   const providerName = provider?.name || provider?.businessName || 'Coach';
   const providerUpiId = supabaseBookingData?.provider?.upiId || null;
   const providerQrCodeUrl = supabaseBookingData?.provider?.qrCodeUrl || null;
-  const showPaymentSection = Boolean(isPaidService && paymentStatus !== 'not_required');
+  const showPaymentSection = Boolean(isPaidService && paymentStatus !== 'not_required' && !isConfirmed && !isCancelled && !isCompleted);
 
   // TODO(hardcoded): User-agent based mobile detection for 5-10 user test
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 
-  // TODO(hardcoded): Fixed currency INR for UPI payment link
+  // TODO(hardcoded): Fixed currency INR for UPI payment link with URLSearchParams safe encoding
   const upiLink = providerUpiId
-    ? `upi://pay?pa=${encodeURIComponent(providerUpiId)}&pn=${encodeURIComponent(providerName)}&am=${encodeURIComponent(resolvedBooking?.price || 0)}&cu=INR&tn=${encodeURIComponent(`Calup booking ${resolvedBooking?.id || ''}`)}`
+    ? `upi://pay?${new URLSearchParams({
+        pa: providerUpiId,
+        pn: providerName,
+        am: String(resolvedBooking?.price || 0),
+        cu: 'INR',
+        tn: `Calup booking ${resolvedBooking?.id || ''}`,
+      }).toString()}`
     : '';
 
-  // Compute Headline, Subline, Celebrate Icon, and Status Badge strictly from payment_status and booking state
-  let celebrateBadge = '🎉';
-  let heroHeadline = "Payment confirmed";
-  let heroSubline = `Your appointment with ${providerName} is confirmed.`;
-  let statusBadgeText = getStatusLabel(resolvedBooking.status);
-  let statusBadgeStyle = null;
+  // Compute Headline, Subline, Celebrate Icon, and Status Badge strictly from payment_status and booking state (States A, B, C, D)
+  let celebrateBadge = '💳';
+  let heroHeadline = 'Booking Reserved';
+  let heroSubline = 'Complete your payment using UPI and submit the payment screenshot.';
+  let statusBadgeText = 'Booking Reserved';
+  let statusBadgeStyle = { background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' };
 
-  if (paymentStatus === 'rejected' || resolvedBooking.status === 'rejected') {
+  if (paymentStatus === 'rejected' || resolvedBooking?.status === 'rejected') {
+    // State D: Coach rejects
     celebrateBadge = '⚠️';
-    heroHeadline = "Payment not confirmed";
-    heroSubline = `Payment not confirmed, contact your coach.`;
+    heroHeadline = 'Payment Not Confirmed';
+    heroSubline = 'Your coach could not verify the payment. Please contact your coach.';
     statusBadgeText = 'Payment Not Confirmed';
     statusBadgeStyle = { background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA' };
   } else if (isCancelled) {
     celebrateBadge = '❌';
     heroHeadline = 'Appointment Cancelled';
     heroSubline = `Your appointment with ${providerName} has been cancelled.`;
-    statusBadgeText = getStatusLabel(resolvedBooking.status);
+    statusBadgeText = getStatusLabel(resolvedBooking?.status);
+    statusBadgeStyle = null;
   } else if (isCompleted) {
     celebrateBadge = '✓';
     heroHeadline = 'Session Completed';
     heroSubline = `Thank you for attending your session with ${providerName}.`;
     statusBadgeText = 'Completed';
-  } else if (paymentStatus === 'confirmed' || resolvedBooking.status === 'confirmed') {
+    statusBadgeStyle = null;
+  } else if (isConfirmed) {
+    // State C: Coach accepts (or free service confirmed)
     celebrateBadge = '🎉';
-    heroHeadline = "Payment confirmed";
-    heroSubline = `Your payment is confirmed. Your appointment with ${providerName} is set!`;
-    statusBadgeText = 'Payment Confirmed';
+    heroHeadline = isPaidService ? 'Payment Confirmed' : 'Booking Confirmed';
+    heroSubline = isPaidService
+      ? `Your payment is confirmed. Your appointment with ${providerName} is set!`
+      : `Your appointment with ${providerName} is confirmed.`;
+    statusBadgeText = isPaidService ? 'Payment Confirmed' : 'Confirmed';
     statusBadgeStyle = { background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' };
   } else if (isPaidService) {
-    if (paymentStatus === 'awaiting_payment') {
-      celebrateBadge = '💳';
-      heroHeadline = 'Waiting for your payment';
-      heroSubline = `Your appointment with ${providerName} is reserved. Complete payment to secure your spot.`;
-      statusBadgeText = 'Waiting for Payment';
-      statusBadgeStyle = { background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' };
-    } else if (paymentStatus === 'verification_pending') {
+    if (paymentStatus === 'verification_pending') {
+      // State B: Screenshot submitted, coach has not accepted
       celebrateBadge = '⏱️';
-      heroHeadline = `Payment submitted — waiting for ${providerName} to confirm`;
-      heroSubline = `Your coach will verify your payment in their UPI app shortly.`;
-      statusBadgeText = 'Verification Pending';
+      heroHeadline = 'Payment Verification Pending';
+      heroSubline = 'Your payment details have been submitted. Your coach will verify your payment shortly.';
+      statusBadgeText = 'Payment Verification Pending';
       statusBadgeStyle = { background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' };
+    } else {
+      // State A: Booking created, payment not submitted
+      celebrateBadge = '💳';
+      heroHeadline = 'Booking Reserved';
+      heroSubline = 'Complete your payment using UPI and submit the payment screenshot.';
+      statusBadgeText = 'Booking Reserved';
+      statusBadgeStyle = { background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' };
     }
   }
 
   const handleMarkPaid = async () => {
     if (isMarkingPaid) return;
+    if (!paymentScreenshot && !resolvedBooking?.paymentScreenshotUrl) {
+      addToast('Please select and upload your payment screenshot before clicking I\'ve Paid.', 'error');
+      return;
+    }
     setIsMarkingPaid(true);
     try {
       const res = await customerBookingService.markPaid(lookupIdentifier, paymentScreenshot);
-      addToast('Payment marked as paid. Awaiting coach verification.');
+      addToast('Payment submitted. Awaiting coach verification.');
       setSupabaseBookingData(prev => prev ? {
         ...prev,
         booking: {
@@ -427,37 +451,9 @@ export default function CustomerBooking() {
       setPaymentScreenshot(null);
       setIsRetryingPayment(false);
     } catch (err) {
-      console.warn('Backend markPaid failed or token is demo/local, falling back to local state update:', err.message);
-      const now = new Date().toISOString();
-      const fakeUrl = paymentScreenshot ? URL.createObjectURL(paymentScreenshot) : null;
-
-      // Update local Redux/store booking
-      if (resolvedBooking?.id) {
-        dispatch({
-          type: ACTIONS.UPDATE_BOOKING,
-          payload: {
-            id: resolvedBooking.id,
-            paymentStatus: 'verification_pending',
-            paymentMarkedPaidAt: now,
-            paymentScreenshotUrl: fakeUrl,
-          },
-        });
-      }
-
-      // Update component state so UI instantly reflects verification_pending
-      setSupabaseBookingData(prev => ({
-        ...(prev || {}),
-        booking: {
-          ...(prev?.booking || resolvedBooking || {}),
-          paymentStatus: 'verification_pending',
-          paymentMarkedPaidAt: now,
-          paymentScreenshotUrl: fakeUrl || prev?.booking?.paymentScreenshotUrl,
-        },
-      }));
-
-      addToast('Payment marked as paid. Awaiting coach verification.');
-      setPaymentScreenshot(null);
-      setIsRetryingPayment(false);
+      console.error('Payment submission failed:', err);
+      addToast(err.message || 'Failed to submit payment. Please try again.', 'error');
+      // CRITICAL: Do NOT mark as verification_pending or confirmed on failure!
     } finally {
       setIsMarkingPaid(false);
     }
@@ -590,7 +586,7 @@ export default function CustomerBooking() {
                 </PillButton>
               )}
             </div>
-          ) : (
+          ) : isConfirmed ? (
             meetUrl ? (
               <div className="manage-meet-block animate-fade-in-up">
                 <div className="manage-meet-title">Virtual Session via Google Meet</div>
@@ -615,7 +611,7 @@ export default function CustomerBooking() {
                 Meet link will be sent before your session.
               </div>
             )
-          )}
+          ) : null}
 
           {/* Payment Verification Section */}
           {showPaymentSection && (
@@ -665,7 +661,7 @@ export default function CustomerBooking() {
                       border: '1px solid var(--color-border)',
                     }}>
                       {/* Mobile View: Plain <a href={upiLink}> opens UPI app directly (GPay/PhonePe/Paytm) */}
-                      {isMobile && providerUpiId ? (
+                      {isMobile && upiLink ? (
                         <div style={{ marginBottom: '16px', textAlign: 'center' }}>
                           <a
                             href={upiLink}
@@ -686,7 +682,7 @@ export default function CustomerBooking() {
                               boxSizing: 'border-box',
                             }}
                           >
-                            <span>⚡ Pay Now via UPI</span>
+                            <span>⚡ Pay Now</span>
                             <span style={{ fontSize: '12px', opacity: 0.9 }}>(GPay / PhonePe / Paytm)</span>
                           </a>
                           <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '6px' }}>
@@ -695,10 +691,12 @@ export default function CustomerBooking() {
                         </div>
                       ) : null}
 
-                      {/* Desktop View: Fall back to showing QR image since deep links don't run on laptops */}
-                      {!isMobile && providerQrCodeUrl ? (
+                      {/* QR Code: Displayed prominently on Desktop, AND visible as an alternative below Pay Now on Mobile */}
+                      {providerQrCodeUrl ? (
                         <div style={{ textAlign: 'center', marginBottom: providerUpiId ? '14px' : 0 }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Scan QR Code with Phone</div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
+                            {isMobile ? 'Or Scan / Screenshot QR Code' : 'Scan QR Code with Phone'}
+                          </div>
                           <img
                             src={providerQrCodeUrl}
                             alt="UPI QR Code"
@@ -706,18 +704,6 @@ export default function CustomerBooking() {
                           />
                         </div>
                       ) : null}
-
-                      {/* Mobile with no UPI ID but QR code exists */}
-                      {isMobile && !providerUpiId && providerQrCodeUrl && (
-                        <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Scan or Screenshot QR Code</div>
-                          <img
-                            src={providerQrCodeUrl}
-                            alt="UPI QR Code"
-                            style={{ maxWidth: '200px', width: '100%', borderRadius: '12px', border: '1px solid var(--color-border)' }}
-                          />
-                        </div>
-                      )}
 
                       {/* Always show text UPI ID with Copy button for manual entry if needed */}
                       {providerUpiId && (
@@ -739,7 +725,12 @@ export default function CustomerBooking() {
                             <span>{providerUpiId}</span>
                             <button
                               type="button"
-                              onClick={() => { navigator.clipboard?.writeText(providerUpiId); addToast('UPI ID copied!'); }}
+                              onClick={() => {
+                                if (navigator.clipboard?.writeText) {
+                                  navigator.clipboard.writeText(providerUpiId);
+                                  addToast('UPI ID copied!');
+                                }
+                              }}
                               style={{
                                 background: 'none',
                                 border: 'none',
@@ -756,26 +747,29 @@ export default function CustomerBooking() {
                   ) : (
                     <div style={{
                       fontSize: '13px',
-                      color: 'var(--color-text-tertiary)',
-                      padding: '12px',
-                      background: 'var(--color-bg-subtle)',
+                      color: 'var(--color-warning-800, #92400E)',
+                      padding: '14px',
+                      background: 'var(--color-warning-50, #FFFBEB)',
+                      border: '1px solid var(--color-warning-200, #FDE68A)',
                       borderRadius: '12px',
                       marginBottom: '16px',
                       textAlign: 'center',
+                      lineHeight: 1.5,
                     }}>
-                      Contact your coach for payment details.
+                      Payment details have not been configured yet for this coach. Please contact your coach directly to complete your payment.
                     </div>
                   )}
 
                   {/* Screenshot Upload */}
                   <div style={{ marginBottom: '16px' }}>
                     <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
-                      Payment Screenshot (optional)
+                      Payment Screenshot <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                     </label>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       onChange={e => setPaymentScreenshot(e.target.files?.[0] || null)}
+                      disabled={isMarkingPaid}
                       style={{ fontSize: '13px' }}
                     />
                     {paymentScreenshot && (
@@ -810,7 +804,7 @@ export default function CustomerBooking() {
                     <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-warning-800, #92400E)' }}>Payment Verification Pending</span>
                   </div>
                   <p style={{ fontSize: '13px', color: 'var(--color-warning-700, #A16207)', margin: 0, lineHeight: 1.5 }}>
-                    Your payment details have been submitted. Your coach ({providerName}) will verify the payment shortly.
+                    Your payment details have been submitted. Your coach ({providerName}) will verify your payment shortly.
                   </p>
                   {resolvedBooking.paymentMarkedPaidAt && (
                     <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--color-warning-800)', fontWeight: 500 }}>
@@ -858,11 +852,11 @@ export default function CustomerBooking() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <span style={{ fontSize: '18px' }}>⚠️</span>
                     <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-error-800, #991B1B)' }}>
-                      Payment could not be verified
+                      Payment Not Confirmed
                     </span>
                   </div>
                   <p style={{ fontSize: '13.5px', color: 'var(--color-error-700, #B91C1C)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                    Your payment could not be verified by <strong>{providerName}</strong>, and the reserved time slot has been released.
+                    Your coach could not verify the payment. Please contact your coach.
                   </p>
                   {resolvedBooking.paymentRejectedReason && (
                     <div style={{

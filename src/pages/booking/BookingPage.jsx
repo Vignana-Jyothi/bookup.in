@@ -495,7 +495,7 @@ export default function PublicBookingPage() {
         depositAmount: authoritativeDeposit,
         depositStatus: 'na',
         paymentStatus: (authoritativePrice || 0) > 0 ? 'awaiting_payment' : 'not_required',
-        status: 'confirmed',
+        status: (authoritativePrice || 0) > 0 ? 'pending_payment' : 'confirmed',
         source: 'CalUp booking page',
         notes: customerInfo.notes || '',
         managementToken: authoritativeToken,

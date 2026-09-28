@@ -299,7 +299,7 @@ async function handleCreateBooking(req, res) {
             .select('id, start_time, end_time, actual_end_time, payment_status, created_at')
             .eq('provider_id', providerId)
             .eq('booking_date', bookingDate)
-            .in('status', ['confirmed', 'completed'])
+            .in('status', ['confirmed', 'completed', 'pending_payment'])
             .neq('payment_status', 'rejected');
 
           if (!checkErr && existingBookings) {
@@ -353,6 +353,7 @@ async function handleCreateBooking(req, res) {
           const endM = String(endTotalMin % 60).padStart(2, '0');
           const calculatedEndTime = `${endH}:${endM}`;
 
+          const isPaid = (Number(service.price) || 0) > 0;
           const insertPayload = {
             provider_id: providerId,
             service_id: serviceId,
@@ -364,14 +365,14 @@ async function handleCreateBooking(req, res) {
             booking_date: bookingDate,
             start_time: startTime,
             end_time: calculatedEndTime,
-            status: 'confirmed',
+            status: isPaid ? 'pending_payment' : 'confirmed',
             notes: encodedNotes,
             management_token_hash: tokenHash,
             management_token_encrypted: tokenEncrypted,
             meeting_type: resolvedMeetingType,
             location_address_snapshot: resolvedLocation,
             maps_link_snapshot: resolvedMapsLink,
-            payment_status: (Number(service.price) || 0) === 0 ? 'not_required' : 'awaiting_payment',
+            payment_status: isPaid ? 'awaiting_payment' : 'not_required',
           };
 
           const { data: inserted, error: insertErr } = await supabase.from('bookings').insert(insertPayload).select('id').single();
@@ -388,7 +389,7 @@ async function handleCreateBooking(req, res) {
               booking_date: bookingDate,
               start_time: startTime,
               end_time: calculatedEndTime,
-              status: 'confirmed',
+              status: isPaid ? 'pending_payment' : 'confirmed',
               notes: encodedNotes,
             };
             const { data: fallbackInserted, error: fbErr } = await supabase.from('bookings').insert(fallbackPayload).select('id').single();
@@ -407,17 +408,19 @@ async function handleCreateBooking(req, res) {
 
     if (res.headersSent) return;
 
-    // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status (non-blocking)
+    // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status & pending status (non-blocking)
     try {
+      const isPaid = (Number(service.price) || 0) > 0;
+      const paymentStatus = isPaid ? 'awaiting_payment' : 'not_required';
       const postInsertPayload = {
         management_token_encrypted: tokenEncrypted,
         management_token_hash: tokenHash,
         meeting_type: resolvedMeetingType,
         location_address_snapshot: resolvedLocation,
         maps_link_snapshot: resolvedMapsLink,
+        payment_status: paymentStatus,
+        status: isPaid ? 'pending_payment' : 'confirmed',
       };
-      const paymentStatus = (Number(service.price) || 0) === 0 ? 'not_required' : 'awaiting_payment';
-      postInsertPayload.payment_status = paymentStatus;
       await supabase.from('bookings').update(postInsertPayload).eq('id', newBooking.id);
     } catch (_postErr) {
       // Non-blocking: columns may be pending migration

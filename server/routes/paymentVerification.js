@@ -149,7 +149,11 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
           });
 
         if (uploadError) {
-          console.warn('[PaymentVerification] Screenshot upload warning:', uploadError.message);
+          console.error('[PaymentVerification] Screenshot upload failed:', uploadError.message);
+          return res.status(500).json({
+            success: false,
+            error: `Failed to upload payment screenshot: ${uploadError.message}`,
+          });
         } else {
           // For private buckets, generate a signed URL (valid for 7 days)
           const { data: signedData } = await supabase.storage
@@ -164,7 +168,11 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
           }
         }
       } catch (uploadErr) {
-        console.warn('[PaymentVerification] Screenshot upload non-blocking error:', uploadErr.message);
+        console.error('[PaymentVerification] Screenshot upload error:', uploadErr.message);
+        return res.status(500).json({
+          success: false,
+          error: `Failed to upload payment screenshot: ${uploadErr.message}`,
+        });
       }
     }
 
@@ -186,7 +194,10 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to update payment status:', updateErr);
-      throw updateErr;
+      return res.status(500).json({
+        success: false,
+        error: `Failed to update payment status: ${updateErr.message}`,
+      });
     }
 
     console.log(`[PaymentVerification] Booking ${booking.id} marked as paid by customer`);
@@ -275,6 +286,14 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
+    // Verify the coach is authorized to update that booking
+    if (booking.provider_id !== providerId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: you can only confirm bookings belonging to your account.',
+      });
+    }
+
     // Guard: only allowed from 'verification_pending'
     if (booking.payment_status !== 'verification_pending') {
       return res.status(400).json({
@@ -297,7 +316,10 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to confirm payment:', updateErr);
-      throw updateErr;
+      return res.status(500).json({
+        success: false,
+        error: `Failed to confirm payment in database: ${updateErr.message}`,
+      });
     }
 
     console.log(`[PaymentVerification] Booking ${bookingId} payment confirmed by provider ${providerId}`);
@@ -549,6 +571,14 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
+    // Verify the coach is authorized to update that booking
+    if (booking.provider_id !== providerId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: you can only reject bookings belonging to your account.',
+      });
+    }
+
     // Guard: allowed from 'verification_pending' or 'awaiting_payment'
     if (!['verification_pending', 'awaiting_payment'].includes(booking.payment_status)) {
       return res.status(400).json({
@@ -572,7 +602,10 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to reject payment:', updateErr);
-      throw updateErr;
+      return res.status(500).json({
+        success: false,
+        error: `Failed to reject payment in database: ${updateErr.message}`,
+      });
     }
 
     console.log(`[PaymentVerification] Booking ${bookingId} payment rejected by provider ${providerId}. Reason: "${trimmedReason}". Slot freed.`);

@@ -15,6 +15,7 @@ const testFiles = [
   'tests/test-onboarding-slug-and-zero-services.js',
   'tests/test-complete-real-user-flow.js',
   'tests/test-upi-scoping.js',
+  'tests/test-payment-flow-fixes.js',
 ];
 
 console.log('Running test suite (' + testFiles.length + ' test files)...');

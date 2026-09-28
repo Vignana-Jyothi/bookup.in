@@ -17,8 +17,8 @@ async function runTests() {
   // Calling without reason should succeed (reason is optional)
   const resNoReason = await dbService.rejectPayment('booking-123');
   assert.strictEqual(resNoReason.success, true, 'rejectPayment succeeds with no reason');
-  assert.strictEqual(resNoReason.booking.paymentStatus, 'rejected', 'status is rejected');
-  assert.strictEqual(resNoReason.booking.status, 'cancelled', 'booking is cancelled');
+  assert.strictEqual(resNoReason.booking.paymentStatus, 'rejected', 'paymentStatus is rejected');
+  assert.strictEqual(resNoReason.booking.status, 'rejected', 'booking status is rejected');
   console.log('  ✓ dbService.rejectPayment succeeds when reason is omitted');
 
   // Calling with reason should succeed

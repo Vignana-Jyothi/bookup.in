@@ -886,7 +886,7 @@ export const dbService = {
       .select('start_time, end_time, actual_end_time, status')
       .eq('provider_id', providerId)
       .eq('booking_date', bookingDate)
-      .in('status', ['confirmed', 'completed']);
+      .in('status', ['confirmed', 'completed', 'pending_payment']);
 
     const candStart = startMin;
     const candEnd = endMin + buffer;
@@ -905,7 +905,7 @@ export const dbService = {
       throw new Error('This slot is no longer available. Please select another time.');
     }
 
-    // Insert booking (including management_token_hash directly)
+    const isPaid = (Number(svc.price) || 0) > 0;
     const insertPayload = {
       provider_id: providerId,
       service_id: svc.id,
@@ -920,7 +920,8 @@ export const dbService = {
       price: svc.price,
       deposit_amount: svc.deposit_amount || 0,
       deposit_status: 'na',
-      status: 'confirmed',
+      payment_status: isPaid ? 'awaiting_payment' : 'not_required',
+      status: isPaid ? 'pending_payment' : 'confirmed',
       notes: finalNotes,
     };
     if (managementTokenHash) {
@@ -1174,7 +1175,7 @@ export const dbService = {
     if (!bookingId) throw new Error('Booking ID is required');
 
     if (!isSupabaseConfigured() || (typeof bookingId === 'string' && bookingId.startsWith('booking-'))) {
-      return { success: true, booking: { id: bookingId, paymentStatus: 'rejected', status: 'cancelled' } };
+      return { success: true, booking: { id: bookingId, paymentStatus: 'rejected', status: 'rejected' } };
     }
 
     const apiBase = getApiBase();

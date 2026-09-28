@@ -341,11 +341,7 @@ export default function Appointments() {
     setProcessingPaymentId(booking.id);
     try {
       if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
-        try {
-          await dbService.confirmPayment(booking.id);
-        } catch (apiErr) {
-          console.warn('[Appointments] Backend confirmPayment API notice:', apiErr.message);
-        }
+        await dbService.confirmPayment(booking.id);
       }
       dispatch({
         type: ACTIONS.UPDATE_BOOKING,
