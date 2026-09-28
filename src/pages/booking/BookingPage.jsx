@@ -317,6 +317,9 @@ export default function PublicBookingPage() {
   const handlePrevStep = () => {
     setBookingError(null);
     if (currentStep > 1) {
+      if (currentStep === 3 && selectedDate && provider?.id) {
+        fetchDateBusySlots(selectedDate, provider.id, provider.timezone);
+      }
       setCurrentStep(prev => prev - 1);
     }
   };
@@ -343,20 +346,22 @@ export default function PublicBookingPage() {
     const service = selectedService;
     const [h, m] = selectedTime.split(':').map(Number);
     const endMinutes = h * 60 + m + service.duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+    const calculatedEndTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
-    let realBookingId = generateId('bk');
+    let authoritativeBookingId = generateId('bk');
     let authoritativePrice = service.price || 0;
     let authoritativeDeposit = service.depositAmount || 0;
+    let authoritativeEndTime = calculatedEndTime;
 
-    const managementToken = generateManagementToken();
+    const localManagementToken = generateManagementToken();
     let tokenHash = '';
     try {
-      tokenHash = await hashManagementToken(managementToken);
+      tokenHash = await hashManagementToken(localManagementToken);
     } catch (err) {
       console.warn('Failed to hash token:', err);
     }
-    const managementUrl = buildManagementUrl(managementToken);
+    let authoritativeToken = localManagementToken;
+    let authoritativeUrl = buildManagementUrl(localManagementToken);
 
     const resolvedMeetingType = selectedService.meetingType === 'both'
       ? customerMeetingType
@@ -382,19 +387,27 @@ export default function PublicBookingPage() {
           bookingDate: selectedDate,
           startTime: selectedTime,
           notes: customerInfo.notes?.trim() || '',
-          managementToken,
+          managementToken: localManagementToken,
           managementTokenHash: tokenHash,
           meetingType: resolvedMeetingType,
           locationAddress: resolvedLocation,
           mapsLink: resolvedMapsLink,
         });
 
-        if (result?.bookingId) realBookingId = result.bookingId;
+        if (result?.bookingId) authoritativeBookingId = result.bookingId;
         if (result?.price !== undefined) authoritativePrice = result.price;
         if (result?.depositAmount !== undefined) authoritativeDeposit = result.depositAmount;
+        if (result?.endTime) authoritativeEndTime = result.endTime;
+        if (result?.managementToken) authoritativeToken = result.managementToken;
+        if (result?.managementUrl) authoritativeUrl = result.managementUrl;
       } catch (err) {
         console.error('Booking creation error:', err);
         setSubmittingBooking(false);
+
+        // Always refresh live busy slots from backend so the customer sees real-time slot state
+        if (selectedDate && provider?.id) {
+          fetchDateBusySlots(selectedDate, provider.id, provider.timezone);
+        }
 
         const rawMsg = err.message || '';
         const isConflict =
@@ -407,14 +420,9 @@ export default function PublicBookingPage() {
           rawMsg.toLowerCase().includes('slot');
 
         if (isConflict) {
-          // 1. Refetch busy slots for selectedDate from database & calendar
-          if (selectedDate && provider?.id) {
-            fetchDateBusySlots(selectedDate, provider.id, provider.timezone);
-          }
-          // 2. Send customer back to time picker (Step 2) with that slot removed
+          // Send customer back to time picker (Step 2) with that slot removed
           setCurrentStep(2);
           setSelectedTime(null);
-          // 3. Show "That time was just taken, please pick another."
           const conflictMsg = 'That time was just taken, please pick another.';
           setBookingError(conflictMsg);
           addToast(conflictMsg, 'error');
@@ -436,7 +444,7 @@ export default function PublicBookingPage() {
 
     try {
       const booking = {
-        id: realBookingId,
+        id: authoritativeBookingId,
         providerId: provider.id,
         serviceId: service.id,
         serviceName: service.name,
@@ -447,7 +455,7 @@ export default function PublicBookingPage() {
         customerEmail: customerInfo.email,
         date: selectedDate,
         startTime: selectedTime,
-        endTime,
+        endTime: authoritativeEndTime,
         duration: service.duration,
         price: authoritativePrice,
         depositAmount: authoritativeDeposit,
@@ -456,8 +464,8 @@ export default function PublicBookingPage() {
         status: 'confirmed',
         source: 'CalUp booking page',
         notes: customerInfo.notes || '',
-        managementToken,
-        managementUrl,
+        managementToken: authoritativeToken,
+        managementUrl: authoritativeUrl,
         meetingType: resolvedMeetingType,
         locationAddress: resolvedLocation,
         mapsLink: resolvedMapsLink,
@@ -475,7 +483,7 @@ export default function PublicBookingPage() {
       setSubmittingBooking(false);
 
       // Directly navigate to confirmation / manage screen
-      navigate(`/manage/${managementToken}`, { replace: true });
+      navigate(`/manage/${encodeURIComponent(authoritativeToken)}`, { replace: true });
 
       if (!isDemo && provider?.id) {
         realGoogleCalendarService.createEvent(booking, provider.id, provider.timezone || 'Asia/Kolkata').catch(() => {});
@@ -483,7 +491,7 @@ export default function PublicBookingPage() {
     } catch (e) {
       console.error('Final dispatch error:', e);
       setSubmittingBooking(false);
-      navigate(`/manage/${managementToken}`, { replace: true });
+      navigate(`/manage/${encodeURIComponent(authoritativeToken)}`, { replace: true });
     }
   };
 

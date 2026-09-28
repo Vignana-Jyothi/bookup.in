@@ -59,7 +59,7 @@ async function runEmailFlowTests() {
   assert.strictEqual(res1.success, true, 'sendCoachBookingAwaitingPaymentEmail succeeds');
   assert(capturedCoachPendingMail, 'Email payload was captured');
   assert.strictEqual(capturedCoachPendingMail.to[0], 'coach@example.com', 'Recipient is coach email');
-  assert(capturedCoachPendingMail.subject.includes('New booking - awaiting payment'), 'Subject contains "New booking - awaiting payment"');
+  assert(capturedCoachPendingMail.subject.includes('New booking — review payment'), 'Subject contains "New booking — review payment"');
   assert(capturedCoachPendingMail.subject.includes('Rahul Verma'), 'Subject contains customer name');
   assert(capturedCoachPendingMail.subject.includes('1-on-1 Fitness Consultation'), 'Subject contains service name');
   assert(!capturedCoachPendingMail.subject.includes('CalUp'), 'Subject does NOT contain "CalUp"');
@@ -113,7 +113,7 @@ async function runEmailFlowTests() {
   assert.strictEqual(res2.success, true, 'sendCustomerBookingPendingEmail succeeds');
   assert(capturedCustPendingMail, 'Email payload was captured');
   assert.strictEqual(capturedCustPendingMail.to[0], 'customer@example.com', 'Recipient is customer email');
-  assert(capturedCustPendingMail.subject.includes('Booking received - payment verification pending'), 'Subject contains "Booking received - payment verification pending"');
+  assert(capturedCustPendingMail.subject.includes('Your slot is booked — waiting for payment confirmation'), 'Subject contains "Your slot is booked — waiting for payment confirmation"');
   assert(!capturedCustPendingMail.subject.includes('CalUp'), 'Subject does NOT contain "CalUp"');
 
   // Header branding
@@ -167,9 +167,8 @@ async function runEmailFlowTests() {
   });
 
   assert.strictEqual(res3.success, true, 'sendPaymentSubmittedEmailToProvider succeeds');
-  assert(capturedPaymentSubmittedMail, 'Email payload was captured');
-  assert(capturedPaymentSubmittedMail.subject.includes('Payment Submitted'), 'Subject contains "Payment Submitted"');
-  assert(capturedPaymentSubmittedMail.subject.includes('2000'), 'Subject contains amount paid');
+  assert(capturedPaymentSubmittedMail.subject.includes('New booking — review payment'), 'Subject contains "New booking — review payment"');
+  assert(capturedPaymentSubmittedMail.subject.includes('Ananya Roy'), 'Subject contains customer name');
   assert(capturedPaymentSubmittedMail.html.includes('Calup'), 'Header uses "Calup"');
   assert(!capturedPaymentSubmittedMail.html.includes('CalUp'), 'Does NOT use "CalUp"');
   assert(capturedPaymentSubmittedMail.html.includes('https://calup-in.vercel.app/dashboard/appointments'), 'Includes dashboard verification link');
@@ -207,7 +206,7 @@ async function runEmailFlowTests() {
   });
 
   assert.strictEqual(res4a.success, true, 'sendCustomerConfirmationEmail succeeds');
-  assert(capturedCustConfirmMail.subject.includes('Booking Confirmed'), 'Subject contains "Booking Confirmed"');
+  assert(capturedCustConfirmMail.subject.includes('Your payment is confirmed'), 'Subject contains "Your payment is confirmed"');
   assert(capturedCustConfirmMail.html.includes('https://meet.google.com/abc-defg-hij'), 'Customer email embeds Google Meet link');
   assert(capturedCustConfirmMail.html.includes('https://calup-in.vercel.app/manage/secret-token-xyz'), 'Customer email embeds management URL');
   assert(Array.isArray(capturedCustConfirmMail.attachments) && capturedCustConfirmMail.attachments.length === 1, 'Contains exactly 1 attachment');
@@ -282,7 +281,7 @@ async function runEmailFlowTests() {
   });
 
   assert.strictEqual(res4c.success, true, 'sendCoachBookingConfirmedEmail succeeds');
-  assert(capturedCoachConfirmMail.subject.includes('Booking Confirmed'), 'Subject contains "Booking Confirmed"');
+  assert(capturedCoachConfirmMail.subject.includes("You're booked"), 'Subject contains "You\'re booked"');
   assert(capturedCoachConfirmMail.subject.includes('Ananya Roy'), 'Subject contains client name');
   assert(capturedCoachConfirmMail.html.includes('Ananya Roy'), 'Contains client details: name');
   assert(capturedCoachConfirmMail.html.includes('ananya@example.com'), 'Contains client details: email');
@@ -323,7 +322,7 @@ async function runEmailFlowTests() {
 
   assert.strictEqual(res5.success, true, 'sendPaymentRejectedEmailToCustomer succeeds');
   assert(capturedRejectMail, 'Email payload was captured');
-  assert(capturedRejectMail.subject.includes('Payment could not be verified - please contact Coach Vikram'), 'Subject contains "Payment could not be verified - please contact <coach name>"');
+  assert(capturedRejectMail.subject.includes('Payment not confirmed — please contact your coach'), 'Subject contains "Payment not confirmed — please contact your coach"');
   assert(capturedRejectMail.html.includes('Calup'), 'Header contains "Calup"');
   assert(!capturedRejectMail.html.includes('CalUp'), 'Does NOT contain "CalUp"');
   assert(capturedRejectMail.html.includes('vikram.coach@example.com'), 'Contains coach contact email');

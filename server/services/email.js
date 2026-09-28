@@ -27,7 +27,12 @@ export class EmailService {
   }
 
   get fromEmail() {
-    return this._fromEmail !== null ? this._fromEmail : (process.env.RESEND_FROM_EMAIL || config.resendFromEmail || 'Calup <bookings@calup.in>');
+    // TODO(hardcoded): Verified sender domain on Resend is bookup.work.gd until calup.in DNS verification is complete
+    const configured = this._fromEmail !== null ? this._fromEmail : (process.env.RESEND_FROM_EMAIL || config.resendFromEmail || '');
+    if (configured && configured.includes('@bookup.work.gd')) {
+      return configured;
+    }
+    return 'Calup <bookings@bookup.work.gd>';
   }
 
   isConfigured() {
@@ -86,7 +91,7 @@ export class EmailService {
         timeZone,
       });
 
-      const subject = `Booking Confirmed: ${serviceName} with ${providerName}`;
+      const subject = `Your payment is confirmed: ${serviceName} with ${providerName}`;
       const meetButton = meetLink
         ? `<div style="margin: 24px 0 16px;">
              <a href="${meetLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
@@ -118,9 +123,9 @@ export class EmailService {
               <span style="font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">Calup</span>
             </div>
             
-            <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 12px;">Booking Confirmed</h1>
+            <h1 style="font-size: 22px; font-weight: 700; color: #166534; margin: 0 0 12px;">Your payment is confirmed</h1>
             <p style="font-size: 15px; line-height: 1.5; color: #334155; margin: 0 0 20px;">
-              Hi ${customerName || 'there'}, your appointment with <strong>${providerName}</strong> has been confirmed.
+              Hi ${customerName || 'there'}, your payment has been confirmed and your session with <strong>${providerName}</strong> is set!
             </p>
 
             <div style="background-color: #f1f5f9; border-radius: 8px; padding: 18px 20px; margin: 20px 0;">
@@ -185,6 +190,12 @@ A calendar invite (.ics) has been attached to this email.
         ],
       });
 
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
+      });
+
       if (error) {
         console.error(`[EmailService] Resend customer confirmation failed. Provider: "${providerName || 'Unknown'}", Recipient: "${to}", Error: ${error.message || JSON.stringify(error)}`);
         return {
@@ -232,7 +243,7 @@ A calendar invite (.ics) has been attached to this email.
 
     try {
       const client = this.getClient();
-      const subject = `Booking Confirmed: ${customerName} — ${serviceName}`;
+      const subject = `You're booked: ${customerName} — ${serviceName}`;
 
       const meetSection = meetLink
         ? `<div style="margin: 20px 0 12px;">
@@ -257,7 +268,7 @@ A calendar invite (.ics) has been attached to this email.
               <span style="font-size: 18px; font-weight: 700; color: #0f172a;">Calup</span>
             </div>
             
-            <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">Booking Confirmed</h1>
+            <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">You're booked</h1>
             <p style="font-size: 15px; color: #334155; margin: 0 0 20px;">
               Hi ${providerName || 'Coach'}, your appointment with <strong>${customerName}</strong> has been confirmed.
             </p>
@@ -294,7 +305,7 @@ A calendar invite (.ics) has been attached to this email.
       `;
 
       const text = `
-Booking Confirmed!
+You're booked!
 
 Hi ${providerName || 'Coach'}, your appointment with ${customerName} has been confirmed:
 - Client: ${customerName}
@@ -312,6 +323,12 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -341,6 +358,8 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
     startTime,
     duration,
     amount = 0,
+    screenshotUrl = '',
+    dashboardUrl = '',
   }) {
     if (!to || !to.includes('@')) {
       return { success: false, skipped: true, error: 'Missing or invalid provider email address' };
@@ -353,7 +372,24 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
 
     try {
       const client = this.getClient();
-      const subject = `New booking - awaiting payment: ${customerName} — ${serviceName}`;
+      const subject = `New booking — review payment: ${customerName} — ${serviceName}`;
+
+      const screenshotSection = screenshotUrl
+        ? `<div style="margin: 20px 0 16px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+             <div style="font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">📷 Uploaded Payment Screenshot:</div>
+             <a href="${screenshotUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 14px;">
+               View Uploaded Payment Screenshot ↗
+             </a>
+           </div>`
+        : `<p style="color: #64748b; font-size: 13px; margin: 16px 0;"><em>Customer has not uploaded a payment screenshot yet. You will be notified when submitted.</em></p>`;
+
+      const dashboardButton = dashboardUrl
+        ? `<div style="margin: 24px 0 16px;">
+             <a href="${dashboardUrl}" style="background-color: #166534; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
+               Review Payment in Dashboard
+             </a>
+           </div>`
+        : '';
 
       const html = `
         <!DOCTYPE html>
@@ -369,9 +405,9 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
               <span style="font-size: 18px; font-weight: 700; color: #0f172a;">Calup</span>
             </div>
             
-            <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">New booking - awaiting payment</h1>
+            <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">New booking — review payment</h1>
             <p style="font-size: 15px; color: #334155; margin: 0 0 20px;">
-              Hi ${providerName || 'Coach'}, you have a new booking awaiting payment verification from <strong>${customerName}</strong>.
+              Hi ${providerName || 'Coach'}, you have a new booking from <strong>${customerName}</strong> awaiting payment review.
             </p>
 
             <div style="background-color: #f1f5f9; border-radius: 8px; padding: 18px 20px; margin: 20px 0;">
@@ -400,8 +436,12 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
               </table>
             </div>
 
+            ${screenshotSection}
+
+            ${dashboardButton}
+
             <p style="font-size: 13px; color: #64748b; margin-top: 16px;">
-              The slot is reserved. Once the client marks the payment as paid and submits details, you will be notified to verify and confirm.
+              Please check your UPI app to confirm receipt of payment, then accept or reject the booking from your Calup dashboard.
             </p>
           </div>
         </body>
@@ -409,17 +449,15 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not conne
       `;
 
       const text = `
-New booking - awaiting payment
+New booking — review payment
 
-Hi ${providerName || 'Coach'}, you have a new booking awaiting payment from ${customerName}:
+Hi ${providerName || 'Coach'}, you have a new booking from ${customerName} awaiting payment review:
 - Client: ${customerName}
 - Client Email: ${customerEmail || 'N/A'}
 - Client Phone: ${customerPhone || 'N/A'}
 - Service: ${serviceName}
 - Date & Time: ${bookingDate} at ${startTime} (${duration} mins)
-${amount ? `- Amount: ₹${amount}` : ''}
-
-The slot is reserved. You will be notified once the client submits payment details.
+${amount ? `- Amount: ₹${amount}\n` : ''}${screenshotUrl ? `- Payment Screenshot: ${screenshotUrl}\n` : ''}${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}\n` : ''}
       `.trim();
 
       const { data, error } = await client.emails.send({
@@ -428,6 +466,12 @@ The slot is reserved. You will be notified once the client submits payment detai
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -466,7 +510,7 @@ The slot is reserved. You will be notified once the client submits payment detai
 
     try {
       const client = this.getClient();
-      const subject = `Booking received - payment verification pending: ${serviceName} with ${providerName}`;
+      const subject = `Your slot is booked — waiting for payment confirmation: ${serviceName} with ${providerName}`;
 
       const html = `
         <!DOCTYPE html>
@@ -482,9 +526,9 @@ The slot is reserved. You will be notified once the client submits payment detai
               <span style="font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">Calup</span>
             </div>
             
-            <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 12px;">Booking received - payment verification pending</h1>
+            <h1 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 12px;">Your slot is booked — waiting for payment confirmation</h1>
             <p style="font-size: 15px; line-height: 1.5; color: #334155; margin: 0 0 20px;">
-              Hi ${customerName || 'there'}, your slot is reserved and the coach will confirm shortly.
+              Hi ${customerName || 'there'}, your slot is booked — waiting for payment confirmation. Your slot is reserved and the coach will confirm shortly once your payment is reviewed.
             </p>
 
             <div style="background-color: #f1f5f9; border-radius: 8px; padding: 18px 20px; margin: 20px 0;">
@@ -509,7 +553,7 @@ The slot is reserved. You will be notified once the client submits payment detai
             </div>
 
             <p style="font-size: 14px; line-height: 1.5; color: #475569; margin: 20px 0 0;">
-              Please make sure you have paid the coach directly and marked it as paid. Once your coach confirms the payment, you will receive an official booking confirmation with meeting links.
+              Please make sure you have paid your coach directly via UPI and uploaded your payment screenshot. Once your coach verifies and confirms the payment, you will receive your Google Meet link and session confirmation.
             </p>
           </div>
         </body>
@@ -517,15 +561,15 @@ The slot is reserved. You will be notified once the client submits payment detai
       `;
 
       const text = `
-Booking received - payment verification pending
+Your slot is booked — waiting for payment confirmation
 
-Hi ${customerName || 'there'}, your slot is reserved and the coach will confirm shortly:
+Hi ${customerName || 'there'}, your slot is booked — waiting for payment confirmation. Your slot is reserved and the coach will confirm shortly once your payment is reviewed:
 - Service: ${serviceName}
 - Coach: ${providerName}
 - Date: ${bookingDate}
 - Time: ${startTime} (${duration} mins)
 
-Once your coach confirms the payment, you will receive a booking confirmation email with session details.
+Once your coach verifies and confirms your payment, you will receive your Google Meet link and session confirmation.
       `.trim();
 
       const { data, error } = await client.emails.send({
@@ -534,6 +578,12 @@ Once your coach confirms the payment, you will receive a booking confirmation em
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -653,6 +703,12 @@ ${meetLink ? `Google Meet Link: ${meetLink}` : ''}
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -787,6 +843,12 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
         html,
       });
 
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
+      });
+
       if (error) {
         console.error(`[EmailService] Resend reminder email failed. Provider: "${providerName || 'Unknown'}", Recipient: "${to}", Error: ${error.message || JSON.stringify(error)}`);
         return {
@@ -835,11 +897,11 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
 
     try {
       const client = this.getClient();
-      const subject = `Payment Submitted: ${customerName} paid ₹${amount} for ${serviceName}`;
+      const subject = `New booking — review payment: ${customerName} — ${serviceName}`;
 
       const screenshotSection = screenshotUrl
         ? `<div style="margin: 20px 0 16px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-             <div style="font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">📷 Payment Screenshot Attached:</div>
+             <div style="font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">📷 Uploaded Payment Screenshot:</div>
              <a href="${screenshotUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 14px;">
                View Uploaded Payment Screenshot ↗
              </a>
@@ -849,7 +911,7 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
       const dashboardButton = dashboardUrl
         ? `<div style="margin: 24px 0 16px;">
              <a href="${dashboardUrl}" style="background-color: #166534; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
-               Review & Confirm Payment in Dashboard
+               Review Payment in Dashboard
              </a>
            </div>`
         : '';
@@ -868,7 +930,7 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
               <span style="font-size: 18px; font-weight: 700; color: #0f172a;">Calup</span>
             </div>
             
-            <h1 style="font-size: 20px; font-weight: 700; color: #166534; margin: 0 0 8px;">Payment Details Submitted</h1>
+            <h1 style="font-size: 20px; font-weight: 700; color: #166534; margin: 0 0 8px;">New booking — review payment</h1>
             <p style="font-size: 15px; color: #334155; margin: 0 0 20px;">
               Hi ${providerName || 'Coach'}, <strong>${customerName}</strong> has submitted payment details for their upcoming session. Please verify the payment in your UPI app and confirm or reject it in your Calup dashboard.
             </p>
@@ -915,15 +977,14 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
       `;
 
       const text = `
-Payment Details Submitted!
+New booking — review payment
 
 Hi ${providerName || 'Coach'}, ${customerName} has submitted payment details:
 - Client: ${customerName} (${customerPhone})
 - Service: ${serviceName}
 - Date & Time: ${bookingDate} at ${startTime}
 - Amount: ₹${amount}
-${screenshotUrl ? `- Screenshot: ${screenshotUrl}` : ''}
-${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
+${screenshotUrl ? `- Screenshot: ${screenshotUrl}\n` : ''}${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}\n` : ''}
       `.trim();
 
       const { data, error } = await client.emails.send({
@@ -932,6 +993,12 @@ ${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -948,7 +1015,7 @@ ${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
 
   /**
    * 5. Send Customer Payment Rejected Notification (POST /api/bookings/:id/reject-payment)
-   * "Payment could not be verified - please contact <coach name>" with coach contact details. NO .ics.
+   * "Payment not confirmed — please contact your coach" with coach contact details. NO .ics.
    */
   async sendPaymentRejectedEmailToCustomer({
     to,
@@ -973,7 +1040,7 @@ ${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
 
     try {
       const client = this.getClient();
-      const subject = `Payment could not be verified - please contact ${providerName}`;
+      const subject = 'Payment not confirmed — please contact your coach';
 
       const contactSection = `
         <div style="background-color: #f1f5f9; border-radius: 8px; padding: 18px 20px; margin: 20px 0;">
@@ -1004,9 +1071,9 @@ ${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
               <span style="font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">Calup</span>
             </div>
             
-            <h1 style="font-size: 22px; font-weight: 700; color: #dc2626; margin: 0 0 12px;">Payment could not be verified</h1>
+            <h1 style="font-size: 22px; font-weight: 700; color: #dc2626; margin: 0 0 12px;">Payment not confirmed — please contact your coach</h1>
             <p style="font-size: 15px; line-height: 1.5; color: #334155; margin: 0 0 20px;">
-              Hi ${customerName || 'there'}, your payment for <strong>${serviceName}</strong> on <strong>${bookingDate}</strong> at <strong>${startTime}</strong> could not be verified, and the reserved time slot has been released.
+              Hi ${customerName || 'there'}, your payment for <strong>${serviceName}</strong> on <strong>${bookingDate}</strong> at <strong>${startTime}</strong> could not be verified by <strong>${providerName}</strong>, and the reserved time slot has been released.
             </p>
 
             ${reason ? `<div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 16px; margin: 16px 0; font-size: 14px; color: #991b1b;"><strong>Reason:</strong> ${reason}</div>` : ''}
@@ -1022,11 +1089,11 @@ ${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}` : ''}
       `;
 
       const text = `
-Payment could not be verified - please contact ${providerName}
+Payment not confirmed — please contact your coach
 
 Hi ${customerName || 'there'},
 
-Your payment for ${serviceName} on ${bookingDate} at ${startTime} could not be verified, and the reserved time slot has been released.
+Your payment for ${serviceName} on ${bookingDate} at ${startTime} could not be verified by ${providerName}, and the reserved time slot has been released.
 ${reason ? `Reason: ${reason}\n` : ''}
 Please contact ${providerName} directly:
 - Email: ${providerEmail || 'N/A'}
@@ -1039,6 +1106,12 @@ Please contact ${providerName} directly:
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -1118,6 +1191,12 @@ Please contact ${providerName} directly:
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {
@@ -1203,6 +1282,12 @@ Please contact ${providerName} directly:
         subject,
         text,
         html,
+      });
+
+      console.log(`[EmailService] Resend API response for "${subject}" to "${to}":`, {
+        success: !error,
+        messageId: data?.id || null,
+        error: error ? { message: error.message, name: error.name, details: error } : null,
       });
 
       if (error) {

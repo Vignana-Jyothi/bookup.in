@@ -510,6 +510,8 @@ async function handleCreateBooking(req, res) {
               startTime,
               duration,
               amount: insertPayload.price || 0,
+              screenshotUrl: insertPayload.payment_screenshot_url || null,
+              dashboardUrl: `${frontendBase}/dashboard/appointments`,
             })
           : Promise.resolve({ success: false, skipped: true, error: 'Provider email not configured' }),
       ]);

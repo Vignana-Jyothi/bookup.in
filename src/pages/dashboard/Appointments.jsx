@@ -351,6 +351,7 @@ export default function Appointments() {
         type: ACTIONS.UPDATE_BOOKING,
         payload: {
           id: booking.id,
+          status: 'confirmed',
           paymentStatus: 'confirmed',
           paymentConfirmedAt: new Date().toISOString(),
         },
@@ -391,7 +392,7 @@ export default function Appointments() {
           paymentStatus: 'rejected',
           paymentRejectedAt: new Date().toISOString(),
           paymentRejectedReason: rejectReason.trim() || null,
-          status: 'cancelled',
+          status: 'rejected',
         },
       });
 

@@ -282,10 +282,11 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
-    // Update payment status
+    // Update booking status to confirmed and commit to DB before sending emails
     const { error: updateErr } = await supabase
       .from('bookings')
       .update({
+        status: 'confirmed',
         payment_status: 'confirmed',
         payment_confirmed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -555,15 +556,14 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
-    // Free the slot by cancelling the booking (same mechanism as existing cancellation)
-    // AND set the payment rejection fields — single atomic update
+    // Update booking status to 'rejected' and commit to DB before sending emails
     const { error: updateErr } = await supabase
       .from('bookings')
       .update({
+        status: 'rejected',
         payment_status: 'rejected',
         payment_rejected_at: new Date().toISOString(),
         payment_rejected_reason: trimmedReason || null,
-        status: 'cancelled',
         updated_at: new Date().toISOString(),
       })
       .eq('id', bookingId);

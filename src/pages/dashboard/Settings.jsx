@@ -247,10 +247,17 @@ export default function Settings() {
         } catch (_) {}
       }
 
-      const url = await dbService.uploadAvatar(activeProviderId, file);
+      const url = await dbService.uploadQrCode(activeProviderId, file);
       if (url) {
         setQrCodeUrl(url);
-        addToast('QR code uploaded ✓');
+        dispatch({
+          type: ACTIONS.UPDATE_PROVIDER,
+          payload: { qrCodeUrl: url },
+        });
+        if (isSupabaseConfigured() && activeProviderId) {
+          await dbService.updateProviderProfile(activeProviderId, { qrCodeUrl: url });
+        }
+        addToast('QR code uploaded and saved ✓');
       }
     } catch (err) {
       addToast(err.message || 'Failed to upload QR code.', 'error');
@@ -563,7 +570,16 @@ export default function Settings() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => setQrCodeUrl(null)}
+                    onClick={async () => {
+                      setQrCodeUrl(null);
+                      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { qrCodeUrl: null } });
+                      if (isSupabaseConfigured() && provider?.id) {
+                        try {
+                          await dbService.updateProviderProfile(provider.id, { qrCodeUrl: null });
+                        } catch (_) {}
+                      }
+                      addToast('QR code removed.');
+                    }}
                     style={{ fontSize: '12px', color: '#EF4444' }}
                   >Remove</button>
                 )}

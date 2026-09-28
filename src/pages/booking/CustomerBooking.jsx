@@ -25,7 +25,7 @@ import { buildManagementUrl } from '../../utils/token';
 import { whatsAppService } from '../../services/notifications/MockWhatsAppProvider';
 import { MOCK_GCAL_BUSY_EVENTS } from '../../services/calendar/MockGoogleCalendarProvider';
 import { DEMO_PROVIDER, DEMO_POLICIES, DEMO_BOOKINGS, createSeedState } from '../../data/seedData';
-import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import PillButton from '../../components/ui/PillButton';
 import BrandLogo from '../../components/ui/BrandLogo';
@@ -101,6 +101,64 @@ export default function CustomerBooking() {
       isMounted = false;
     };
   }, [lookupIdentifier, demoBooking, hasBookings, dispatch]);
+
+  // Live status update on customer screen via Supabase Realtime (no manual refresh)
+  useEffect(() => {
+    const bookingId = resolvedBooking?.id;
+    if (!bookingId || !isSupabaseConfigured()) return;
+
+    const channel = supabase
+      .channel(`realtime-booking-${bookingId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bookings',
+          filter: `id=eq.${bookingId}`,
+        },
+        (payload) => {
+          const newRow = payload.new;
+          if (!newRow) return;
+
+          console.log(`[CustomerBooking] Realtime update received for booking ${bookingId}:`, {
+            status: newRow.status,
+            payment_status: newRow.payment_status,
+          });
+
+          // Instantly update local state without polling or page refresh
+          setSupabaseBookingData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              booking: {
+                ...prev.booking,
+                status: newRow.status,
+                paymentStatus: newRow.payment_status,
+                paymentConfirmedAt: newRow.payment_confirmed_at,
+                paymentRejectedAt: newRow.payment_rejected_at,
+                paymentRejectedReason: newRow.payment_rejected_reason,
+                paymentScreenshotUrl: newRow.payment_screenshot_url || prev.booking?.paymentScreenshotUrl,
+                meetLink: newRow.meet_link || prev.booking?.meetLink,
+              },
+            };
+          });
+
+          if (newRow.status === 'confirmed' || newRow.payment_status === 'confirmed') {
+            addToast('Payment confirmed! Your session is set ✓');
+          } else if (newRow.status === 'rejected' || newRow.payment_status === 'rejected') {
+            addToast('Payment could not be verified. Please contact your coach.', 'error');
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[CustomerBooking] Supabase realtime channel status: ${status}`);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [resolvedBooking?.id, addToast]);
 
   const isStateBooking = Boolean(
     bookingInState &&
@@ -311,18 +369,26 @@ export default function CustomerBooking() {
   const providerQrCodeUrl = supabaseBookingData?.provider?.qrCodeUrl || null;
   const showPaymentSection = Boolean(isPaidService && paymentStatus !== 'not_required');
 
+  // TODO(hardcoded): User-agent based mobile detection for 5-10 user test
+  const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+
+  // TODO(hardcoded): Fixed currency INR for UPI payment link
+  const upiLink = providerUpiId
+    ? `upi://pay?pa=${encodeURIComponent(providerUpiId)}&pn=${encodeURIComponent(providerName)}&am=${encodeURIComponent(resolvedBooking?.price || 0)}&cu=INR&tn=${encodeURIComponent(`Calup booking ${resolvedBooking?.id || ''}`)}`
+    : '';
+
   // Compute Headline, Subline, Celebrate Icon, and Status Badge strictly from payment_status and booking state
   let celebrateBadge = '🎉';
-  let heroHeadline = "You're booked!";
+  let heroHeadline = "Payment confirmed";
   let heroSubline = `Your appointment with ${providerName} is confirmed.`;
   let statusBadgeText = getStatusLabel(resolvedBooking.status);
   let statusBadgeStyle = null;
 
-  if (paymentStatus === 'rejected') {
+  if (paymentStatus === 'rejected' || resolvedBooking.status === 'rejected') {
     celebrateBadge = '⚠️';
-    heroHeadline = "Payment could not be verified";
-    heroSubline = `Your payment submission could not be verified by ${providerName}.`;
-    statusBadgeText = 'Payment Rejected';
+    heroHeadline = "Payment not confirmed";
+    heroSubline = `Payment not confirmed, contact your coach.`;
+    statusBadgeText = 'Payment Not Confirmed';
     statusBadgeStyle = { background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA' };
   } else if (isCancelled) {
     celebrateBadge = '❌';
@@ -334,12 +400,18 @@ export default function CustomerBooking() {
     heroHeadline = 'Session Completed';
     heroSubline = `Thank you for attending your session with ${providerName}.`;
     statusBadgeText = 'Completed';
+  } else if (paymentStatus === 'confirmed' || resolvedBooking.status === 'confirmed') {
+    celebrateBadge = '🎉';
+    heroHeadline = "Payment confirmed";
+    heroSubline = `Your payment is confirmed. Your appointment with ${providerName} is set!`;
+    statusBadgeText = 'Payment Confirmed';
+    statusBadgeStyle = { background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' };
   } else if (isPaidService) {
     if (paymentStatus === 'awaiting_payment') {
       celebrateBadge = '💳';
-      heroHeadline = 'Almost there — complete your payment';
+      heroHeadline = 'Waiting for your payment';
       heroSubline = `Your appointment with ${providerName} is reserved. Complete payment to secure your spot.`;
-      statusBadgeText = 'Awaiting Payment';
+      statusBadgeText = 'Waiting for Payment';
       statusBadgeStyle = { background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' };
     } else if (paymentStatus === 'verification_pending') {
       celebrateBadge = '⏱️';
@@ -347,12 +419,6 @@ export default function CustomerBooking() {
       heroSubline = `Your coach will verify your payment in their UPI app shortly.`;
       statusBadgeText = 'Verification Pending';
       statusBadgeStyle = { background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' };
-    } else if (paymentStatus === 'confirmed') {
-      celebrateBadge = '🎉';
-      heroHeadline = "You're booked!";
-      heroSubline = `Your appointment with ${providerName} is confirmed.`;
-      statusBadgeText = 'Confirmed';
-      statusBadgeStyle = { background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' };
     }
   }
 
@@ -584,7 +650,25 @@ export default function CustomerBooking() {
                     Pay your coach directly via UPI to confirm your booking. Your slot is reserved — complete payment to secure it.
                   </p>
 
-                  {/* UPI Info */}
+                  {/* Amount Due Display */}
+                  {resolvedBooking.price > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      background: 'var(--color-primary-50, #EFF6FF)',
+                      borderRadius: '10px',
+                      marginBottom: '16px',
+                      fontWeight: 600,
+                      fontSize: '14px',
+                    }}>
+                      <span>Amount Due</span>
+                      <span style={{ fontSize: '18px', color: 'var(--color-primary-700)', fontWeight: 700 }}>{formatCurrency(resolvedBooking.price)}</span>
+                    </div>
+                  )}
+
+                  {/* UPI Info / Mobile Pay Now / Desktop QR Code */}
                   {(providerUpiId || providerQrCodeUrl) ? (
                     <div style={{
                       background: 'var(--color-bg-subtle, #F8FAFC)',
@@ -593,11 +677,67 @@ export default function CustomerBooking() {
                       marginBottom: '16px',
                       border: '1px solid var(--color-border)',
                     }}>
+                      {/* Mobile View: Plain <a href={upiLink}> opens UPI app directly (GPay/PhonePe/Paytm) */}
+                      {isMobile && providerUpiId ? (
+                        <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                          <a
+                            href={upiLink}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              width: '100%',
+                              padding: '14px 20px',
+                              background: '#16a34a',
+                              color: '#ffffff',
+                              borderRadius: '9999px',
+                              fontWeight: 700,
+                              fontSize: '15px',
+                              textDecoration: 'none',
+                              boxShadow: '0 2px 8px rgba(22, 163, 74, 0.35)',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            <span>⚡ Pay Now via UPI</span>
+                            <span style={{ fontSize: '12px', opacity: 0.9 }}>(GPay / PhonePe / Paytm)</span>
+                          </a>
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '6px' }}>
+                            Tap to open your UPI app directly
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Desktop View: Fall back to showing QR image since deep links don't run on laptops */}
+                      {!isMobile && providerQrCodeUrl ? (
+                        <div style={{ textAlign: 'center', marginBottom: providerUpiId ? '14px' : 0 }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Scan QR Code with Phone</div>
+                          <img
+                            src={providerQrCodeUrl}
+                            alt="UPI QR Code"
+                            style={{ maxWidth: '200px', width: '100%', borderRadius: '12px', border: '1px solid var(--color-border)' }}
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* Mobile with no UPI ID but QR code exists */}
+                      {isMobile && !providerUpiId && providerQrCodeUrl && (
+                        <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Scan or Screenshot QR Code</div>
+                          <img
+                            src={providerQrCodeUrl}
+                            alt="UPI QR Code"
+                            style={{ maxWidth: '200px', width: '100%', borderRadius: '12px', border: '1px solid var(--color-border)' }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Always show text UPI ID with Copy button for manual entry if needed */}
                       {providerUpiId && (
-                        <div style={{ marginBottom: providerQrCodeUrl ? '12px' : 0 }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>UPI ID</div>
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Coach UPI ID</div>
                           <div style={{
-                            fontSize: '15px',
+                            fontSize: '14px',
                             fontWeight: 700,
                             fontFamily: 'monospace',
                             color: 'var(--color-text)',
@@ -625,16 +765,6 @@ export default function CustomerBooking() {
                           </div>
                         </div>
                       )}
-                      {providerQrCodeUrl && (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Scan to Pay</div>
-                          <img
-                            src={providerQrCodeUrl}
-                            alt="UPI QR Code"
-                            style={{ maxWidth: '200px', width: '100%', borderRadius: '12px', border: '1px solid var(--color-border)' }}
-                          />
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div style={{
@@ -647,23 +777,6 @@ export default function CustomerBooking() {
                       textAlign: 'center',
                     }}>
                       Contact your coach for payment details.
-                    </div>
-                  )}
-
-                  {resolvedBooking.price > 0 && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 16px',
-                      background: 'var(--color-primary-50, #EFF6FF)',
-                      borderRadius: '10px',
-                      marginBottom: '16px',
-                      fontWeight: 600,
-                      fontSize: '14px',
-                    }}>
-                      <span>Amount</span>
-                      <span style={{ fontSize: '16px', color: 'var(--color-primary-700)' }}>{formatCurrency(resolvedBooking.price)}</span>
                     </div>
                   )}
 
