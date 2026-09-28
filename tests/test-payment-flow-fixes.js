@@ -126,12 +126,17 @@ async function runAllScenarios() {
   // SCENARIO 2: Open Pay Now on mobile. Validate UPI deep link with URLSearchParams.
   // ===========================================================================
   console.log('\n--- [SCENARIO 2] UPI DEEP LINK GENERATION & ENCODING ---');
+  const customerName = booking1.customer_name?.trim();
+  const paymentNote = customerName
+    ? `CalUp Booking - ${customerName}`.slice(0, 45)
+    : 'CalUp Appointment Booking';
+
   const upiParams = new URLSearchParams({
     pa: testCoachUpiId,
     pn: coach.name || 'Coach',
     am: String(booking1.price || 0),
     cu: 'INR',
-    tn: `Calup booking ${booking1.id}`,
+    tn: paymentNote,
   });
   const upiLink = `upi://pay?${upiParams.toString()}`;
 
@@ -139,8 +144,10 @@ async function runAllScenarios() {
   assert(upiLink.includes(`pa=${encodeURIComponent(testCoachUpiId)}`) || upiLink.includes(`pa=${testCoachUpiId}`), 'Link must contain correct coach UPI ID');
   assert(upiLink.includes(`am=${booking1.price}`), 'Link must contain exact INR booking amount');
   assert(upiLink.includes('cu=INR'), 'Link must specify cu=INR');
-  assert(upiLink.includes(booking1.id), 'Link must contain booking ID in transaction note');
+  assert(!upiLink.includes(booking1.id), 'Link must NOT leak raw UUID booking ID in transaction note');
+  assert(upiLink.includes('CalUp+Booking') || upiLink.includes('CalUp%20Booking'), 'Link must contain clean customer-friendly description');
   console.log(`  ✓ Generated UPI deep link: ${upiLink}`);
+  console.log(`  ✓ Clean customer-friendly note verified: "${paymentNote}" (no raw UUID)`);
   console.log(`  ✓ URLSearchParams safely escaped all parameters`);
 
   // ===========================================================================

@@ -365,6 +365,11 @@ export default function CustomerBooking() {
   // TODO(hardcoded): User-agent based mobile detection for 5-10 user test
   const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 
+  const customerName = resolvedBooking?.customerName?.trim();
+  const paymentNote = customerName
+    ? `CalUp Booking - ${customerName}`.slice(0, 45)
+    : 'CalUp Appointment Booking';
+
   // TODO(hardcoded): Fixed currency INR for UPI payment link with URLSearchParams safe encoding
   const upiLink = providerUpiId
     ? `upi://pay?${new URLSearchParams({
@@ -372,7 +377,7 @@ export default function CustomerBooking() {
         pn: providerName,
         am: String(resolvedBooking?.price || 0),
         cu: 'INR',
-        tn: `Calup booking ${resolvedBooking?.id || ''}`,
+        tn: paymentNote,
       }).toString()}`
     : '';
 
