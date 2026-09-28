@@ -585,12 +585,9 @@ export default function CustomerBooking() {
   const mapsLink = locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null;
 
   const trackingIdentifier = resolvedBooking?.managementToken || lookupIdentifier || resolvedBooking?.id;
-  const fullTrackingUrl = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/booking-status/${encodeURIComponent(trackingIdentifier || '')}`;
-    }
-    return getCustomerBookingStatusUrl(trackingIdentifier);
-  }, [trackingIdentifier]);
+  const fullTrackingUrl = (typeof window !== 'undefined')
+    ? `${window.location.origin}/booking-status/${encodeURIComponent(trackingIdentifier || '')}`
+    : getCustomerBookingStatusUrl(trackingIdentifier);
 
   return (
     <div className="janjiyuk-booking-canvas">

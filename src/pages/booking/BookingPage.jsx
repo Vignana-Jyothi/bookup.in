@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useStore, formatCurrency, formatDate, formatTime, generateId } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import {

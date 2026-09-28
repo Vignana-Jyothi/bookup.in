@@ -14,7 +14,7 @@ export function getApiBase() {
   }
   if (typeof window !== 'undefined') {
     const host = window.location?.hostname || '';
-    if (host.includes('vercel.app') || host.includes('bookup.in') || host.includes('calup.in') || (!host.includes('localhost') && !host.includes('127.0.0.1'))) {
+    if (host.includes('vercel.app') || host.includes('calup.in') || (!host.includes('localhost') && !host.includes('127.0.0.1'))) {
       return 'https://bookup-in.onrender.com/api';
     }
   }
