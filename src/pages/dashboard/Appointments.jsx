@@ -779,7 +779,7 @@ export default function Appointments() {
                   }}
                 >
                   <span className="item-icon">✓</span>
-                  <span>Confirm Payment</span>
+                  <span>Accept Payment</span>
                 </button>
                 <button
                   type="button"
@@ -1073,7 +1073,7 @@ export default function Appointments() {
                       disabled={processingPaymentId === b.id}
                       onClick={() => handleConfirmPayment(b)}
                     >
-                      ✓ Confirm Payment
+                      ✓ Accept Payment
                     </button>
                     <button
                       type="button"

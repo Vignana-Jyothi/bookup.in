@@ -376,6 +376,9 @@ export default function CustomerBooking() {
       }).toString()}`
     : '';
 
+  // Use coach's saved QR code image, or dynamically generate QR code from valid UPI deep link
+  const displayQrCodeUrl = providerQrCodeUrl || (upiLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}` : null);
+
   // Compute Headline, Subline, Celebrate Icon, and Status Badge strictly from payment_status and booking state (States A, B, C, D)
   let celebrateBadge = '💳';
   let heroHeadline = 'Booking Reserved';
@@ -652,7 +655,7 @@ export default function CustomerBooking() {
                   )}
 
                   {/* UPI Info / Mobile Pay Now / Desktop QR Code */}
-                  {(providerUpiId || providerQrCodeUrl) ? (
+                  {(providerUpiId || displayQrCodeUrl) ? (
                     <div style={{
                       background: 'var(--color-bg-subtle, #F8FAFC)',
                       borderRadius: '12px',
@@ -692,16 +695,42 @@ export default function CustomerBooking() {
                       ) : null}
 
                       {/* QR Code: Displayed prominently on Desktop, AND visible as an alternative below Pay Now on Mobile */}
-                      {providerQrCodeUrl ? (
-                        <div style={{ textAlign: 'center', marginBottom: providerUpiId ? '14px' : 0 }}>
+                      {displayQrCodeUrl ? (
+                        <div style={{ textAlign: 'center', marginBottom: (providerUpiId || (!isMobile && upiLink)) ? '14px' : 0 }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
                             {isMobile ? 'Or Scan / Screenshot QR Code' : 'Scan QR Code with Phone'}
                           </div>
                           <img
-                            src={providerQrCodeUrl}
+                            src={displayQrCodeUrl}
                             alt="UPI QR Code"
                             style={{ maxWidth: '200px', width: '100%', borderRadius: '12px', border: '1px solid var(--color-border)' }}
                           />
+                        </div>
+                      ) : null}
+
+                      {/* Desktop View: Also display Pay Now button alongside QR code */}
+                      {!isMobile && upiLink ? (
+                        <div style={{ marginBottom: '14px', textAlign: 'center' }}>
+                          <a
+                            href={upiLink}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '8px 18px',
+                              background: '#16a34a',
+                              color: '#ffffff',
+                              borderRadius: '9999px',
+                              fontWeight: 600,
+                              fontSize: '13px',
+                              textDecoration: 'none',
+                              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+                            }}
+                          >
+                            <span>⚡ Pay Now</span>
+                            <span style={{ fontSize: '11px', opacity: 0.9 }}>(UPI App)</span>
+                          </a>
                         </div>
                       ) : null}
 

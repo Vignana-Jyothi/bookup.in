@@ -32,10 +32,15 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
-        if (typeof this.props.fallback === 'function') {
-          return this.props.fallback(this.state.error, this.handleReset);
+        try {
+          if (typeof this.props.fallback === 'function') {
+            return this.props.fallback(this.state.error, this.handleReset);
+          }
+          return this.props.fallback;
+        } catch (fallbackError) {
+          console.error('[ErrorBoundary] Error occurred inside fallback component:', fallbackError);
+          // Fall through to safe built-in fallback UI
         }
-        return this.props.fallback;
       }
 
       return (
@@ -64,7 +69,7 @@ export default class ErrorBoundary extends React.Component {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-              <BrandLogo />
+              <BrandLogo to={null} />
             </div>
 
             <div

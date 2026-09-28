@@ -178,14 +178,8 @@ export default function PublicBookingPage() {
   }, [isDemo, selectedDate, provider?.id, provider?.timezone, fetchDateBusySlots]);
 
   const calendarBusyTimes = useMemo(() => {
-    if (isDemo) {
-      if (!state.googleCalendar?.isConnected || !selectedDate) return [];
-      const d = new Date(selectedDate + 'T00:00:00');
-      const day = d.getDay();
-      return MOCK_GCAL_BUSY_EVENTS.filter(e => e.dayOfWeek === day);
-    }
     return liveGcalBusyTimes;
-  }, [isDemo, state.googleCalendar?.isConnected, selectedDate, liveGcalBusyTimes]);
+  }, [liveGcalBusyTimes]);
 
   const timeSlotsDetailed = useMemo(() => {
     if (!selectedDate || !selectedService) return [];
@@ -203,7 +197,6 @@ export default function PublicBookingPage() {
       ...formattedDbBookings,
       ...(supabaseData?.bookings || []),
       ...(state.bookings || []),
-      ...(demoFallback?.bookings || []),
     ];
 
     return getTimeSlotsDetailedForDate(
@@ -214,7 +207,7 @@ export default function PublicBookingPage() {
       bookingsToCheck,
       calendarBusyTimes
     );
-  }, [selectedDate, selectedService, availability, services, liveDbBusySlots, supabaseData?.bookings, state.bookings, demoFallback?.bookings, calendarBusyTimes]);
+  }, [selectedDate, selectedService, availability, services, liveDbBusySlots, supabaseData?.bookings, state.bookings, calendarBusyTimes]);
 
   const timeSlots = useMemo(() => {
     return timeSlotsDetailed.filter(s => s.available).map(s => s.time);

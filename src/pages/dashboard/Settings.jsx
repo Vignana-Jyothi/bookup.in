@@ -593,6 +593,29 @@ export default function Settings() {
           Set up direct UPI payments so customers can pay you directly. CalUp tracks payment verification but never handles money.
         </p>
 
+        {(!upiId && !qrCodeUrl) && (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: '10px',
+              color: '#92400E',
+              fontSize: '13px',
+              lineHeight: 1.5,
+              marginBottom: 'var(--space-4)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}
+          >
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <strong>Payment details missing:</strong> You have not configured your UPI ID or QR code yet. Clients booking paid sessions will see a warning to contact you directly until you add your UPI details.
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 560 }}>
           <div className="form-group">
             <label className="form-label">UPI ID</label>
