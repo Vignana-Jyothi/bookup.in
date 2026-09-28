@@ -55,3 +55,12 @@ export function getCustomerManagementUrl(token) {
   const base = getAppBaseUrl();
   return `${base}/manage/${encodeURIComponent(token || '')}`;
 }
+
+/**
+ * Returns the customer booking tracking URL for a secure token or booking ID.
+ * e.g. "https://calup-in.vercel.app/booking-status/c8a9f..."
+ */
+export function getCustomerBookingStatusUrl(token) {
+  const base = getAppBaseUrl();
+  return `${base}/booking-status/${encodeURIComponent(token || '')}`;
+}

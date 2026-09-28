@@ -12,8 +12,11 @@ export function getApiBase() {
   if (envUrl.trim()) {
     return `${envUrl.trim().replace(/\/$/, '')}/api`;
   }
-  if (typeof window !== 'undefined' && window.location?.hostname?.includes('vercel.app')) {
-    return 'https://bookup-in.onrender.com/api';
+  if (typeof window !== 'undefined') {
+    const host = window.location?.hostname || '';
+    if (host.includes('vercel.app') || host.includes('bookup.in') || host.includes('calup.in') || (!host.includes('localhost') && !host.includes('127.0.0.1'))) {
+      return 'https://bookup-in.onrender.com/api';
+    }
   }
   if (typeof window === 'undefined' && typeof process !== 'undefined') {
     return `http://localhost:${process.env.PORT || 3001}/api`;
@@ -58,9 +61,16 @@ export const customerBookingService = {
     const apiBase = getApiBase();
 
     try {
-      const res = await fetch(`${apiBase}/public/bookings/manage/${encodeURIComponent(token)}`, {
+      let res = await fetch(`${apiBase}/public/bookings/booking-status/${encodeURIComponent(token)}`, {
         headers: { Accept: 'application/json' },
       });
+
+      if (!res.ok && res.status !== 404) {
+        // Fallback to manage endpoint if booking-status alias failed
+        res = await fetch(`${apiBase}/public/bookings/manage/${encodeURIComponent(token)}`, {
+          headers: { Accept: 'application/json' },
+        });
+      }
 
       if (res.ok) {
         const data = await res.json();

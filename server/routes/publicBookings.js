@@ -70,27 +70,29 @@ export function hashToken(token) {
  * Internal helper to lookup booking strictly by token hash
  * (with fallback to notes mgmt_hash tag for pre-migration records)
  */
-async function findBookingByToken(supabase, token) {
+async function findBookingByToken(supabase, token, options = {}) {
   if (!token || typeof token !== 'string') return null;
-  const tokenHash = hashToken(token);
-  if (!tokenHash) return null;
+  const trimmed = token.trim();
+  const tokenHash = hashToken(trimmed);
 
   let data = null;
 
   // 1. Check management_token_hash column (authoritative)
-  try {
-    const { data: hashColMatch, error: hashErr } = await supabase
-      .from('bookings')
-      .select('*, services (*), providers (*)')
-      .eq('management_token_hash', tokenHash)
-      .maybeSingle();
-    if (!hashErr && hashColMatch) data = hashColMatch;
-  } catch (_e) {
-    // Column may be pending migration
+  if (tokenHash) {
+    try {
+      const { data: hashColMatch, error: hashErr } = await supabase
+        .from('bookings')
+        .select('*, services (*), providers (*)')
+        .eq('management_token_hash', tokenHash)
+        .maybeSingle();
+      if (!hashErr && hashColMatch) data = hashColMatch;
+    } catch (_e) {
+      // Column may be pending migration
+    }
   }
 
   // 2. Backward compatibility fallback: Check notes column for [mgmt_hash:<tokenHash>]
-  if (!data) {
+  if (!data && tokenHash) {
     try {
       const { data: noteMatch, error: noteErr } = await supabase
         .from('bookings')
@@ -100,6 +102,21 @@ async function findBookingByToken(supabase, token) {
       if (!noteErr && noteMatch) data = noteMatch;
     } catch (_e) {
       // Notes query fallback
+    }
+  }
+
+  // 3. Fallback: Lookup by booking ID if token matches standard UUID (allowed on status check routes)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!data && options.allowUuid && uuidRegex.test(trimmed)) {
+    try {
+      const { data: idMatch, error: idErr } = await supabase
+        .from('bookings')
+        .select('*, services (*), providers (*)')
+        .eq('id', trimmed)
+        .maybeSingle();
+      if (!idErr && idMatch) data = idMatch;
+    } catch (_e) {
+      // Direct ID fallback query
     }
   }
 
@@ -493,7 +510,8 @@ async function handleCreateBooking(req, res) {
 
     // 8. SYNCHRONOUS SERVER-SIDE EMAIL NOTIFICATIONS (PRIMARY CHANNEL - Phase 4b)
     const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
-    const managementUrl = `${frontendBase}/manage/${encodeURIComponent(rawToken)}`;
+    const trackingUrl = `${frontendBase}/booking-status/${encodeURIComponent(rawToken)}`;
+    const managementUrl = trackingUrl;
 
     let customerEmailMsgId = null;
     let customerEmailError = null;
@@ -617,6 +635,7 @@ async function handleCreateBooking(req, res) {
       depositAmount: service.deposit_amount || 0,
       managementToken: rawToken,
       managementUrl,
+      trackingUrl,
       meetLink: meetLink || null,
       meetingType: resolvedMeetingType,
       locationAddress: resolvedLocation,
@@ -726,7 +745,8 @@ router.get('/:token', async (req, res) => {
   }
 
   try {
-    const bookingRow = await findBookingByToken(supabase, token);
+    const isStatusRoute = req.baseUrl?.includes('booking-status');
+    const bookingRow = await findBookingByToken(supabase, token, { allowUuid: isStatusRoute });
     if (!bookingRow) {
       return res.status(404).json({ success: false, error: 'Appointment not found or invalid management link' });
     }
@@ -776,7 +796,9 @@ router.get('/:token', async (req, res) => {
       .replace(/\[loc:[^\]]*\]/g, '')
       .replace(/\[maps:[^\]]*\]/g, '')
       .trim();
-    const managementUrl = `${(config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '')}/manage/${encodeURIComponent(token)}`;
+    const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+    const trackingUrl = `${frontendBase}/booking-status/${encodeURIComponent(token)}`;
+    const managementUrl = trackingUrl;
 
     const effectiveMeetingType = bookingRow.meeting_type || extractTag(bookingRow.notes, 'mode') || 'online';
     const effectiveLocation = bookingRow.location_address_snapshot || extractTag(bookingRow.notes, 'loc') || null;
@@ -801,6 +823,7 @@ router.get('/:token', async (req, res) => {
         status: bookingRow.status,
         notes: cleanNotes,
         managementUrl,
+        trackingUrl,
         meetLink: bookingRow.meet_link || null,
         mode: effectiveMeetingType === 'in-person' ? 'In-person' : (effectiveMeetingType === 'online' ? 'Online' : 'In-person / Online'),
         meetingType: effectiveMeetingType,

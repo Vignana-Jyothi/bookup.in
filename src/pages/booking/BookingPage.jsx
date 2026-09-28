@@ -509,8 +509,8 @@ export default function PublicBookingPage() {
       dispatch({ type: ACTIONS.ADD_BOOKING, payload: { booking, customer } });
       setSubmittingBooking(false);
 
-      // Directly navigate to confirmation / manage screen
-      navigate(`/manage/${encodeURIComponent(authoritativeToken)}`, { replace: true });
+      // Directly navigate to confirmation / booking status screen
+      navigate(`/booking-status/${encodeURIComponent(authoritativeToken)}`, { replace: true });
 
       if (!isDemo && provider?.id) {
         realGoogleCalendarService.createEvent(booking, provider.id, provider.timezone || 'Asia/Kolkata').catch(() => {});
@@ -518,7 +518,7 @@ export default function PublicBookingPage() {
     } catch (e) {
       console.error('Final dispatch error:', e);
       setSubmittingBooking(false);
-      navigate(`/manage/${encodeURIComponent(authoritativeToken)}`, { replace: true });
+      navigate(`/booking-status/${encodeURIComponent(authoritativeToken)}`, { replace: true });
     }
   };
 
@@ -576,7 +576,23 @@ export default function PublicBookingPage() {
             </div>
           </div>
 
-          <div className="header-right">
+          <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link
+              to="/booking-status"
+              style={{
+                fontSize: '11px',
+                color: 'var(--color-primary-600, #4f46e5)',
+                textDecoration: 'none',
+                fontWeight: 600,
+                background: 'rgba(79, 70, 229, 0.08)',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                whiteSpace: 'nowrap',
+              }}
+              title="Track existing booking"
+            >
+              Track booking ↗
+            </Link>
             <BrandLogo iconOnly size="sm" to={null} />
           </div>
         </header>

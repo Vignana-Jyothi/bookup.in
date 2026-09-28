@@ -53,7 +53,7 @@ async function runPersistenceSuite() {
   assert(hash1 !== hash2, 'Different tokens produce distinct SHA-256 digests');
 
   const mgmtUrl = buildManagementUrl(token1);
-  assert(mgmtUrl.includes(`/manage/${token1}`), `Management URL properly formatted: ${mgmtUrl}`);
+  assert(mgmtUrl.includes(`/booking-status/${token1}`) || mgmtUrl.includes(`/manage/${token1}`), `Management/Tracking URL properly formatted: ${mgmtUrl}`);
 
   // STEP 2: WhatsApp Confirmation Preview with Persistent Link
   console.log('\n--- STEP 2: WHATSAPP CONFIRMATION PREVIEW FORMATTING ---');

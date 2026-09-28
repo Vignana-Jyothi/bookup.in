@@ -21,7 +21,8 @@ import {
   getInitials,
   getTimeSlotsDetailedForDate,
 } from '../../utils/helpers';
-import { buildManagementUrl } from '../../utils/token';
+import { buildManagementUrl, buildTrackingUrl } from '../../utils/token';
+import { getCustomerBookingStatusUrl } from '../../utils/url';
 import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import PillButton from '../../components/ui/PillButton';
@@ -35,6 +36,8 @@ export default function CustomerBooking() {
   const navigate = useNavigate();
   const { state, dispatch, addToast } = useStore();
 
+  const [lookupInput, setLookupInput] = useState('');
+  const [copiedTracking, setCopiedTracking] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [newDate, setNewDate] = useState('');
@@ -51,7 +54,7 @@ export default function CustomerBooking() {
 
   const [supabaseBookingData, setSupabaseBookingData] = useState(null);
   const [isLoading, setIsLoading] = useState(
-    () => Boolean(lookupIdentifier) && isSupabaseConfigured()
+    () => Boolean(lookupIdentifier && lookupIdentifier !== 'lookup') && isSupabaseConfigured()
   );
 
   const bookingInState = state.bookings?.find(
@@ -67,7 +70,7 @@ export default function CustomerBooking() {
   useEffect(() => {
     let isMounted = true;
 
-    if (lookupIdentifier) {
+    if (lookupIdentifier && lookupIdentifier !== 'lookup') {
       customerBookingService
         .getBooking(lookupIdentifier)
         .then(data => {
@@ -223,18 +226,126 @@ export default function CustomerBooking() {
     );
   }
 
+  // Lookup state when no identifier is provided in the URL or identifier is 'lookup'
+  if (!lookupIdentifier || lookupIdentifier === 'lookup') {
+    return (
+      <div className="janjiyuk-booking-canvas">
+        <div className="janjiyuk-phone-card" style={{ maxWidth: 480 }}>
+          <div className="booking-card-header">
+            <div className="header-left">
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: '#EEF2FF',
+                color: '#4F46E5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 700,
+              }}>
+                🔍
+              </div>
+              <div>
+                <div className="header-provider-name">CalUp</div>
+                <div className="header-step-sub">Booking Status Tracking</div>
+              </div>
+            </div>
+            <BrandLogo iconOnly size={26} />
+          </div>
+
+          <div className="booking-step-pane" style={{ padding: '24px' }}>
+            <h3 className="pane-headline" style={{ marginBottom: '8px' }}>Track Your Booking</h3>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', lineHeight: 1.5, marginBottom: '20px' }}>
+              Enter your booking reference token or booking ID to view your session status and payment verification.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = lookupInput.trim();
+                if (trimmed) {
+                  navigate(`/booking-status/${encodeURIComponent(trimmed)}`);
+                }
+              }}
+            >
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Booking Token or Booking ID</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Paste your booking token or ID..."
+                  value={lookupInput}
+                  onChange={(e) => setLookupInput(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: '13px' }}
+                />
+              </div>
+              <PillButton type="submit" variant="primary" style={{ width: '100%', justifyContent: 'center' }}>
+                Check Status →
+              </PillButton>
+            </form>
+          </div>
+
+          <div className="booking-card-footer">
+            <div className="booking-powered-by">Powered by <BrandLogo size={18} /></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // If booking not found
   if (!resolvedBooking) {
     return (
-      <div className="booking-page">
-        <div className="booking-container">
-          <div className="booking-empty" style={{ textAlign: 'center', padding: 'var(--space-12) var(--space-6)' }}>
-            <div style={{ fontSize: '3rem', marginBottom: 'var(--space-3)' }}>📋</div>
-            <h3 style={{ fontSize: 'var(--font-size-xl)', marginBottom: 'var(--space-2)' }}>Appointment Not Found</h3>
-            <p style={{ color: 'var(--color-text-secondary)', maxWidth: 360, margin: '0 auto var(--space-6)' }}>
-              We couldn't find an appointment matching reference <strong>{lookupIdentifier}</strong>.
+      <div className="janjiyuk-booking-canvas">
+        <div className="janjiyuk-phone-card" style={{ maxWidth: 480 }}>
+          <div className="booking-card-header">
+            <div className="header-left">
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: '#FEE2E2',
+                color: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 700,
+              }}>
+                ✕
+              </div>
+              <div>
+                <div className="header-provider-name">CalUp</div>
+                <div className="header-step-sub">Booking Status</div>
+              </div>
+            </div>
+            <BrandLogo iconOnly size={26} />
+          </div>
+          <div className="booking-step-pane" style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📋</div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Booking Not Found</h3>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', lineHeight: 1.5, margin: '0 auto 20px', maxWidth: 320 }}>
+              We couldn't find an appointment matching reference <br />
+              <code style={{ background: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{lookupIdentifier}</code>.
             </p>
-            <button className="btn btn-primary" onClick={() => navigate('/')}>Return to CalUp</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <PillButton variant="primary" onClick={() => navigate('/booking-status')} style={{ width: '100%', justifyContent: 'center' }}>
+                Try Another Booking Reference
+              </PillButton>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => navigate('/')}
+                style={{ width: '100%', border: 'none', background: 'transparent', color: '#64748B', fontSize: '13px', cursor: 'pointer', padding: '8px' }}
+              >
+                Return to CalUp Home
+              </button>
+            </div>
+          </div>
+          <div className="booking-card-footer">
+            <div className="booking-powered-by">Powered by <BrandLogo size={18} /></div>
           </div>
         </div>
       </div>
@@ -473,18 +584,37 @@ export default function CustomerBooking() {
   const locationAddress = resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot || resolvedBooking?.locationAddress || resolvedBooking?.location_address || null;
   const mapsLink = locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null;
 
+  const trackingIdentifier = resolvedBooking?.managementToken || lookupIdentifier || resolvedBooking?.id;
+  const fullTrackingUrl = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/booking-status/${encodeURIComponent(trackingIdentifier || '')}`;
+    }
+    return getCustomerBookingStatusUrl(trackingIdentifier);
+  }, [trackingIdentifier]);
+
   return (
     <div className="janjiyuk-booking-canvas">
       <div className="janjiyuk-phone-card" style={{ maxWidth: 480 }}>
         {/* Header Bar */}
         <div className="booking-card-header">
           <div className="header-left">
-            <Link to={`/book/${providerSlug}`} className="header-back-btn" title="Back to booking">
-              ‹
-            </Link>
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '14px',
+              fontWeight: 700,
+            }}>
+              ✓
+            </div>
             <div>
               <div className="header-provider-name">{provider?.businessName || provider?.name || 'CalUp'}</div>
-              <div className="header-step-sub">Appointment Management</div>
+              <div className="header-step-sub">Booking Status & Verification</div>
             </div>
           </div>
           <BrandLogo iconOnly size={26} />
@@ -562,6 +692,14 @@ export default function CustomerBooking() {
                 </span>
               </div>
             )}
+            {(resolvedBooking.price !== undefined && resolvedBooking.price !== null) && (
+              <div className="manage-detail-row">
+                <span className="manage-detail-label">Amount</span>
+                <span className="manage-detail-val" style={{ fontWeight: 600 }}>
+                  {resolvedBooking.price > 0 ? formatCurrency(resolvedBooking.price) : 'Free'}
+                </span>
+              </div>
+            )}
             <div className="manage-detail-row">
               <span className="manage-detail-label">Status</span>
               <span
@@ -570,6 +708,93 @@ export default function CustomerBooking() {
               >
                 {statusBadgeText}
               </span>
+            </div>
+            {paymentStatus && paymentStatus !== 'not_required' && (
+              <div className="manage-detail-row">
+                <span className="manage-detail-label">Payment</span>
+                <span className="manage-detail-val" style={{
+                  fontWeight: 600,
+                  color: paymentStatus === 'confirmed' ? '#16A34A' : (paymentStatus === 'verification_pending' ? '#D97706' : '#64748B'),
+                }}>
+                  {paymentStatus === 'confirmed'
+                    ? '✓ Verified & Confirmed'
+                    : (paymentStatus === 'verification_pending'
+                      ? '⏱ Verification Pending'
+                      : (paymentStatus === 'awaiting_payment' ? 'Awaiting Payment' : paymentStatus))}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Booking Tracking Link Card */}
+          <div className="animate-fade-in-up" style={{
+            background: '#F8FAFC',
+            border: '1.5px solid #E2E8F0',
+            borderRadius: '16px',
+            padding: '16px',
+            margin: '16px 0',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>🔗</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>Your Booking Tracking Link</span>
+              </div>
+              <span style={{ fontSize: '11px', background: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                Save this URL
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+              Bookmark or save this private link to check your booking & payment verification status at any time or from any device.
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '10px',
+              padding: '6px 10px',
+            }}>
+              <input
+                type="text"
+                readOnly
+                value={fullTrackingUrl}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: '12px',
+                  color: '#334155',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+                onClick={e => e.target.select()}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(fullTrackingUrl);
+                    setCopiedTracking(true);
+                    setTimeout(() => setCopiedTracking(false), 2500);
+                    addToast('Tracking link copied to clipboard!');
+                  }
+                }}
+                style={{
+                  background: copiedTracking ? '#16A34A' : '#0F172A',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                {copiedTracking ? '✓ Copied' : '📋 Copy Link'}
+              </button>
             </div>
           </div>
 
@@ -852,6 +1077,18 @@ export default function CustomerBooking() {
                       </a>
                     </div>
                   )}
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '10px 12px',
+                    background: '#FFFFFF',
+                    borderRadius: '8px',
+                    border: '1px dashed var(--color-warning-300, #FCD34D)',
+                    fontSize: '12px',
+                    color: 'var(--color-warning-900, #78350F)',
+                    lineHeight: 1.4,
+                  }}>
+                    💡 <strong>Status is permanently saved:</strong> You can safely close your browser or reopen your tracking link at any time. When your coach approves your payment, this page will update automatically.
+                  </div>
                 </div>
               )}
 

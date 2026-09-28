@@ -65,27 +65,29 @@ function hashToken(token) {
 /**
  * Internal helper to lookup booking by management token hash
  */
-async function findBookingByToken(supabase, token) {
+async function findBookingByToken(supabase, token, options = {}) {
   if (!token || typeof token !== 'string') return null;
-  const tokenHash = hashToken(token);
-  if (!tokenHash) return null;
+  const trimmed = token.trim();
+  const tokenHash = hashToken(trimmed);
 
   let data = null;
 
   // 1. Check management_token_hash column (authoritative)
-  try {
-    const { data: hashColMatch, error: hashErr } = await supabase
-      .from('bookings')
-      .select('*, services (*), providers (*)')
-      .eq('management_token_hash', tokenHash)
-      .maybeSingle();
-    if (!hashErr && hashColMatch) data = hashColMatch;
-  } catch (_e) {
-    // Column may be pending migration
+  if (tokenHash) {
+    try {
+      const { data: hashColMatch, error: hashErr } = await supabase
+        .from('bookings')
+        .select('*, services (*), providers (*)')
+        .eq('management_token_hash', tokenHash)
+        .maybeSingle();
+      if (!hashErr && hashColMatch) data = hashColMatch;
+    } catch (_e) {
+      // Column may be pending migration
+    }
   }
 
   // 2. Backward compatibility fallback: notes column
-  if (!data) {
+  if (!data && tokenHash) {
     try {
       const { data: noteMatch, error: noteErr } = await supabase
         .from('bookings')
@@ -93,6 +95,19 @@ async function findBookingByToken(supabase, token) {
         .ilike('notes', `%[mgmt_hash:${tokenHash}]%`)
         .maybeSingle();
       if (!noteErr && noteMatch) data = noteMatch;
+    } catch (_e) {}
+  }
+
+  // 3. Fallback: Lookup by booking ID if token matches standard UUID (allowed on status route)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!data && options.allowUuid && uuidRegex.test(trimmed)) {
+    try {
+      const { data: idMatch, error: idErr } = await supabase
+        .from('bookings')
+        .select('*, services (*), providers (*)')
+        .eq('id', trimmed)
+        .maybeSingle();
+      if (!idErr && idMatch) data = idMatch;
     } catch (_e) {}
   }
 
@@ -117,7 +132,8 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
   }
 
   try {
-    const booking = await findBookingByToken(supabase, token);
+    const isStatusRoute = req.baseUrl?.includes('booking-status');
+    const booking = await findBookingByToken(supabase, token, { allowUuid: isStatusRoute });
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Appointment not found or invalid management link' });
     }

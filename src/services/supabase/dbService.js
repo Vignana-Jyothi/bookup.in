@@ -702,6 +702,28 @@ export const dbService = {
       console.warn('Token hash lookup warning:', e);
     }
 
+    // 3. Direct booking ID fallback if token matches UUID pattern
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!data && uuidRegex.test(trimmed)) {
+      try {
+        const { data: idMatch } = await supabase
+          .from('bookings')
+          .select(`
+            *,
+            services (*),
+            providers (*)
+          `)
+          .eq('id', trimmed)
+          .maybeSingle();
+
+        if (idMatch) {
+          data = idMatch;
+        }
+      } catch (e) {
+        console.warn('Booking ID lookup warning:', e);
+      }
+    }
+
     if (!data) return null;
 
     const providerId = data.provider_id;

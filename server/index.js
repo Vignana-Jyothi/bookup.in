@@ -58,8 +58,10 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/public', publicBookingsRoutes);
 app.use('/api/public/bookings', publicBookingsRoutes);
 app.use('/api/public/bookings/manage', publicBookingsRoutes);
+app.use('/api/public/bookings/booking-status', publicBookingsRoutes);
 app.use('/api/internal/notifications', internalNotificationsRoutes);
 app.use('/api/public/bookings/manage', paymentVerificationRoutes);  // customer: mark-paid (token-authed)
+app.use('/api/public/bookings/booking-status', paymentVerificationRoutes); // customer: mark-paid alias
 app.use('/api/bookings', paymentVerificationRoutes);                // provider: confirm/reject (JWT-authed)
 
 // Health check endpoint

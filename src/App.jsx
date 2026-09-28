@@ -89,10 +89,25 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Public booking page & Customer management */}
+      {/* Public booking page & Customer management / tracking */}
       <Route path="/book/:slug" element={
         <ErrorBoundary title="Booking page error, please refresh">
           <PublicBookingPage />
+        </ErrorBoundary>
+      } />
+      <Route path="/booking-status/:token" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
+        </ErrorBoundary>
+      } />
+      <Route path="/booking-status/:id" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
+        </ErrorBoundary>
+      } />
+      <Route path="/booking-status" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
         </ErrorBoundary>
       } />
       <Route path="/manage/:token" element={
