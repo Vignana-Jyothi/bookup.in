@@ -14,9 +14,9 @@ function AuthLayout({ children, title, subtitle }) {
   const navigate = useNavigate();
   const { dispatch } = useStore();
 
+  // Demo mode disabled for production
   const handleDemo = () => {
-    dispatch({ type: ACTIONS.ENTER_DEMO });
-    navigate('/dashboard');
+    navigate('/signup');
   };
 
   return (
@@ -144,9 +144,7 @@ export function Login() {
     }
 
     if (!isSupabaseConfigured()) {
-      // Fallback for offline demo mode
-      dispatch({ type: ACTIONS.ENTER_DEMO });
-      navigate('/dashboard');
+      setErrorMsg('Database connection is not configured. Please contact the administrator.');
       return;
     }
 

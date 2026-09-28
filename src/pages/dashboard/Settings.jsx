@@ -31,6 +31,8 @@ export default function Settings() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
   const [bioError, setBioError] = useState('');
+  const [profileErrors, setProfileErrors] = useState({});
+  const [paymentErrors, setPaymentErrors] = useState({});
   const [isConnectingGcal, setIsConnectingGcal] = useState(false);
 
   // Payment settings state
@@ -158,10 +160,36 @@ export default function Settings() {
   };
 
   const handleSaveProfile = async () => {
+    const errors = {};
+    if (!name || name.trim().length < 2) {
+      errors.name = 'Name must be at least 2 characters';
+    }
+    if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errors.email = 'Enter a valid email address';
+    }
+    if (phone && phone.trim()) {
+      const cleanedPhone = phone.replace(/[\s\-()]/g, '');
+      if (!/^(\+?91|0)?[6-9]\d{9}$/.test(cleanedPhone)) {
+        errors.phone = 'Enter a valid phone number';
+      }
+    }
     if (bio.trim().length > 0 && bio.trim().length < 20) {
-      setBioError('Bio should be at least 20 characters to build trust with clients.');
+      errors.bio = 'Bio should be at least 20 characters to build trust with clients.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setProfileErrors(errors);
+      if (errors.bio) setBioError(errors.bio);
+      const firstKey = Object.keys(errors)[0];
+      const el = document.getElementById(`settings-field-${firstKey}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+      addToast('Please fix the highlighted fields', 'error');
       return;
     }
+    setProfileErrors({});
     setBioError('');
 
     if (isSupabaseConfigured()) {
@@ -268,6 +296,22 @@ export default function Settings() {
   };
 
   const handleSavePaymentSettings = async () => {
+    const trimmedUpi = upiId.trim();
+    if (trimmedUpi) {
+      // Validate UPI ID format: username@bank
+      const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+      if (!upiRegex.test(trimmedUpi)) {
+        setPaymentErrors({ upiId: 'Enter a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm)' });
+        const el = document.getElementById('settings-field-upiId');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        }
+        addToast('Please enter a valid UPI ID', 'error');
+        return;
+      }
+    }
+    setPaymentErrors({});
     setSavingPayment(true);
     try {
       let activeProviderId = provider?.id;
@@ -448,12 +492,23 @@ export default function Settings() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 560 }}>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Your name</label>
-              <input className="form-input" value={name} onChange={e => setName(e.target.value)} />
+              <label className="form-label">Your name *</label>
+              <input
+                id="settings-field-name"
+                className={`form-input${profileErrors.name ? ' form-input-error' : ''}`}
+                value={name}
+                onChange={e => { setName(e.target.value); if (profileErrors.name) setProfileErrors(prev => ({ ...prev, name: '' })); }}
+              />
+              {profileErrors.name && <div className="form-field-error">{profileErrors.name}</div>}
             </div>
             <div className="form-group">
               <label className="form-label">Business name</label>
-              <input className="form-input" value={businessName} onChange={e => setBusinessName(e.target.value)} />
+              <input
+                id="settings-field-businessName"
+                className="form-input"
+                value={businessName}
+                onChange={e => setBusinessName(e.target.value)}
+              />
             </div>
           </div>
 
@@ -465,6 +520,7 @@ export default function Settings() {
               </span>
             </div>
             <textarea
+              id="settings-field-bio"
               className={`form-input form-textarea ${bioError ? 'form-input-error' : ''}`}
               placeholder="e.g. Certified personal trainer helping busy professionals build strength and consistency."
               value={bio}
@@ -475,7 +531,7 @@ export default function Settings() {
               rows={3}
             />
             {bioError ? (
-              <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{bioError}</span>
+              <span className="form-field-error">{bioError}</span>
             ) : (
               <span className="form-hint">Brief intro displayed on your public booking page. Minimum 20 characters recommended.</span>
             )}
@@ -484,17 +540,32 @@ export default function Settings() {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Email</label>
-              <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              <input
+                id="settings-field-email"
+                className={`form-input${profileErrors.email ? ' form-input-error' : ''}`}
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); if (profileErrors.email) setProfileErrors(prev => ({ ...prev, email: '' })); }}
+              />
+              {profileErrors.email && <div className="form-field-error">{profileErrors.email}</div>}
             </div>
             <div className="form-group">
               <label className="form-label">Phone</label>
-              <input className="form-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
+              <input
+                id="settings-field-phone"
+                className={`form-input${profileErrors.phone ? ' form-input-error' : ''}`}
+                type="tel"
+                value={phone}
+                onChange={e => { setPhone(e.target.value); if (profileErrors.phone) setProfileErrors(prev => ({ ...prev, phone: '' })); }}
+              />
+              {profileErrors.phone && <div className="form-field-error">{profileErrors.phone}</div>}
             </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Business Address (Default Meeting Location)</label>
             <input
+              id="settings-field-address"
               className="form-input"
               type="text"
               placeholder="e.g. 42 MG Road, Koramangala, Bengaluru, Karnataka"
@@ -526,13 +597,18 @@ export default function Settings() {
           <div className="form-group">
             <label className="form-label">UPI ID</label>
             <input
-              className="form-input"
+              id="settings-field-upiId"
+              className={`form-input${paymentErrors.upiId ? ' form-input-error' : ''}`}
               type="text"
               placeholder="e.g. yourname@upi"
               value={upiId}
-              onChange={e => setUpiId(e.target.value)}
+              onChange={e => { setUpiId(e.target.value); if (paymentErrors.upiId) setPaymentErrors(prev => ({ ...prev, upiId: '' })); }}
             />
-            <span className="form-hint">Your UPI ID will be shown to customers on the booking confirmation page.</span>
+            {paymentErrors.upiId ? (
+              <div className="form-field-error">{paymentErrors.upiId}</div>
+            ) : (
+              <span className="form-hint">Your UPI ID will be shown to customers on the booking confirmation page.</span>
+            )}
           </div>
 
           <div className="form-group">

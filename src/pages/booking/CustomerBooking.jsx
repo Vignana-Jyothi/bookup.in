@@ -22,9 +22,6 @@ import {
   getTimeSlotsDetailedForDate,
 } from '../../utils/helpers';
 import { buildManagementUrl } from '../../utils/token';
-import { whatsAppService } from '../../services/notifications/MockWhatsAppProvider';
-import { MOCK_GCAL_BUSY_EVENTS } from '../../services/calendar/MockGoogleCalendarProvider';
-import { DEMO_PROVIDER, DEMO_POLICIES, DEMO_BOOKINGS, createSeedState } from '../../data/seedData';
 import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import PillButton from '../../components/ui/PillButton';
@@ -58,19 +55,13 @@ export default function CustomerBooking() {
   );
 
   const bookingInState = state.bookings?.find(
-    b => b.managementToken === lookupIdentifier
-  );
-  const demoBooking = DEMO_BOOKINGS.find(
     b => b.managementToken === lookupIdentifier || b.id === lookupIdentifier
   );
 
   // Authoritative server projection is source of truth when Supabase is configured.
-  // In-memory or demo state serves as fallback if Supabase is unconfigured or fetch fails.
   const resolvedBooking = isSupabaseConfigured()
-    ? (supabaseBookingData?.booking || (!isLoading ? (bookingInState || demoBooking || null) : null))
-    : (supabaseBookingData?.booking || bookingInState || demoBooking || null);
-
-  const hasBookings = Boolean(state.bookings && state.bookings.length > 0);
+    ? (supabaseBookingData?.booking || (!isLoading ? (bookingInState || null) : null))
+    : (supabaseBookingData?.booking || bookingInState || null);
 
   // Authoritative Supabase hydration for persistent access across refresh, tabs, or incognito
   useEffect(() => {
@@ -91,16 +82,14 @@ export default function CustomerBooking() {
           console.error('Failed to load booking from API/Supabase:', err);
           if (isMounted) setIsLoading(false);
         });
-    }
-
-    if (!hasBookings && demoBooking) {
-      dispatch({ type: ACTIONS.LOAD_STATE, payload: createSeedState() });
+    } else {
+      setIsLoading(false);
     }
 
     return () => {
       isMounted = false;
     };
-  }, [lookupIdentifier, demoBooking, hasBookings, dispatch]);
+  }, [lookupIdentifier]);
 
   // Live status update on customer screen via Supabase Realtime (no manual refresh)
   useEffect(() => {
@@ -165,28 +154,26 @@ export default function CustomerBooking() {
     state.provider &&
     (!bookingInState.providerId || bookingInState.providerId === state.provider.id)
   );
-  const provider = supabaseBookingData?.provider || (isStateBooking ? state.provider : (demoBooking ? DEMO_PROVIDER : null));
-  const policies = supabaseBookingData?.policies || supabaseBookingData?.cancellationPolicy || (isStateBooking ? state.policies : DEMO_POLICIES);
+  const provider = supabaseBookingData?.provider || (isStateBooking ? state.provider : null);
+  const policies = supabaseBookingData?.policies || supabaseBookingData?.cancellationPolicy || (isStateBooking ? state.policies : null) || {
+    cancellationWindow: 12,
+    freeCancellation: true,
+  };
   const availability = supabaseBookingData?.availability || (isStateBooking ? state.availability : null);
   const services = useMemo(
     () => supabaseBookingData?.services || (isStateBooking ? (state.services || []) : []),
     [supabaseBookingData?.services, isStateBooking, state.services]
   );
   const isGcal = Boolean(isStateBooking && state.googleCalendar?.isConnected);
-  const providerSlug = provider?.slug || 'alex-johnson';
+  const providerSlug = provider?.slug || '';
 
   const managementUrl = buildManagementUrl(resolvedBooking?.managementToken || lookupIdentifier);
 
   // Available slots for customer rescheduling (excluding current booking to avoid self-conflict)
   const availableSlotsDetailed = useMemo(() => {
     if (!resolvedBooking || !newDate || !availability) return [];
-    const gcalEvents = isGcal
-      ? (() => {
-          const d = new Date(newDate + 'T00:00:00');
-          const day = d.getDay();
-          return MOCK_GCAL_BUSY_EVENTS.filter(e => e.dayOfWeek === day);
-        })()
-      : [];
+    // Live GCal busy slots are checked on server/backend; frontend holds no mock events
+    const gcalEvents = [];
 
     return getTimeSlotsDetailedForDate(
       newDate,

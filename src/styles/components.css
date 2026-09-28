@@ -318,9 +318,11 @@
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
-.form-error {
+.form-error,
+.form-field-error {
   font-size: var(--font-size-xs);
   color: var(--color-error-600);
+  margin-top: 4px;
 }
 
 .form-select {

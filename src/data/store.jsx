@@ -4,7 +4,6 @@
  */
 
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { createSeedState } from './seedData';
 import { ACTIONS } from './actions';
 import { supabase, isSupabaseConfigured } from '../services/supabase/supabaseClient';
 import { dbService } from '../services/supabase/dbService';
@@ -94,13 +93,9 @@ function reducer(state, action) {
       };
 
     case ACTIONS.ENTER_DEMO: {
-      const seed = createSeedState();
-      return {
-        ...seed,
-        auth: { isAuthenticated: true, isDemoMode: true, user: seed.provider, loading: false },
-        onboarding: { completed: true, currentStep: 8 },
-        toasts: []
-      };
+      // Demo mode disabled for production launch. Real users must sign up/login.
+      console.warn('[Store] ENTER_DEMO action disabled in production build.');
+      return state;
     }
 
     case ACTIONS.UPDATE_PROVIDER:
@@ -261,48 +256,16 @@ function reducer(state, action) {
 const StoreContext = createContext(null);
 
 export function StoreProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, initialState, () => {
-    try {
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('demo') === '1' || urlParams.get('demo') === 'true') {
-          const seed = createSeedState();
-          return {
-            ...seed,
-            auth: { isAuthenticated: true, isDemoMode: true, user: seed.provider, loading: false },
-            onboarding: { completed: true, currentStep: 8 },
-            toasts: []
-          };
-        }
-      }
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // ONLY restore from localStorage if the user was explicitly in Demo Mode
-        if (parsed?.auth?.isDemoMode) {
-          return { ...parsed, auth: { ...parsed.auth, loading: false }, toasts: [] };
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load demo state from localStorage:', e);
-    }
-    // For real Supabase users, start with initialState (loading: true)
-    return initialState;
-  });
+  // Demo mode completely disabled for production. Always start with initialState.
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Persist state to localStorage ONLY when in Demo Mode
+  // Demo mode localStorage persistence disabled for production.
+  // Clear any leftover demo state on mount.
   useEffect(() => {
     try {
-      if (state.auth?.isDemoMode) {
-        const { toasts: _t, ...persistState } = state;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState));
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch (e) {
-      console.error('Failed to manage localStorage:', e);
-    }
-  }, [state.auth?.isDemoMode, state]);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_e) { /* noop */ }
+  }, []);
 
   const isHydratingRef = useRef(false);
 

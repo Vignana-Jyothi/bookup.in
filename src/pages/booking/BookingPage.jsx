@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore, formatCurrency, formatDate, formatTime, generateId } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
-import { createSeedState } from '../../data/seedData';
 import {
   getCalendarDays,
   isDateAvailable,
@@ -16,7 +15,6 @@ import {
   hashManagementToken,
   buildManagementUrl,
 } from '../../utils/token';
-import { MOCK_GCAL_BUSY_EVENTS } from '../../services/calendar/MockGoogleCalendarProvider';
 import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
@@ -35,11 +33,11 @@ export default function PublicBookingPage() {
   const navigate = useNavigate();
   const { state, dispatch, addToast } = useStore();
 
-  const isDemo = slug === 'demo' || (state.provider && state.provider.slug === slug && state.auth?.isDemoMode);
-  const demoFallback = isDemo ? createSeedState(slug) : null;
+  // Demo mode completely disabled for production — always fetch from Supabase
+  const isDemo = false;
 
   const [supabaseData, setSupabaseData] = useState(null);
-  const [isLoadingPublic, setIsLoadingPublic] = useState(!isDemo);
+  const [isLoadingPublic, setIsLoadingPublic] = useState(true);
   const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
@@ -71,35 +69,24 @@ export default function PublicBookingPage() {
       });
     }
     return () => { isMounted = false; };
-  }, [slug, isDemo]);
-
-  useEffect(() => {
-    if (isDemo && (!state.provider || state.provider.slug !== slug)) {
-      const seed = createSeedState(slug);
-      const existingBookings = (state.bookings && state.bookings.length > 0) ? state.bookings : seed.bookings;
-      dispatch({
-        type: ACTIONS.LOAD_STATE,
-        payload: { ...seed, bookings: existingBookings }
-      });
-    }
-  }, [slug, isDemo, state.provider, state.bookings, dispatch]);
+  }, [slug]);
 
   const provider = supabaseData?.provider || ((state.provider && state.provider.slug === slug)
     ? state.provider
-    : (demoFallback ? demoFallback.provider : null));
+    : null);
 
   const availability = supabaseData?.availability || ((state.provider && state.provider.slug === slug)
     ? state.availability
-    : (demoFallback ? demoFallback.availability : null));
+    : null);
 
   const allServices = supabaseData?.services || ((state.provider && state.provider.slug === slug)
     ? (state.services || [])
-    : (demoFallback ? demoFallback.services : []));
+    : []);
   const services = allServices.filter(s => s.isActive);
 
   const policies = supabaseData?.policies || ((state.provider && state.provider.slug === slug)
     ? state.policies
-    : (demoFallback ? demoFallback.policies : null));
+    : null);
 
   // Flow steps: 1 = 'service', 2 = 'datetime', 3 = 'details'
   const [currentStep, setCurrentStep] = useState(1);
@@ -111,6 +98,44 @@ export default function PublicBookingPage() {
   const [policyAgreed, setPolicyAgreed] = useState(true);
   const [submittingBooking, setSubmittingBooking] = useState(false);
   const [bookingError, setBookingError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  // Field-level validation helpers
+  const validateField = (field, value) => {
+    switch (field) {
+      case 'name':
+        if (!value || !value.trim()) return 'This field is required';
+        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        return '';
+      case 'phone': {
+        if (!value || !value.trim()) return 'This field is required';
+        // Accept Indian phone numbers: +91XXXXXXXXXX, 91XXXXXXXXXX, 0XXXXXXXXXX, XXXXXXXXXX
+        const cleaned = value.replace(/[\s\-()]/g, '');
+        // TODO(hardcoded): Indian phone number validation only
+        if (!/^(\+?91|0)?[6-9]\d{9}$/.test(cleaned)) return 'Enter a valid phone number';
+        return '';
+      }
+      case 'email':
+        if (value && value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return 'Enter a valid email address';
+        return '';
+      default:
+        return '';
+    }
+  };
+
+  const handleFieldBlur = (field) => {
+    const error = validateField(field, customerInfo[field]);
+    setFieldErrors(prev => ({ ...prev, [field]: error }));
+  };
+
+  const validateAllFields = () => {
+    const errors = {};
+    errors.name = validateField('name', customerInfo.name);
+    errors.phone = validateField('phone', customerInfo.phone);
+    errors.email = validateField('email', customerInfo.email);
+    setFieldErrors(errors);
+    return errors;
+  };
 
   // Calendar month/year navigation
   const today = new Date();
@@ -328,8 +353,17 @@ export default function PublicBookingPage() {
     if (e) e.preventDefault();
     if (submittingBooking) return;
 
-    if (!customerInfo.name.trim() || !customerInfo.phone.trim()) {
-      addToast('Please provide your name and phone number', 'error');
+    // Validate all fields with inline errors
+    const errors = validateAllFields();
+    const firstErrorField = Object.keys(errors).find(k => errors[k]);
+    if (firstErrorField) {
+      // Scroll and focus to first error field
+      const el = document.getElementById(`booking-field-${firstErrorField}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+      addToast('Please fix the highlighted fields', 'error');
       return;
     }
 
@@ -797,36 +831,45 @@ export default function PublicBookingPage() {
               <div className="form-group">
                 <label className="form-label">Full Name *</label>
                 <input
-                  className="form-input"
+                  id="booking-field-name"
+                  className={`form-input${fieldErrors.name ? ' form-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. Maya Lin"
                   required
                   value={customerInfo.name}
-                  onChange={e => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+                  onChange={e => { setCustomerInfo({ ...customerInfo, name: e.target.value }); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: '' })); }}
+                  onBlur={() => handleFieldBlur('name')}
                 />
+                {fieldErrors.name && <div className="form-field-error">{fieldErrors.name}</div>}
               </div>
 
               <div className="form-group">
                 <label className="form-label">WhatsApp / Phone *</label>
                 <input
-                  className="form-input"
+                  id="booking-field-phone"
+                  className={`form-input${fieldErrors.phone ? ' form-input-error' : ''}`}
                   type="tel"
                   placeholder="+91 98765 43210"
                   required
                   value={customerInfo.phone}
-                  onChange={e => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
+                  onChange={e => { setCustomerInfo({ ...customerInfo, phone: e.target.value }); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: '' })); }}
+                  onBlur={() => handleFieldBlur('phone')}
                 />
+                {fieldErrors.phone && <div className="form-field-error">{fieldErrors.phone}</div>}
               </div>
 
               <div className="form-group">
                 <label className="form-label">Email address (for calendar invite)</label>
                 <input
-                  className="form-input"
+                  id="booking-field-email"
+                  className={`form-input${fieldErrors.email ? ' form-input-error' : ''}`}
                   type="email"
                   placeholder="your@email.com"
                   value={customerInfo.email}
-                  onChange={e => setCustomerInfo({ ...customerInfo, email: e.target.value })}
+                  onChange={e => { setCustomerInfo({ ...customerInfo, email: e.target.value }); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: '' })); }}
+                  onBlur={() => handleFieldBlur('email')}
                 />
+                {fieldErrors.email && <div className="form-field-error">{fieldErrors.email}</div>}
               </div>
 
               <div className="form-group">

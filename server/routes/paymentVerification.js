@@ -137,7 +137,9 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
       try {
         const fileExt = req.file.mimetype === 'image/png' ? 'png'
           : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
-        const fileName = `${booking.id}-${Date.now()}.${fileExt}`;
+        // Use booking UUID + crypto-random token for non-guessable file paths
+        const randomToken = crypto.randomBytes(16).toString('hex');
+        const fileName = `${booking.id}-${randomToken}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('payment-screenshots')

@@ -291,9 +291,12 @@ async function handleCreateBooking(req, res) {
           console.warn(`[PublicBookings] Atomic RPC error (${rpcError.code}: ${rpcError.message}) - executing resilient direct conflict check & insertion fallback`);
 
           // 1. Conflict check
+          // TODO(hardcoded): 30-minute slot reservation expiry window for unpaid bookings awaiting payment screenshot
+          const PAYMENT_RESERVATION_EXPIRY_MS = 30 * 60 * 1000;
+
           const { data: existingBookings, error: checkErr } = await supabase
             .from('bookings')
-            .select('id, start_time, end_time, actual_end_time')
+            .select('id, start_time, end_time, actual_end_time, payment_status, created_at')
             .eq('provider_id', providerId)
             .eq('booking_date', bookingDate)
             .in('status', ['confirmed', 'completed'])
@@ -304,8 +307,17 @@ async function handleCreateBooking(req, res) {
             const [sh, sm] = startTime.split(':').map(Number);
             const candStart = (sh * 60) + sm;
             const candEnd = candStart + service.duration + buffer;
+            const nowTime = Date.now();
 
             const hasConflict = existingBookings.some(b => {
+              // TODO(hardcoded): Release slot back to available if unpaid booking has no screenshot after 30 minutes
+              if (b.payment_status === 'awaiting_payment' && b.created_at) {
+                const bookingAge = nowTime - new Date(b.created_at).getTime();
+                if (bookingAge > PAYMENT_RESERVATION_EXPIRY_MS) {
+                  return false; // Expired reservation, does not block slot
+                }
+              }
+
               const [bsh, bsm] = (b.start_time || '00:00').split(':').map(Number);
               const bStart = (bsh * 60) + bsm;
               const endTimeStr = b.actual_end_time || b.end_time || '00:00';
@@ -653,7 +665,7 @@ router.get('/busy-slots', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('start_time, end_time, actual_end_time, status, payment_status')
+      .select('start_time, end_time, actual_end_time, status, payment_status, created_at')
       .eq('provider_id', providerId)
       .eq('booking_date', date)
       .in('status', ['confirmed', 'completed']);
@@ -663,8 +675,21 @@ router.get('/busy-slots', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Failed to fetch busy slots' });
     }
 
+    const nowTime = Date.now();
+    // TODO(hardcoded): 30-minute slot reservation expiry window for unpaid bookings awaiting payment screenshot
+    const PAYMENT_RESERVATION_EXPIRY_MS = 30 * 60 * 1000;
+
     const busySlots = (data || [])
-      .filter(b => b.payment_status !== 'rejected')
+      .filter(b => {
+        if (b.payment_status === 'rejected') return false;
+        // Release slot back to available if unpaid booking has no screenshot after 30 minutes
+        // TODO(hardcoded): 30-minute slot reservation expiry window
+        if (b.payment_status === 'awaiting_payment' && b.created_at) {
+          const age = nowTime - new Date(b.created_at).getTime();
+          if (age > PAYMENT_RESERVATION_EXPIRY_MS) return false;
+        }
+        return true;
+      })
       .map(b => ({
         start_time: b.start_time,
         end_time: b.end_time,

@@ -108,8 +108,8 @@ export default function Landing() {
   const [activeTab, setActiveTab] = useState('features');
 
   const handleStartTrial = () => {
-    dispatch({ type: ACTIONS.ENTER_DEMO });
-    navigate('/dashboard');
+    // Demo mode disabled for production — direct users to real signup
+    navigate('/signup');
   };
 
   return (
