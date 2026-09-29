@@ -162,5 +162,79 @@ export const customerBookingService = {
     }
     return result;
   },
+
+  /**
+   * Customer reports coach no-show after start + grace period
+   */
+  async reportCoachNoShow(token) {
+    if (!token) throw new Error('Management token is required');
+    const apiBase = getApiBase();
+
+    const res = await fetch(`${apiBase}/public/bookings/manage/${encodeURIComponent(token)}/report-coach-no-show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to report coach no-show');
+    }
+    return result;
+  },
+
+  /**
+   * Customer confirms receipt or disputes refund
+   */
+  async refundAction(token, action, disputeNote = '') {
+    if (!token) throw new Error('Management token is required');
+    const apiBase = getApiBase();
+
+    const res = await fetch(`${apiBase}/public/bookings/manage/${encodeURIComponent(token)}/refund-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ action, disputeNote }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to process refund action');
+    }
+    return result;
+  },
+
+  /**
+   * Customer disputes a customer no-show within 48h
+   */
+  async disputeNoShow(token, disputeNote = '') {
+    if (!token) throw new Error('Management token is required');
+    const apiBase = getApiBase();
+
+    const res = await fetch(`${apiBase}/public/bookings/manage/${encodeURIComponent(token)}/dispute-no-show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ disputeNote }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to submit dispute');
+    }
+    return result;
+  },
+
+  /**
+   * Get public policy for provider
+   */
+  async getPublicPolicy(providerId) {
+    if (!providerId) return null;
+    const apiBase = getApiBase();
+    try {
+      const res = await fetch(`${apiBase}/policies/public/${encodeURIComponent(providerId)}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (_) {}
+    return null;
+  },
 };
 

@@ -32,6 +32,7 @@ import { getCustomerTrackUrl } from '../../utils/url';
 import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { clearLastBooking } from '../../utils/lastBooking';
+import { calculateCancellationRefund, DEFAULT_POLICY } from '../../utils/policyEngine';
 import PillButton from '../../components/ui/PillButton';
 import BrandLogo from '../../components/ui/BrandLogo';
 import './BookingPage.css';
@@ -596,6 +597,123 @@ export default function CustomerBooking() {
     window.open(gcalUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeType, setDisputeType] = useState('refund');
+  const [disputeNote, setDisputeNote] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
+  const liveRefundConsequence = useMemo(() => {
+    if (!resolvedBooking) return null;
+    return calculateCancellationRefund({
+      booking: resolvedBooking,
+      currentTime: new Date(),
+      timezone: provider?.timezone || 'Asia/Kolkata',
+    });
+  }, [resolvedBooking, provider?.timezone]);
+
+  const canReportCoachNoShow = useMemo(() => {
+    if (!resolvedBooking || resolvedBooking.status !== 'confirmed') return false;
+    const policy = resolvedBooking.policySnapshot || DEFAULT_POLICY;
+    const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
+    try {
+      const sessionStart = new Date(`${resolvedBooking.date}T${resolvedBooking.startTime}:00`).getTime();
+      return Date.now() >= sessionStart + (graceMinutes * 60 * 1000);
+    } catch (_) {
+      return false;
+    }
+  }, [resolvedBooking]);
+
+  const canDisputeNoShow = useMemo(() => {
+    if (!resolvedBooking || resolvedBooking.status !== 'no-show') return false;
+    try {
+      const markedAt = resolvedBooking.customerNoShowAt ? new Date(resolvedBooking.customerNoShowAt).getTime() : new Date(resolvedBooking.createdAt).getTime();
+      return Date.now() - markedAt <= 48 * 60 * 60 * 1000;
+    } catch (_) {
+      return false;
+    }
+  }, [resolvedBooking]);
+
+  const handleConfirmRefundReceived = async () => {
+    setIsSubmittingDispute(true);
+    try {
+      await customerBookingService.refundAction(lookupIdentifier, 'confirm');
+      setSupabaseBookingData(prev => prev ? {
+        ...prev,
+        booking: { ...prev.booking, refundStatus: 'confirmed' }
+      } : null);
+      addToast('Thank you! Refund receipt confirmed ✓');
+    } catch (err) {
+      addToast(err.message || 'Failed to confirm refund receipt.', 'error');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  const handleOpenDisputeRefund = () => {
+    setDisputeType('refund');
+    setDisputeNote('');
+    setShowDisputeModal(true);
+  };
+
+  const handleOpenDisputeNoShow = () => {
+    setDisputeType('no_show');
+    setDisputeNote('');
+    setShowDisputeModal(true);
+  };
+
+  const handleSubmitDispute = async (e) => {
+    e.preventDefault();
+    if (!disputeNote.trim()) {
+      addToast('Please enter a note explaining the dispute.', 'error');
+      return;
+    }
+    setIsSubmittingDispute(true);
+    try {
+      if (disputeType === 'refund') {
+        await customerBookingService.refundAction(lookupIdentifier, 'dispute', disputeNote.trim());
+        setSupabaseBookingData(prev => prev ? {
+          ...prev,
+          booking: { ...prev.booking, refundStatus: 'disputed', status: 'disputed' }
+        } : null);
+        addToast('Dispute recorded. Our team will review this transaction.');
+      } else {
+        await customerBookingService.disputeNoShow(lookupIdentifier, disputeNote.trim());
+        setSupabaseBookingData(prev => prev ? {
+          ...prev,
+          booking: { ...prev.booking, status: 'disputed' }
+        } : null);
+        addToast('No-show dispute submitted. Coach and CalUp admin alerted.');
+      }
+      setShowDisputeModal(false);
+      setDisputeNote('');
+    } catch (err) {
+      addToast(err.message || 'Failed to submit dispute.', 'error');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  const handleReportCoachNoShow = async () => {
+    if (!window.confirm('Are you sure you want to report that your coach did not attend? This will initiate a 100% refund and flag the booking for review.')) {
+      return;
+    }
+    try {
+      await customerBookingService.reportCoachNoShow(lookupIdentifier);
+      setSupabaseBookingData(prev => prev ? {
+        ...prev,
+        booking: {
+          ...prev.booking,
+          status: 'disputed',
+          refundStatus: resolvedBooking.price > 0 ? 'refund_due' : 'none',
+          refundAmount: resolvedBooking.price,
+        }
+      } : null);
+      addToast('Coach no-show reported. Full refund has been initiated.');
+    } catch (err) {
+      addToast(err.message || 'Failed to report coach no-show.', 'error');
+    }
+  };
+
   const isPaidService = (resolvedBooking?.price || 0) > 0;
   const rawPaymentStatus = resolvedBooking?.paymentStatus;
   let paymentStatus = rawPaymentStatus || (isPaidService ? 'awaiting_payment' : 'not_required');
@@ -655,6 +773,18 @@ export default function CustomerBooking() {
     heroSubline = 'Your coach could not verify the payment. Please contact your coach.';
     statusBadgeText = 'Payment Not Confirmed';
     statusBadgeStyle = { background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA' };
+  } else if (resolvedBooking?.status === 'no-show') {
+    celebrateBadge = '🚫';
+    heroHeadline = 'Session Marked as No-Show';
+    heroSubline = 'Your coach marked this appointment as unattended (0% refund).';
+    statusBadgeText = 'No-Show';
+    statusBadgeStyle = { background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA' };
+  } else if (resolvedBooking?.status === 'disputed') {
+    celebrateBadge = '⚖️';
+    heroHeadline = 'Booking Under Review';
+    heroSubline = 'This booking has an active dispute under review.';
+    statusBadgeText = 'Disputed';
+    statusBadgeStyle = { background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' };
   } else if (isCancelled) {
     celebrateBadge = '❌';
     heroHeadline = 'Appointment Cancelled';
@@ -970,6 +1100,133 @@ export default function CustomerBooking() {
               </button>
             </div>
           </div>
+
+          {/* Live Cancellation Consequence Box */}
+          {resolvedBooking && !isCancelled && !isCompleted && isPaidService && liveRefundConsequence && (
+            <div className="animate-fade-in-up" style={{
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              borderRadius: '14px',
+              padding: '12px 14px',
+              marginBottom: '14px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                  If you cancel now:
+                </span>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: liveRefundConsequence.refundPercent === 100 ? '#DCFCE7' : (liveRefundConsequence.refundPercent > 0 ? '#FEF3C7' : '#F1F5F9'),
+                  color: liveRefundConsequence.refundPercent === 100 ? '#166534' : (liveRefundConsequence.refundPercent > 0 ? '#92400E' : '#475569'),
+                }}>
+                  {liveRefundConsequence.refundPercent > 0 ? `${liveRefundConsequence.refundPercent}% refund (${formatCurrency(liveRefundConsequence.refundAmount)})` : 'No refund'}
+                </span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.4 }}>
+                {liveRefundConsequence.refundPercent === 100 && `Full refund window active (${liveRefundConsequence.hoursNotice}h remaining until session).`}
+                {liveRefundConsequence.refundPercent > 0 && liveRefundConsequence.refundPercent < 100 && `Partial refund tier (${liveRefundConsequence.hoursNotice}h remaining until session).`}
+                {liveRefundConsequence.refundPercent === 0 && `Past refund window (${liveRefundConsequence.hoursNotice}h notice).`}
+              </div>
+            </div>
+          )}
+
+          {/* Refund Ledger Card (shown when refund is due, sent, confirmed, or disputed) */}
+          {isPaidService && (resolvedBooking.refundStatus && resolvedBooking.refundStatus !== 'none') && (
+            <div className="animate-fade-in-up" style={{
+              background: '#F8FAFC',
+              border: '1.5px solid #CBD5E1',
+              borderRadius: '16px',
+              padding: '16px',
+              marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💸</span>
+                  <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>Refund Status</span>
+                </div>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: resolvedBooking.refundStatus === 'confirmed' ? '#DCFCE7' : (resolvedBooking.refundStatus === 'disputed' ? '#FEE2E2' : '#FEF3C7'),
+                  color: resolvedBooking.refundStatus === 'confirmed' ? '#166534' : (resolvedBooking.refundStatus === 'disputed' ? '#991B1B' : '#92400E'),
+                }}>
+                  {resolvedBooking.refundStatus === 'refund_due' && 'Refund Due'}
+                  {resolvedBooking.refundStatus === 'refunded' && 'Refund Sent'}
+                  {resolvedBooking.refundStatus === 'confirmed' && 'Confirmed ✓'}
+                  {resolvedBooking.refundStatus === 'disputed' && 'Disputed'}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '13px', color: '#334155', marginBottom: '10px' }}>
+                <strong>Amount:</strong> {formatCurrency(resolvedBooking.refundAmount || resolvedBooking.refundRecord?.amount || 0)}
+              </div>
+
+              {resolvedBooking.refundStatus === 'refund_due' && (
+                <p style={{ fontSize: '12px', color: '#64748B', margin: 0, lineHeight: 1.4 }}>
+                  Your coach has been alerted to send your refund directly via UPI. We will update you here once sent.
+                </p>
+              )}
+
+              {resolvedBooking.refundStatus === 'refunded' && (
+                <div>
+                  <p style={{ fontSize: '12.5px', color: '#1E293B', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+                    Your coach marked this refund as sent. Please verify your UPI account.
+                  </p>
+                  {(resolvedBooking.refundRecord?.proof_url || resolvedBooking.refundProofUrl) && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <a
+                        href={resolvedBooking.refundRecord?.proof_url || resolvedBooking.refundProofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '12px', color: '#2563EB', fontWeight: 600 }}
+                      >
+                        📄 View Coach Refund Payment Proof ↗
+                      </a>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={handleConfirmRefundReceived}
+                      disabled={isSubmittingDispute}
+                      style={{ flex: 1, padding: '8px 12px', background: '#16A34A', color: '#FFF', borderRadius: '10px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      ✓ I Received It
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      onClick={handleOpenDisputeRefund}
+                      disabled={isSubmittingDispute}
+                      style={{ flex: 1, padding: '8px 12px', borderRadius: '10px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      I Haven't Received It
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {resolvedBooking.refundStatus === 'confirmed' && (
+                <p style={{ fontSize: '12px', color: '#166534', margin: 0, fontWeight: 500 }}>
+                  ✓ You confirmed receipt of this refund. Transaction complete.
+                </p>
+              )}
+
+              {resolvedBooking.refundStatus === 'disputed' && (
+                <p style={{ fontSize: '12px', color: '#991B1B', margin: 0, lineHeight: 1.4 }}>
+                  ⚠️ You reported an issue with this refund. Our team and your coach have been alerted to review.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Meeting Mode Block: Directions for In-Person or Google Meet for Online */}
           {isInPerson ? (
@@ -1457,6 +1714,53 @@ export default function CustomerBooking() {
               >
                 Book another session
               </PillButton>
+
+              {canReportCoachNoShow && (
+                <button
+                  type="button"
+                  onClick={handleReportCoachNoShow}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#DC2626',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    padding: '8px',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    marginTop: '4px',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Coach didn't show up? Report Coach No-Show
+                </button>
+              )}
+            </div>
+          )}
+
+          {resolvedBooking?.status === 'no-show' && (
+            <div className="manage-actions-stack" style={{ marginTop: '16px' }}>
+              {canDisputeNoShow ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleOpenDisputeNoShow}
+                  style={{ width: '100%', borderColor: '#EF4444', color: '#DC2626', fontWeight: 600, padding: '10px' }}
+                >
+                  Dispute No-Show (Within 48h Window)
+                </button>
+              ) : (
+                <div style={{ fontSize: '12px', color: '#64748B', textAlign: 'center' }}>
+                  48-hour dispute window has expired.
+                </div>
+              )}
+              <PillButton
+                variant="primary"
+                onClick={handleBookAnotherSession}
+                style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
+              >
+                Book another session
+              </PillButton>
             </div>
           )}
 
@@ -1731,6 +2035,25 @@ export default function CustomerBooking() {
                 <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--theme-text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
                   Please confirm if you would like to cancel your session with {provider?.name}.
                 </p>
+
+                {isPaidService && liveRefundConsequence && (
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    background: liveRefundConsequence.refundPercent === 100 ? '#F0FDF4' : (liveRefundConsequence.refundPercent > 0 ? '#FEF3C7' : '#FEE2E2'),
+                    border: `1px solid ${liveRefundConsequence.refundPercent === 100 ? '#BBF7D0' : (liveRefundConsequence.refundPercent > 0 ? '#FDE68A' : '#FECACA')}`,
+                    marginBottom: '16px',
+                    fontSize: '13px',
+                  }}>
+                    <div style={{ fontWeight: 700, color: liveRefundConsequence.refundPercent === 100 ? '#166534' : (liveRefundConsequence.refundPercent > 0 ? '#92400E' : '#991B1B'), marginBottom: '4px' }}>
+                      Cancellation Policy: {liveRefundConsequence.refundPercent > 0 ? `${liveRefundConsequence.refundPercent}% Refund (${formatCurrency(liveRefundConsequence.refundAmount)})` : 'Non-Refundable (0% Refund)'}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.4 }}>
+                      Notice provided: {liveRefundConsequence.hoursNotice} hours before session start.
+                      {liveRefundConsequence.refundPercent > 0 ? ' Your coach will be notified to refund this amount via UPI.' : ' Cancellations within this window forfeit payment under the policy.'}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <PillButton variant="ghost" onClick={() => setShowCancelModal(false)}>
@@ -1744,6 +2067,55 @@ export default function CustomerBooking() {
                   Cancel appointment
                 </PillButton>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Dispute Modal (Refund or Customer No-Show) */}
+        {showDisputeModal && (
+          <div className="modal-overlay" onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px', maxWidth: 460 }}>
+              <div className="modal-header">
+                <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+                  {disputeType === 'refund' ? 'Dispute Refund' : 'Dispute No-Show Record'}
+                </h3>
+                <button className="modal-close" onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSubmitDispute}>
+                <div className="modal-body" style={{ marginTop: '12px' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                    {disputeType === 'refund'
+                      ? 'Please describe why you have not received your refund (e.g. incorrect UPI, no payment received after coach confirmation).'
+                      : 'Please explain why you dispute being marked as a no-show (e.g. attended Google Meet on time, technical issue).'}
+                  </p>
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '12.5px' }}>
+                      Explanation / Note for CalUp & Coach <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows={4}
+                      required
+                      placeholder="Provide details..."
+                      value={disputeNote}
+                      onChange={e => setDisputeNote(e.target.value)}
+                      style={{ width: '100%', borderRadius: '12px', padding: '10px 12px', fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                  <PillButton variant="ghost" onClick={() => setShowDisputeModal(false)} disabled={isSubmittingDispute}>
+                    Cancel
+                  </PillButton>
+                  <PillButton
+                    variant="primary"
+                    type="submit"
+                    disabled={!disputeNote.trim() || isSubmittingDispute}
+                    style={{ background: '#EF4444', color: '#FFFFFF' }}
+                  >
+                    {isSubmittingDispute ? 'Submitting...' : 'Submit Dispute'}
+                  </PillButton>
+                </div>
+              </form>
             </div>
           </div>
         )}

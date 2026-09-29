@@ -17,6 +17,8 @@ import calendarRoutes from './routes/calendar.js';
 import publicBookingsRoutes from './routes/publicBookings.js';
 import internalNotificationsRoutes from './routes/internalNotifications.js';
 import paymentVerificationRoutes from './routes/paymentVerification.js';
+import policiesRoutes from './routes/policies.js';
+import refundsRoutes from './routes/refunds.js';
 
 const app = express();
 
@@ -55,6 +57,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth/google', authRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/policies', policiesRoutes);
 app.use('/api/public', publicBookingsRoutes);
 app.use('/api/public/bookings', publicBookingsRoutes);
 app.use('/api/public/bookings/manage', publicBookingsRoutes);
@@ -63,6 +66,9 @@ app.use('/api/internal/notifications', internalNotificationsRoutes);
 app.use('/api/public/bookings/manage', paymentVerificationRoutes);  // customer: mark-paid (token-authed)
 app.use('/api/public/bookings/booking-status', paymentVerificationRoutes); // customer: mark-paid alias
 app.use('/api/bookings', paymentVerificationRoutes);                // provider: confirm/reject (JWT-authed)
+app.use('/api', refundsRoutes);                                     // refunds, disputes, admin & coach cancel/no-show
+app.use('/api/public/bookings/manage', refundsRoutes);             // customer: report-coach-no-show, refund-action, dispute-no-show
+app.use('/api/public/bookings/booking-status', refundsRoutes);      // customer alias
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

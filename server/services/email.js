@@ -1301,6 +1301,39 @@ Please contact ${providerName} directly:
       return { success: false, error: err.message };
     }
   }
+
+  /**
+   * 8. Send Generic Transactional Email (Refunds, Notices, Disputes)
+   */
+  async sendGenericEmail({ to, subject, html, text }) {
+    if (!to || !to.includes('@')) {
+      return { success: false, skipped: true, error: 'Missing or invalid email' };
+    }
+    if (!this.isConfigured()) {
+      console.warn(`[EmailService] Resend API not configured. Skipped email: "${subject}" to "${to}"`);
+      return { success: false, skipped: true };
+    }
+
+    try {
+      const client = this.getClient();
+      const { data, error } = await client.emails.send({
+        from: this.fromEmail,
+        to: [to.trim()],
+        subject,
+        text: text || '',
+        html: html || `<p>${text || ''}</p>`,
+      });
+
+      if (error) {
+        console.error(`[EmailService] Generic email failed to "${to}":`, error);
+        return { success: false, error: error.message };
+      }
+      return { success: true, messageId: data?.id || null };
+    } catch (err) {
+      console.error(`[EmailService] Generic email exception to "${to}":`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
 }
 
 export const emailService = new EmailService();

@@ -26,6 +26,8 @@ import { encryptToken, decryptToken } from '../utils/crypto.js';
 import { googleCalendarService } from '../services/googleCalendar.js';
 import { richAutomateService } from '../services/richAutomate.js';
 import { emailService } from '../services/email.js';
+import { DEFAULT_POLICY, calculateCancellationRefund } from '../services/policyEngine.js';
+import { refundService } from '../services/refundService.js';
 
 const router = Router();
 
@@ -363,7 +365,20 @@ async function handleCreateBooking(req, res) {
             customerId = newCust?.id;
           }
 
-          // 3. Insert booking
+          // 3. Fetch coach policy snapshot
+          let policySnapshot = DEFAULT_POLICY;
+          try {
+            const { data: pData } = await supabase
+              .from('cancellation_policies')
+              .select('*')
+              .eq('provider_id', providerId)
+              .maybeSingle();
+            if (pData) {
+              policySnapshot = { ...DEFAULT_POLICY, ...pData };
+            }
+          } catch (_) {}
+
+          // 4. Insert booking
           const [sh, sm] = startTime.split(':').map(Number);
           const endTotalMin = (sh * 60) + sm + service.duration;
           const endH = String(Math.floor(endTotalMin / 60)).padStart(2, '0');
@@ -371,6 +386,8 @@ async function handleCreateBooking(req, res) {
           const calculatedEndTime = `${endH}:${endM}`;
 
           const isPaid = (Number(service.price) || 0) > 0;
+          const policyAcceptedAt = req.body.policyAcceptedAt || (req.body.policyAccepted !== false ? new Date().toISOString() : null);
+
           const insertPayload = {
             provider_id: providerId,
             service_id: serviceId,
@@ -390,6 +407,11 @@ async function handleCreateBooking(req, res) {
             location_address_snapshot: resolvedLocation,
             maps_link_snapshot: resolvedMapsLink,
             payment_status: isPaid ? 'awaiting_payment' : 'not_required',
+            policy_snapshot: policySnapshot,
+            policy_accepted_at: policyAcceptedAt,
+            reschedule_count: 0,
+            refund_amount: 0,
+            refund_status: 'none',
           };
 
           const { data: inserted, error: insertErr } = await supabase.from('bookings').insert(insertPayload).select('id').single();
@@ -415,6 +437,19 @@ async function handleCreateBooking(req, res) {
           } else {
             newBooking = { id: inserted.id };
           }
+
+          // Audit log policy agreement & booking creation
+          refundService.logAudit(supabase, {
+            bookingId: newBooking.id,
+            providerId,
+            entityType: 'booking',
+            entityId: newBooking.id,
+            action: 'policy_accepted',
+            actorType: 'customer',
+            actorId: customerName.trim(),
+            newState: { policy_snapshot: policySnapshot, policy_accepted_at: policyAcceptedAt },
+            details: 'Customer agreed to cancellation and refund policy upon booking.',
+          }).catch(() => {});
           rpcEndTime = calculatedEndTime;
         }
       } catch (rpcErr) {
@@ -810,6 +845,27 @@ router.get('/:token', async (req, res) => {
     const effectiveLocation = bookingRow.location_address_snapshot || extractTag(bookingRow.notes, 'loc') || null;
     const effectiveMapsLink = bookingRow.maps_link_snapshot || extractTag(bookingRow.notes, 'maps') || (effectiveLocation ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(effectiveLocation)}` : null);
 
+    // Fetch refund ledger entry if exists
+    let refundRow = null;
+    try {
+      const { data: rData } = await supabase
+        .from('refunds')
+        .select('*')
+        .eq('booking_id', bookingRow.id)
+        .maybeSingle();
+      if (rData) refundRow = rData;
+    } catch (_) {}
+
+    const policySnapshot = bookingRow.policy_snapshot || (policy ? { ...DEFAULT_POLICY, ...policy } : DEFAULT_POLICY);
+    const liveConsequence = calculateCancellationRefund({
+      booking: {
+        ...bookingRow,
+        policy_snapshot: policySnapshot,
+      },
+      currentTime: new Date(),
+      timezone: provider.timezone || 'Asia/Kolkata',
+    });
+
     // Return sanitized customer-facing projection (no internal keys or user IDs)
     return res.json({
       success: true,
@@ -842,6 +898,19 @@ router.get('/:token', async (req, res) => {
         paymentConfirmedAt: bookingRow.payment_confirmed_at || null,
         paymentRejectedAt: bookingRow.payment_rejected_at || null,
         paymentRejectedReason: bookingRow.payment_rejected_reason || null,
+        policySnapshot,
+        policyAcceptedAt: bookingRow.policy_accepted_at || null,
+        rescheduleCount: bookingRow.reschedule_count || 0,
+        refundAmount: bookingRow.refund_amount || (refundRow ? refundRow.amount : 0),
+        refundStatus: bookingRow.refund_status || (refundRow ? refundRow.status : 'none'),
+        refundReason: bookingRow.refund_reason || (refundRow ? refundRow.reason : null),
+        coachCancelledAt: bookingRow.coach_cancelled_at || null,
+        customerNoShowAt: bookingRow.customer_no_show_at || null,
+        coachNoShowReportedAt: bookingRow.coach_no_show_reported_at || null,
+        disputedAt: bookingRow.disputed_at || null,
+        disputeReason: bookingRow.dispute_reason || null,
+        currentRefundConsequence: liveConsequence,
+        refundRecord: refundRow,
       },
       provider: {
         id: provider.id,
@@ -932,25 +1001,32 @@ router.post('/:token/reschedule', async (req, res) => {
     const provider = booking.providers || {};
     const service = booking.services || {};
 
-    // PART 5: Enforce cancellation_window on reschedule (same check as cancel)
-    // Product decision: BLOCK reschedule within the window (simpler, safer default).
-    // To switch to fee-based, change this block to match the cancel handler's fee logic.
-    const { data: policy } = await supabase
-      .from('cancellation_policies')
-      .select('cancellation_window, fee')
-      .eq('provider_id', providerId)
-      .maybeSingle();
+    // Enforce reschedule limits from booking policy snapshot
+    let policySnapshot = booking.policy_snapshot;
+    if (!policySnapshot) {
+      const { data: pol } = await supabase.from('cancellation_policies').select('*').eq('provider_id', providerId).maybeSingle();
+      policySnapshot = pol ? { ...DEFAULT_POLICY, ...pol } : DEFAULT_POLICY;
+    }
+    const maxReschedules = Number(policySnapshot.max_reschedules ?? DEFAULT_POLICY.max_reschedules);
+    const rescheduleMinHoursBefore = Number(policySnapshot.reschedule_min_hours_before ?? DEFAULT_POLICY.reschedule_min_hours_before);
+    const currentRescheduleCount = Number(booking.reschedule_count || 0);
 
-    const cancellationWindow = policy?.cancellation_window ?? 12;
+    if (currentRescheduleCount >= maxReschedules) {
+      return res.status(400).json({
+        success: false,
+        error: `Maximum number of reschedules (${maxReschedules}) reached. If you cannot attend, cancelling applies the cancellation and refund policy.`,
+      });
+    }
+
     try {
-      const aptTime = new Date(`${booking.booking_date}T${booking.start_time}`).getTime();
+      const aptTime = new Date(`${booking.booking_date}T${booking.start_time}:00`).getTime();
       const hoursNotice = (aptTime - Date.now()) / (1000 * 60 * 60);
-      if (hoursNotice < cancellationWindow) {
+      if (hoursNotice < rescheduleMinHoursBefore) {
         return res.status(400).json({
           success: false,
-          error: `Rescheduling is not allowed within ${cancellationWindow} hours of the appointment. Please contact your provider directly.`,
+          error: `Rescheduling is only allowed at least ${rescheduleMinHoursBefore} hours before session start. If you cannot attend, cancelling applies the late-cancellation and refund policy.`,
           hoursRemaining: Math.max(0, Math.round(hoursNotice * 10) / 10),
-          cancellationWindow,
+          rescheduleMinHoursBefore,
         });
       }
     } catch (_e) {
@@ -1083,6 +1159,7 @@ router.post('/:token/reschedule', async (req, res) => {
         booking_date: newDate,
         start_time: newTime,
         end_time: newEndTime,
+        reschedule_count: currentRescheduleCount + 1,
         updated_at: new Date().toISOString(),
       };
 
@@ -1092,7 +1169,29 @@ router.post('/:token/reschedule', async (req, res) => {
         .eq('id', booking.id);
 
       if (baseUpdateErr) throw baseUpdateErr;
+    } else {
+      await supabase
+        .from('bookings')
+        .update({
+          reschedule_count: currentRescheduleCount + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', booking.id);
     }
+
+    // Log audit log for reschedule
+    refundService.logAudit(supabase, {
+      bookingId: booking.id,
+      providerId,
+      entityType: 'booking',
+      entityId: booking.id,
+      action: 'rescheduled',
+      actorType: 'customer',
+      actorId: booking.customer_name,
+      oldState: { date: oldDate, startTime: oldTime },
+      newState: { date: newDate, startTime: newTime, rescheduleCount: currentRescheduleCount + 1 },
+      details: `Customer rescheduled appointment to ${newDate} at ${newTime}`,
+    }).catch(() => {});
 
     // 3. Update Google Calendar event (non-blocking)
     try {
@@ -1221,35 +1320,71 @@ router.post('/:token/cancel', async (req, res) => {
     const provider = booking.providers || {};
     const service = booking.services || {};
 
-    // Evaluate policy window
-    const { data: policy } = await supabase
-      .from('cancellation_policies')
-      .select('cancellation_window, fee')
-      .eq('provider_id', booking.provider_id)
-      .maybeSingle();
-
-    const cancellationWindow = policy?.cancellation_window ?? 12;
-    let isWithinFreeWindow = true;
-
-    try {
-      const aptTime = new Date(`${booking.booking_date}T${booking.start_time}`).getTime();
-      const hoursNotice = (aptTime - Date.now()) / (1000 * 60 * 60);
-      isWithinFreeWindow = hoursNotice >= cancellationWindow;
-    } catch (_e) {
-      isWithinFreeWindow = true;
+    // Evaluate cancellation refund using policy snapshot
+    let policySnapshot = booking.policy_snapshot;
+    if (!policySnapshot) {
+      const { data: pol } = await supabase.from('cancellation_policies').select('*').eq('provider_id', booking.provider_id).maybeSingle();
+      policySnapshot = pol ? { ...DEFAULT_POLICY, ...pol } : DEFAULT_POLICY;
     }
+    const refundCalculation = calculateCancellationRefund({
+      booking: {
+        ...booking,
+        policy_snapshot: policySnapshot,
+      },
+      currentTime: new Date(),
+      timezone: provider.timezone || 'Asia/Kolkata',
+    });
 
-    const newStatus = isWithinFreeWindow ? 'cancelled' : 'late-cancellation';
+    const { refundPercent, refundAmount, refundReason, hoursNotice } = refundCalculation;
+    const isPaymentConfirmed = booking.payment_status === 'confirmed';
+    const effectiveRefundAmount = isPaymentConfirmed ? refundAmount : 0;
+    const effectiveRefundStatus = (isPaymentConfirmed && refundAmount > 0) ? 'refund_due' : 'none';
+    const newStatus = refundPercent === 100 ? 'cancelled' : 'late-cancellation';
 
     const { error: updateErr } = await supabase
       .from('bookings')
       .update({
         status: newStatus,
+        refund_amount: effectiveRefundAmount,
+        refund_reason: refundReason,
+        refund_status: effectiveRefundStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', booking.id);
 
     if (updateErr) throw updateErr;
+
+    // If paid and refund due, record in refunds ledger (idempotent)
+    let refundRecord = null;
+    if (effectiveRefundStatus === 'refund_due') {
+      try {
+        const refRes = await refundService.processRefund(supabase, {
+          booking,
+          amount: effectiveRefundAmount,
+          reason: refundReason,
+          actorType: 'customer',
+          actorId: booking.customer_name,
+          details: `Customer cancelled appointment with ${hoursNotice}h notice (${refundPercent}% refund).`,
+        });
+        refundRecord = refRes.refund;
+      } catch (rErr) {
+        console.warn('[PublicBookings] Failed to process refund ledger:', rErr.message);
+      }
+    }
+
+    // Log audit log
+    refundService.logAudit(supabase, {
+      bookingId: booking.id,
+      providerId: booking.provider_id,
+      entityType: 'booking',
+      entityId: booking.id,
+      action: 'cancelled',
+      actorType: 'customer',
+      actorId: booking.customer_name,
+      oldState: { status: booking.status },
+      newState: { status: newStatus, refund_amount: effectiveRefundAmount, refund_status: effectiveRefundStatus },
+      details: `Customer cancelled session. Notice: ${hoursNotice}h, Refund: ${refundPercent}% (₹${effectiveRefundAmount})`,
+    }).catch(() => {});
 
     // PART 5: Delete Google Calendar event on cancellation (non-blocking)
     try {
@@ -1303,9 +1438,15 @@ router.post('/:token/cancel', async (req, res) => {
     return res.json({
       success: true,
       status: newStatus,
-      isWithinFreeWindow,
+      isWithinFreeWindow: refundPercent === 100,
+      refundAmount: effectiveRefundAmount,
+      refundPercent,
+      refundStatus: effectiveRefundStatus,
+      refundRecord,
       depositAmount: Number(booking.deposit_amount) || 0,
-      message: 'Appointment cancelled successfully.',
+      message: effectiveRefundAmount > 0
+        ? `Appointment cancelled. A refund of ₹${effectiveRefundAmount} (${refundPercent}%) has been recorded.`
+        : 'Appointment cancelled.',
     });
   } catch (err) {
     console.error('Error cancelling booking:', err.message);

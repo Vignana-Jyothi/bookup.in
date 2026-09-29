@@ -562,11 +562,15 @@ export const dbService = {
 
     return {
       providerId: data.provider_id,
-      cancellationWindow: data.cancellation_window ?? 12,
+      full_refund_hours: data.full_refund_hours ?? 24,
+      partial_refund_hours: data.partial_refund_hours ?? 2,
+      partial_refund_percent: data.partial_refund_percent ?? 50,
+      no_show_grace_minutes: data.no_show_grace_minutes ?? 15,
+      max_reschedules: data.max_reschedules ?? 2,
+      reschedule_min_hours_before: data.reschedule_min_hours_before ?? 24,
+      payment_verification_timeout_hours: data.payment_verification_timeout_hours ?? 24,
+      cancellationWindow: data.full_refund_hours ?? data.cancellation_window ?? 24,
       depositAmount: Number(data.fee) ?? 200,
-      depositType: 'fixed',
-      lateCancellationFee: Number(data.fee) ?? 200,
-      noShowFee: Number(data.fee) ?? 200,
       policyText: data.policy_text || '',
     };
   },
@@ -576,10 +580,18 @@ export const dbService = {
 
     const row = {
       provider_id: providerId,
-      cancellation_window: Number(policy.cancellationWindow) || 12,
-      fee: Number(policy.depositAmount ?? policy.lateCancellationFee ?? 200),
+      full_refund_hours: Number(policy.full_refund_hours ?? 24),
+      partial_refund_hours: Number(policy.partial_refund_hours ?? 2),
+      partial_refund_percent: Number(policy.partial_refund_percent ?? 50),
+      no_show_grace_minutes: Number(policy.no_show_grace_minutes ?? 15),
+      max_reschedules: Number(policy.max_reschedules ?? 2),
+      reschedule_min_hours_before: Number(policy.reschedule_min_hours_before ?? 24),
+      payment_verification_timeout_hours: Number(policy.payment_verification_timeout_hours ?? 24),
+      cancellation_window: Number(policy.full_refund_hours ?? policy.cancellationWindow ?? 24),
+      fee: Number(policy.depositAmount ?? 200),
       enabled: policy.enabled !== undefined ? policy.enabled : true,
       policy_text: policy.policyText || '',
+      updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
@@ -640,7 +652,66 @@ export const dbService = {
       paymentConfirmedAt: b.payment_confirmed_at || null,
       paymentRejectedAt: b.payment_rejected_at || null,
       paymentRejectedReason: b.payment_rejected_reason || null,
+      policySnapshot: b.policy_snapshot || null,
+      policyAcceptedAt: b.policy_accepted_at || null,
+      rescheduleCount: b.reschedule_count || 0,
+      refundAmount: b.refund_amount || 0,
+      refundStatus: b.refund_status || 'none',
+      refundReason: b.refund_reason || null,
+      coachCancelledAt: b.coach_cancelled_at || null,
+      customerNoShowAt: b.customer_no_show_at || null,
+      coachNoShowReportedAt: b.coach_no_show_reported_at || null,
+      disputedAt: b.disputed_at || null,
+      disputeReason: b.dispute_reason || null,
     }));
+  },
+
+  async getRefundsDue(providerId) {
+    if (!isSupabaseConfigured() || !providerId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('refunds')
+        .select('*, bookings (id, customer_name, customer_email, customer_phone, customer_whatsapp, booking_date, start_time, price, service_id, services(name))')
+        .eq('provider_id', providerId)
+        .in('status', ['refund_due', 'refunded', 'disputed'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (_e) {
+      return [];
+    }
+  },
+
+  async uploadRefundProof(refundId, file) {
+    if (!isSupabaseConfigured() || !file) return null;
+    const ext = file.name?.split('.').pop() || 'png';
+    const filePath = `refund_${refundId}_${Date.now()}.${ext}`;
+    const { data, error } = await supabase.storage.from('refund-proofs').upload(filePath, file, { upsert: true });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from('refund-proofs').getPublicUrl(data.path);
+    return urlData?.publicUrl || data.path;
+  },
+
+  async markRefundSent(refundId, proofUrl) {
+    if (!isSupabaseConfigured() || !refundId) return false;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('refunds')
+      .update({
+        status: 'refunded',
+        refunded_at: nowIso,
+        proof_url: proofUrl || null,
+        updated_at: nowIso,
+      })
+      .eq('id', refundId)
+      .select('*, bookings(*)')
+      .single();
+
+    if (error) throw error;
+    if (data?.booking_id) {
+      await supabase.from('bookings').update({ refund_status: 'refunded', updated_at: nowIso }).eq('id', data.booking_id);
+    }
+    return data;
   },
 
   /**
@@ -1228,6 +1299,74 @@ export const dbService = {
     const result = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(result.error || 'Failed to reject payment');
+    }
+    return result;
+  },
+
+  async coachCancelBooking(bookingId) {
+    if (!bookingId) throw new Error('Booking ID is required');
+
+    if (!isSupabaseConfigured() || (typeof bookingId === 'string' && bookingId.startsWith('booking-'))) {
+      return { success: true, booking: { id: bookingId, status: 'cancelled', refundStatus: 'refund_due' } };
+    }
+
+    const apiBase = getApiBase();
+    let authHeaders = {};
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeaders = { Authorization: `Bearer ${session.access_token}` };
+      }
+    } catch (err) {
+      console.warn('Could not retrieve Supabase session token:', err);
+    }
+
+    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/coach-cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...authHeaders,
+      },
+    });
+
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to cancel appointment');
+    }
+    return result;
+  },
+
+  async markCustomerNoShow(bookingId) {
+    if (!bookingId) throw new Error('Booking ID is required');
+
+    if (!isSupabaseConfigured() || (typeof bookingId === 'string' && bookingId.startsWith('booking-'))) {
+      return { success: true, booking: { id: bookingId, status: 'no-show', refundStatus: 'none' } };
+    }
+
+    const apiBase = getApiBase();
+    let authHeaders = {};
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeaders = { Authorization: `Bearer ${session.access_token}` };
+      }
+    } catch (err) {
+      console.warn('Could not retrieve Supabase session token:', err);
+    }
+
+    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/mark-no-show`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...authHeaders,
+      },
+    });
+
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to record no-show');
     }
     return result;
   },

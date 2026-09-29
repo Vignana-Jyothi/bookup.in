@@ -1,163 +1,313 @@
 /**
- * CalUp — Policies & Deposits Page
+ * CalUp — Policies & Refunds Configuration Page
+ *
+ * Implements granular coach policy controls:
+ * - Full refund window (hours)
+ * - Partial refund window (hours) & percentage (%)
+ * - No refund window (derived from partial refund window)
+ * - No-show grace period (minutes)
+ * - Maximum reschedules & minimum notice
+ * - Payment verification timeout (hours)
+ * - Live plain-language policy preview
  */
 
-import { useStore, formatCurrency } from '../../data/store';
+import { useState, useEffect, useMemo } from 'react';
+import { useStore } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
+import { DEFAULT_POLICY, validatePolicy, generatePolicyText } from '../../utils/policyEngine';
 import PillButton from '../../components/ui/PillButton';
 
 export default function Policies() {
   const { state, dispatch, addToast } = useStore();
-  const policies = state.policies || {
-    cancellationWindow: 12,
-    depositAmount: 200,
-    depositType: 'fixed',
-    lateCancellationFee: 200,
-    noShowFee: 200,
-  };
+  const providerId = state.provider?.id;
 
-  const updatePolicy = (field, value) => {
-    dispatch({ type: ACTIONS.UPDATE_POLICIES, payload: { [field]: value } });
-  };
+  const [policy, setPolicy] = useState({
+    full_refund_hours: DEFAULT_POLICY.full_refund_hours,
+    partial_refund_hours: DEFAULT_POLICY.partial_refund_hours,
+    partial_refund_percent: DEFAULT_POLICY.partial_refund_percent,
+    no_show_grace_minutes: DEFAULT_POLICY.no_show_grace_minutes,
+    max_reschedules: DEFAULT_POLICY.max_reschedules,
+    reschedule_min_hours_before: DEFAULT_POLICY.reschedule_min_hours_before,
+    payment_verification_timeout_hours: DEFAULT_POLICY.payment_verification_timeout_hours,
+  });
 
-  const handleSave = async () => {
-    const policyText = `Cancel more than ${policies.cancellationWindow} hours before your appointment: full deposit refund. Late cancellation or no-show: deposit forfeited (${formatCurrency(policies.depositAmount)}).`;
-    
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && state.provider?.id) {
-      try {
-        await dbService.savePolicy(state.provider.id, {
-          cancellationWindow: policies.cancellationWindow,
-          depositAmount: policies.depositAmount,
-          policyText,
-        });
-      } catch (err) {
-        console.error('Failed to save policy in Supabase:', err);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Load existing policy from database on mount
+  useEffect(() => {
+    async function loadPolicy() {
+      if (providerId) {
+        try {
+          const loaded = await dbService.getPolicy(providerId);
+          if (loaded) {
+            setPolicy({
+              full_refund_hours: loaded.full_refund_hours ?? DEFAULT_POLICY.full_refund_hours,
+              partial_refund_hours: loaded.partial_refund_hours ?? DEFAULT_POLICY.partial_refund_hours,
+              partial_refund_percent: loaded.partial_refund_percent ?? DEFAULT_POLICY.partial_refund_percent,
+              no_show_grace_minutes: loaded.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes,
+              max_reschedules: loaded.max_reschedules ?? DEFAULT_POLICY.max_reschedules,
+              reschedule_min_hours_before: loaded.reschedule_min_hours_before ?? DEFAULT_POLICY.reschedule_min_hours_before,
+              payment_verification_timeout_hours: loaded.payment_verification_timeout_hours ?? DEFAULT_POLICY.payment_verification_timeout_hours,
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to load policy:', err);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
       }
     }
+    loadPolicy();
+  }, [providerId]);
 
-    dispatch({ type: ACTIONS.UPDATE_POLICIES, payload: { policyText } });
-    addToast('Policies updated ✓');
+  const updateField = (field, value) => {
+    setPolicy(prev => ({
+      ...prev,
+      [field]: Number(value),
+    }));
+  };
+
+  // Plain language preview generated live as coach edits
+  const plainLanguageText = useMemo(() => {
+    return generatePolicyText(policy);
+  }, [policy]);
+
+  // Derived: no refund below hours
+  const noRefundBelowHours = policy.partial_refund_hours;
+
+  const handleSave = async () => {
+    const validation = validatePolicy(policy);
+    if (!validation.valid) {
+      addToast(validation.errors[0], 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (providerId) {
+        await dbService.savePolicy(providerId, {
+          ...policy,
+          policyText: plainLanguageText,
+        });
+      }
+
+      dispatch({
+        type: ACTIONS.UPDATE_POLICIES,
+        payload: {
+          ...policy,
+          policyText: plainLanguageText,
+        },
+      });
+
+      addToast('Booking & refund policies saved successfully ✓');
+    } catch (err) {
+      console.error('Failed to save policy:', err);
+      addToast(err.message || 'Failed to save policies.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: 1100 }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
-            Cancellation & Deposit Policies
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--color-text)' }}>
+            Booking & Refund Policies
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '3px 0 0' }}>
-            Configure your client cancellation policy and automated deposit rules.
+          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            Set authoritative cancellation, refund, reschedule, and no-show rules for all client sessions.
           </p>
         </div>
-        <PillButton variant="primary" size="md" onClick={handleSave}>
-          Save Changes
+        <PillButton variant="primary" size="md" onClick={handleSave} disabled={isSaving || loading}>
+          {isSaving ? 'Saving...' : 'Save Policy'}
         </PillButton>
       </div>
 
-      {/* Feature Preview Notice Banner */}
-      <div className="policy-notice-banner">
-        <span style={{ fontSize: '20px' }}>💳</span>
-        <div>
-          <strong>Payment collection coming soon</strong> — Online deposit collection via Razorpay will be enabled in an upcoming release. Configure your policy rules below in advance.
-        </div>
-      </div>
-
-      <div className="policies-grid">
-        {/* Settings */}
-        <div className="card card-padding">
-          <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-5)' }}>Deposit Settings</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div className="form-group">
-              <label className="form-label">Default deposit amount (₹)</label>
-              <input
-                type="number"
-                className="form-input"
-                min="0"
-                value={policies.depositAmount}
-                onChange={e => updatePolicy('depositAmount', Number(e.target.value))}
-              />
-              <span className="form-hint">Collected via UPI when a client confirms booking (simulated)</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Cancellation window</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <input
-                  type="number"
-                  className="form-input"
-                  style={{ width: 120 }}
-                  min="0"
-                  value={policies.cancellationWindow}
-                  onChange={e => updatePolicy('cancellationWindow', Number(e.target.value))}
-                />
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>hours before appointment</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+        {/* Settings Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Card 1: Cancellation & Refunds */}
+          <div className="card card-padding" style={{ background: '#FFFFFF', borderRadius: '18px', border: '1px solid #E8E7E0' }}>
+            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, margin: '0 0 16px', color: '#0E0E0E' }}>
+              Cancellation & Refund Windows
+            </h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>100% Refund Window</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    style={{ width: 120 }}
+                    value={policy.full_refund_hours}
+                    onChange={e => updateField('full_refund_hours', e.target.value)}
+                  />
+                  <span style={{ fontSize: '14px', color: '#666' }}>hours before session start</span>
+                </div>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                  Clients who cancel at least this many hours prior receive a 100% refund.
+                </span>
               </div>
-              <span className="form-hint">Cancellations before this window get a full refund</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Late cancellation fee (₹)</label>
-              <input
-                type="number"
-                className="form-input"
-                min="0"
-                value={policies.lateCancellationFee}
-                onChange={e => updatePolicy('lateCancellationFee', Number(e.target.value))}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">No-show fee (₹)</label>
-              <input
-                type="number"
-                className="form-input"
-                min="0"
-                value={policies.noShowFee}
-                onChange={e => updatePolicy('noShowFee', Number(e.target.value))}
-              />
-              <span className="form-hint">Deposit is forfeited by default for no-shows</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Policy Preview */}
-        <div>
-          <div className="card" style={{ overflow: 'hidden', marginBottom: 'var(--space-4)' }}>
-            <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)', fontSize: 'var(--font-size-md)', fontWeight: 600 }}>
-              Policy Preview
-            </div>
-            <div style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="policy-preview-banner policy-banner-success">
-                <span>✅</span>
-                <span>Cancel more than <strong>{policies.cancellationWindow} hours</strong> before your appointment: <strong>full deposit refund</strong></span>
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Partial Refund Window & Percentage</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-input"
+                      style={{ width: 90 }}
+                      value={policy.partial_refund_hours}
+                      onChange={e => updateField('partial_refund_hours', e.target.value)}
+                    />
+                    <span style={{ fontSize: '13px', color: '#666' }}>hours to</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#666' }}>
+                    {policy.full_refund_hours} hours:
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      className="form-input"
+                      style={{ width: 90 }}
+                      value={policy.partial_refund_percent}
+                      onChange={e => updateField('partial_refund_percent', e.target.value)}
+                    />
+                    <span style={{ fontSize: '14px', fontWeight: 600 }}>% refund</span>
+                  </div>
+                </div>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                  Cancellations between {policy.partial_refund_hours}h and {policy.full_refund_hours}h receive a {policy.partial_refund_percent}% refund.
+                </span>
               </div>
-              <div className="policy-preview-banner policy-banner-warning">
-                <span>⚠️</span>
-                <span>Late cancellation or no-show: <strong>deposit forfeited ({formatCurrency(policies.depositAmount)})</strong></span>
+
+              {/* Derived non-refundable indicator */}
+              <div style={{ padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#991B1B' }}>
+                  🔒 Non-Refundable Cutoff: Under {noRefundBelowHours} hours
+                </div>
+                <div style={{ fontSize: '12px', color: '#7F1D1D', marginTop: 2 }}>
+                  Automatically derived: Cancellations under {noRefundBelowHours} hour{noRefundBelowHours === 1 ? '' : 's'} receive 0% refund.
+                </div>
               </div>
             </div>
           </div>
 
-          {/* How it works */}
-          <div className="card card-padding">
-            <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>How it works</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-primary-600)' }}>1.</span>
-                <span>Client books and pays {formatCurrency(policies.depositAmount)} deposit via UPI</span>
+          {/* Card 2: Reschedules & Late Arrival */}
+          <div className="card card-padding" style={{ background: '#FFFFFF', borderRadius: '18px', border: '1px solid #E8E7E0' }}>
+            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, margin: '0 0 16px', color: '#0E0E0E' }}>
+              Reschedule & Attendance Rules
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Maximum Reschedules Allowed</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    style={{ width: 120 }}
+                    value={policy.max_reschedules}
+                    onChange={e => updateField('max_reschedules', e.target.value)}
+                  />
+                  <span style={{ fontSize: '14px', color: '#666' }}>reschedules per booking</span>
+                </div>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                  After this limit, clients cannot reschedule and must cancel under policy terms.
+                </span>
               </div>
-              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-primary-600)' }}>2.</span>
-                <span>If they show up, the deposit is adjusted against the full payment</span>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Reschedule Minimum Notice</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    style={{ width: 120 }}
+                    value={policy.reschedule_min_hours_before}
+                    onChange={e => updateField('reschedule_min_hours_before', e.target.value)}
+                  />
+                  <span style={{ fontSize: '14px', color: '#666' }}>hours before session start</span>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-primary-600)' }}>3.</span>
-                <span>If they cancel on time, deposit is fully refunded</span>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>No-Show Grace Period</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    style={{ width: 120 }}
+                    value={policy.no_show_grace_minutes}
+                    onChange={e => updateField('no_show_grace_minutes', e.target.value)}
+                  />
+                  <span style={{ fontSize: '14px', color: '#666' }}>minutes after start</span>
+                </div>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                  "Mark No-Show" button stays locked until session start + {policy.no_show_grace_minutes} min.
+                </span>
               </div>
-              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-primary-600)' }}>4.</span>
-                <span>Late cancellation or no-show? Deposit is forfeited — your time is protected</span>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Payment Verification Timeout</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-input"
+                    style={{ width: 120 }}
+                    value={policy.payment_verification_timeout_hours}
+                    onChange={e => updateField('payment_verification_timeout_hours', e.target.value)}
+                  />
+                  <span style={{ fontSize: '14px', color: '#666' }}>hours to verify payment</span>
+                </div>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                  If payment is not confirmed within this window, the slot hold expires.
+                </span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Preview Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="card card-padding" style={{ background: '#F9F8F4', borderRadius: '18px', border: '1.5px solid #D8D7CF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '18px' }}>📜</span>
+              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 800, margin: 0, color: '#0E0E0E' }}>
+                Client-Facing Policy Preview
+              </h3>
+            </div>
+            
+            <p style={{ fontSize: '13px', color: '#555', marginBottom: '16px', lineHeight: 1.5 }}>
+              This exact plain-language text is displayed to clients before booking and stored immutably in their booking snapshot.
+            </p>
+
+            <div style={{ background: '#FFFFFF', border: '1px solid #E5E5DE', borderRadius: '14px', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px', lineHeight: 1.6, color: '#1A1A1A' }}>
+              {plainLanguageText.split('\n').map((line, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '20px', padding: '14px', background: 'rgba(198, 241, 53, 0.25)', border: '1px solid rgba(198, 241, 53, 0.8)', borderRadius: '12px', fontSize: '13px', color: '#166534' }}>
+              🛡️ <strong>Snapshot Guarantee</strong>: When a client books, your current policy is permanently snapshotted into their booking record. Future edits will never retroactively change rules for existing bookings.
             </div>
           </div>
         </div>

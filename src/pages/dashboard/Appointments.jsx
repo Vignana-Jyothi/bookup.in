@@ -25,11 +25,13 @@ import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import StatCard from '../../components/ui/StatCard';
 import PillButton from '../../components/ui/PillButton';
+import { DEFAULT_POLICY } from '../../utils/policyEngine';
 
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'payment-pending', label: 'Payment Pending' },
+  { key: 'refunds-due', label: 'Refunds Due' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
   { key: 'no-show', label: 'No-show' },
@@ -74,6 +76,90 @@ export default function Appointments() {
   const [rejectReason, setRejectReason] = useState('');
   const [processingPaymentId, setProcessingPaymentId] = useState(null);
   const [viewScreenshotUrl, setViewScreenshotUrl] = useState(null);
+
+  // Refunds due state
+  const [refundsDueList, setRefundsDueList] = useState([]);
+  const [isLoadingRefunds, setIsLoadingRefunds] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [selectedRefundTarget, setSelectedRefundTarget] = useState(null);
+  const [refundProofFile, setRefundProofFile] = useState(null);
+  const [isSubmittingRefundSent, setIsSubmittingRefundSent] = useState(false);
+
+  const fetchRefundsDue = useCallback(async () => {
+    if (!state.provider?.id) return;
+    setIsLoadingRefunds(true);
+    try {
+      const data = await dbService.getRefundsDue(state.provider.id);
+      setRefundsDueList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn('Failed to load refunds due:', e);
+    } finally {
+      setIsLoadingRefunds(false);
+    }
+  }, [state.provider?.id]);
+
+  useEffect(() => {
+    fetchRefundsDue();
+  }, [fetchRefundsDue]);
+
+  const unifiedRefundsDue = useMemo(() => {
+    const list = [...refundsDueList];
+    (state.bookings || []).forEach(b => {
+      if ((b.refundStatus === 'refund_due' || b.refundStatus === 'refunded' || b.refundStatus === 'disputed') && !list.some(r => r.booking_id === b.id || r.id === b.id)) {
+        list.push({
+          id: `ref-${b.id}`,
+          booking_id: b.id,
+          amount: b.refundAmount || b.price || 0,
+          status: b.refundStatus,
+          reason: b.refundReason || 'cancellation_refund',
+          created_at: b.cancelledAt || b.createdAt || new Date().toISOString(),
+          bookings: {
+            id: b.id,
+            customer_name: b.customerName,
+            customer_email: b.customerEmail,
+            customer_phone: b.customerPhone,
+            customer_whatsapp: b.customerWhatsApp,
+            booking_date: b.date,
+            start_time: b.startTime,
+            price: b.price,
+            services: { name: b.serviceName },
+          },
+        });
+      }
+    });
+    return list;
+  }, [refundsDueList, state.bookings]);
+
+  const handleConfirmRefundSent = async () => {
+    if (!selectedRefundTarget) return;
+    setIsSubmittingRefundSent(true);
+    try {
+      let proofUrl = null;
+      if (refundProofFile) {
+        proofUrl = await dbService.uploadRefundProof(selectedRefundTarget.id, refundProofFile);
+      }
+      await dbService.markRefundSent(selectedRefundTarget.id, proofUrl);
+
+      setRefundsDueList(prev => prev.map(r => r.id === selectedRefundTarget.id ? { ...r, status: 'refunded', proof_url: proofUrl } : r));
+      dispatch({
+        type: ACTIONS.UPDATE_BOOKING,
+        payload: {
+          id: selectedRefundTarget.booking_id,
+          refundStatus: 'refunded',
+        },
+      });
+
+      addToast('Refund marked as sent. Customer notified ✓');
+      setShowRefundModal(false);
+      setSelectedRefundTarget(null);
+      setRefundProofFile(null);
+    } catch (err) {
+      console.error('Failed to mark refund sent:', err);
+      addToast(err.message || 'Failed to update refund status.', 'error');
+    } finally {
+      setIsSubmittingRefundSent(false);
+    }
+  };
 
   // Manual booking modal state
   const [showManualModal, setShowManualModal] = useState(false);
@@ -259,17 +345,20 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmNoShow = (id) => {
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
-      dbService.updateBookingStatus(id, 'no-show', {
-        deposit_status: 'forfeited',
-      }).catch(err => console.error('Failed to persist no-show to Supabase:', err));
+  const handleConfirmNoShow = async (id) => {
+    try {
+      if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
+        await dbService.markCustomerNoShow(id);
+      }
+      dispatch({ type: ACTIONS.MARK_NO_SHOW, payload: id });
+      addToast('No-show recorded (0% refund). Customer notified with 48h dispute link.');
+    } catch (err) {
+      console.error('Failed to mark no-show:', err);
+      addToast(err.message || 'Failed to record no-show.', 'error');
+    } finally {
+      setShowNoShowModal(false);
+      setActionBooking(null);
     }
-
-    dispatch({ type: ACTIONS.MARK_NO_SHOW, payload: id });
-    addToast('No-show recorded. Deposit forfeited. 🛡️');
-    setShowNoShowModal(false);
-    setActionBooking(null);
   };
 
   const handleOpenCancel = (booking) => {
@@ -278,23 +367,35 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmCancel = (id) => {
+  const handleConfirmCancel = async (id) => {
     const target = state.bookings.find(b => b.id === id);
     if (state.googleCalendar?.isConnected && target?.googleEventId) {
       const providerId = state.provider?.id || 'provider-1';
       realGoogleCalendarService.deleteEvent(target.googleEventId, providerId);
     }
 
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
-      dbService.updateBookingStatus(id, 'cancelled', {
-        deposit_status: target?.depositAmount > 0 ? 'refunded' : target?.depositStatus,
-      }).catch(err => console.error('Failed to persist cancel to Supabase:', err));
+    try {
+      if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
+        await dbService.coachCancelBooking(id);
+      }
+      dispatch({
+        type: ACTIONS.UPDATE_BOOKING,
+        payload: {
+          id,
+          status: 'cancelled',
+          refundStatus: target?.price > 0 ? 'refund_due' : 'none',
+          refundAmount: target?.price || 0,
+        },
+      });
+      addToast(`Appointment cancelled. ${target?.price > 0 ? '100% refund due to customer.' : ''}`);
+      fetchRefundsDue();
+    } catch (err) {
+      console.error('Failed to cancel appointment:', err);
+      addToast(err.message || 'Failed to cancel appointment.', 'error');
+    } finally {
+      setShowCancelModal(false);
+      setActionBooking(null);
     }
-
-    dispatch({ type: ACTIONS.CANCEL_BOOKING, payload: id });
-    addToast('Appointment cancelled.');
-    setShowCancelModal(false);
-    setActionBooking(null);
   };
 
   const handleMarkLateCancellation = (booking) => {
@@ -594,11 +695,12 @@ export default function Appointments() {
       all: state.bookings.length,
       upcoming: state.bookings.filter(b => b.date >= today && b.status === 'confirmed').length,
       'payment-pending': state.bookings.filter(b => b.paymentStatus === 'verification_pending').length,
+      'refunds-due': unifiedRefundsDue.filter(r => r.status === 'refund_due').length,
       completed: state.bookings.filter(b => b.status === 'completed').length,
       cancelled: state.bookings.filter(b => b.status === 'cancelled' || b.status === 'late-cancellation').length,
       'no-show': state.bookings.filter(b => b.status === 'no-show').length,
     };
-  }, [state.bookings, today]);
+  }, [state.bookings, today, unifiedRefundsDue]);
 
   // Pending payment confirmations for coach alert section
   const pendingPaymentBookings = useMemo(() => {
@@ -815,14 +917,33 @@ export default function Appointments() {
                   <span className="item-icon">✓</span>
                   <span>Mark as completed</span>
                 </button>
-                <button
-                  type="button"
-                  className="actions-dropdown-item"
-                  onClick={() => handleOpenNoShow(booking)}
-                >
-                  <span className="item-icon">🚫</span>
-                  <span>Mark as no-show</span>
-                </button>
+                {(() => {
+                  const policy = booking.policySnapshot || state.policies || DEFAULT_POLICY;
+                  const grace = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
+                  const sessionStart = new Date(`${booking.date}T${booking.startTime}:00`).getTime();
+                  const allowedAfter = sessionStart + (grace * 60 * 1000);
+                  const isGracePassed = Date.now() >= allowedAfter;
+                  const waitMinutes = Math.ceil((allowedAfter - Date.now()) / 60000);
+
+                  return (
+                    <button
+                      type="button"
+                      className="actions-dropdown-item"
+                      disabled={!isGracePassed}
+                      title={!isGracePassed ? `Cannot mark no-show until ${grace}m after session start (${waitMinutes}m remaining)` : 'Mark customer as no-show'}
+                      style={{
+                        opacity: !isGracePassed ? 0.45 : 1,
+                        cursor: !isGracePassed ? 'not-allowed' : 'pointer',
+                      }}
+                      onClick={() => {
+                        if (isGracePassed) handleOpenNoShow(booking);
+                      }}
+                    >
+                      <span className="item-icon">🚫</span>
+                      <span>Mark as no-show {!isGracePassed && `(${waitMinutes}m left)`}</span>
+                    </button>
+                  );
+                })()}
                 <button
                   type="button"
                   className="actions-dropdown-item"
@@ -1481,8 +1602,125 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Appointments List View */}
-      {paginatedBookings.length > 0 ? (
+      {/* Refunds Due Tab View */}
+      {activeTab === 'refunds-due' ? (
+        <div style={{
+          background: 'var(--theme-bg-card)',
+          borderRadius: 'var(--radius-card)',
+          border: '1px solid var(--theme-border)',
+          padding: '24px',
+          boxShadow: 'var(--shadow-card)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Refunds Due & Ledger</h3>
+              <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '4px 0 0 0' }}>
+                Track cancellations and refunds owed to clients. Once you send payment via UPI, upload proof to alert the customer.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={fetchRefundsDue}
+              disabled={isLoadingRefunds}
+            >
+              ↻ Refresh
+            </button>
+          </div>
+
+          {unifiedRefundsDue.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
+              <div style={{ fontWeight: 600 }}>All refunds clear!</div>
+              <div style={{ fontSize: '13px', marginTop: '4px' }}>No pending refunds owed to customers.</div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+                <thead>
+                  <tr style={{ color: 'var(--theme-text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Customer</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Service</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Session Date</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Refund Amount</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 600 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unifiedRefundsDue.map((ref) => {
+                    const b = ref.bookings || {};
+                    return (
+                      <tr key={ref.id} className="highlighted-lime">
+                        <td style={{ padding: '14px', fontWeight: 600 }}>
+                          <div>{b.customer_name || 'Customer'}</div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', fontWeight: 400, marginTop: 2 }}>
+                            {b.customer_phone || b.customer_email || '—'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 600 }}>{b.services?.name || 'Session'}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div>{b.booking_date ? formatDate(b.booking_date) : '—'}</div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)' }}>
+                            {b.start_time ? formatTime(b.start_time) : ''}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#DC2626' }}>
+                            {formatCurrency(ref.amount)}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '9999px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            background: ref.status === 'confirmed' ? '#DCFCE7' : (ref.status === 'disputed' ? '#FEE2E2' : '#FEF3C7'),
+                            color: ref.status === 'confirmed' ? '#166534' : (ref.status === 'disputed' ? '#991B1B' : '#92400E'),
+                          }}>
+                            {ref.status === 'refund_due' ? 'Refund Due' : (ref.status === 'refunded' ? 'Refund Sent' : ref.status)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px', textAlign: 'center' }}>
+                          {ref.status === 'refund_due' ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              onClick={() => {
+                                setSelectedRefundTarget(ref);
+                                setRefundProofFile(null);
+                                setShowRefundModal(true);
+                              }}
+                              style={{ background: '#16A34A', color: '#FFFFFF', fontWeight: 600, fontSize: '12px' }}
+                            >
+                              Mark Refunded
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#64748B' }}>
+                              {ref.proof_url ? (
+                                <a href={ref.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563EB', fontWeight: 500 }}>
+                                  View Proof ↗
+                                </a>
+                              ) : 'Sent ✓'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : paginatedBookings.length > 0 ? (
         <>
           {/* Desktop Table Container (Matching Overview Today's Schedule) */}
           <div className="appointments-desktop-table" style={{
@@ -2087,10 +2325,28 @@ export default function Appointments() {
                 <p style={{ marginBottom: 'var(--space-3)' }}>
                   Are you sure you want to cancel this appointment with <strong>{target.customerName}</strong>?
                 </p>
+                {target.price > 0 && (
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#991B1B',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                  }}>
+                    <strong>100% Refund Due ({formatCurrency(target.price)})</strong>:
+                    <div style={{ fontSize: '11.5px', marginTop: '4px', color: '#7F1D1D' }}>
+                      Under the cancellation policy, coach cancellations qualify for a full 100% refund. The slot will be freed immediately and an email sent to the client.
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowCancelModal(false)}>Keep Appointment</button>
-                <button className="btn btn-danger" onClick={() => handleConfirmCancel(target.id)}>Cancel Appointment</button>
+                <button className="btn btn-danger" onClick={() => handleConfirmCancel(target.id)}>
+                  Cancel Appointment & Issue Refund
+                </button>
               </div>
             </div>
           </div>
@@ -2108,10 +2364,24 @@ export default function Appointments() {
                 <p style={{ marginBottom: 'var(--space-4)' }}>
                   Are you sure you want to mark this appointment with <strong>{target.customerName}</strong> as a no-show?
                 </p>
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  color: '#92400E',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                }}>
+                  <strong>Policy Enforcement (0% Refund)</strong>:
+                  <div style={{ fontSize: '11.5px', marginTop: '4px', color: '#78350F' }}>
+                    0% refund will be provided. The customer will receive an email notifying them that the session was marked as a no-show, with a 48-hour dispute window.
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowNoShowModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={() => handleConfirmNoShow(target.id)}>Confirm & Charge</button>
+                <button className="btn btn-danger" onClick={() => handleConfirmNoShow(target.id)}>Confirm No-Show (0% Refund)</button>
               </div>
             </div>
           </div>
@@ -2223,13 +2493,76 @@ export default function Appointments() {
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', borderRadius: '8px', overflow: 'hidden', maxHeight: '70vh' }}>
                 <img
                   src={viewScreenshotUrl}
-                  alt="Payment proof screenshot"
+                  alt="Payment screenshot"
                   style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => setViewScreenshotUrl(null)}>
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mark Refund Sent Modal */}
+        {showRefundModal && selectedRefundTarget && (
+          <div className="modal-overlay" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '20px', padding: '24px', maxWidth: 480 }}>
+              <div className="modal-header">
+                <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Confirm Refund Sent</h3>
+                <button className="modal-close" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>✕</button>
+              </div>
+              <div className="modal-body" style={{ marginTop: '12px' }}>
+                <div style={{ padding: '14px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748B', fontSize: '12.5px' }}>Customer</span>
+                    <strong style={{ fontSize: '13px' }}>{selectedRefundTarget.bookings?.customer_name || 'Customer'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748B', fontSize: '12.5px' }}>Contact</span>
+                    <span style={{ fontSize: '13px' }}>{selectedRefundTarget.bookings?.customer_phone || selectedRefundTarget.bookings?.customer_email || '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px dashed #CBD5E1' }}>
+                    <span style={{ fontWeight: 600, fontSize: '13px' }}>Refund Amount</span>
+                    <span style={{ fontWeight: 700, fontSize: '16px', color: '#16A34A' }}>{formatCurrency(selectedRefundTarget.amount)}</span>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>
+                    Payment Proof Screenshot (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="form-input"
+                    onChange={e => setRefundProofFile(e.target.files?.[0] || null)}
+                    style={{ fontSize: '12px' }}
+                  />
+                  <span className="form-hint" style={{ fontSize: '11.5px', color: '#64748B', marginTop: 4 }}>
+                    Upload your UPI confirmation screenshot. The customer will be able to view this proof.
+                  </span>
+                </div>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRefundModal(false)}
+                  disabled={isSubmittingRefundSent}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleConfirmRefundSent}
+                  disabled={isSubmittingRefundSent}
+                  style={{ background: '#16A34A', color: '#FFFFFF', fontWeight: 600 }}
+                >
+                  {isSubmittingRefundSent ? 'Marking...' : 'Confirm Refund Sent'}
                 </button>
               </div>
             </div>

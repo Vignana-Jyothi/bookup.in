@@ -25,6 +25,7 @@ import {
   clearLastBooking,
   isBookingActive,
 } from '../../utils/lastBooking';
+import { DEFAULT_POLICY, generatePolicyText } from '../../utils/policyEngine';
 import PillButton from '../../components/ui/PillButton';
 import BrandLogo from '../../components/ui/BrandLogo';
 import './BookingPage.css';
@@ -188,7 +189,7 @@ export default function PublicBookingPage() {
   const [selectedTime, setSelectedTime] = useState(null);
   const [customerMeetingType, setCustomerMeetingType] = useState('online');
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '', notes: '' });
-  const [policyAgreed, setPolicyAgreed] = useState(true);
+  const [policyAgreed, setPolicyAgreed] = useState(false);
   const [submittingBooking, setSubmittingBooking] = useState(false);
   const [bookingError, setBookingError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -518,6 +519,8 @@ export default function PublicBookingPage() {
           meetingType: resolvedMeetingType,
           locationAddress: resolvedLocation,
           mapsLink: resolvedMapsLink,
+          policyAcceptedAt: new Date().toISOString(),
+          policyAccepted: true,
         });
 
         if (result?.bookingId) authoritativeBookingId = result.bookingId;
@@ -996,21 +999,35 @@ export default function PublicBookingPage() {
               </div>
             </div>
 
-            {/* Confirmation Note */}
-            <div className="booking-notice-box">
-              <div>• You will receive instant confirmation via email.</div>
-              <div>• Please arrive 5 minutes before your scheduled start time.</div>
+            {/* Cancellation & Refund Policy in plain language */}
+            <div className="policy-display-box" style={{
+              background: 'var(--theme-bg-subtle, #F9F8F4)',
+              border: '1px solid var(--theme-border, #E8E7E0)',
+              borderRadius: '14px',
+              padding: '14px 16px',
+              margin: '14px 0',
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--theme-text-muted, #666)', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                Cancellation & Refund Policy
+              </div>
+              <div style={{ fontSize: '13px', lineHeight: 1.55, color: 'var(--color-text, #111)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {generatePolicyText(policies || DEFAULT_POLICY).split('\n').map((line, idx) => (
+                  <div key={idx}>{line}</div>
+                ))}
+              </div>
             </div>
 
             {/* Policy checkbox */}
-            <label className="policy-agree-row">
+            <label className="policy-agree-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: '14px 0', fontSize: '13.5px', fontWeight: 600 }}>
               <input
                 type="checkbox"
+                required
                 checked={policyAgreed}
                 onChange={e => setPolicyAgreed(e.target.checked)}
                 className="form-checkbox"
+                style={{ width: 18, height: 18, cursor: 'pointer' }}
               />
-              <span>I agree to the booking and cancellation policy.</span>
+              <span>I agree to the cancellation and refund policy *</span>
             </label>
 
             {/* Error Banner */}
