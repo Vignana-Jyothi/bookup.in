@@ -1,19 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import {
+  Calendar,
+  Zap,
+  Video,
+  Mail,
+  Link2,
+  LayoutDashboard,
+  Dumbbell,
+  Briefcase,
+  GraduationCap,
+  Plus,
+  Minus,
+  Check,
+  CalendarCheck,
+  ShieldCheck,
+  ArrowRight,
+} from 'lucide-react';
 import BrandLogo from '../components/ui/BrandLogo';
 import PillButton from '../components/ui/PillButton';
 import PhoneMockup from '../components/landing/PhoneMockup';
 import DashboardMockup from '../components/landing/DashboardMockup';
-import { LANDING_CONTENT } from '../data/landingContent';
+import { InstagramIcon, WhatsAppIcon, GoogleMeetIcon, UpiFlashIcon } from '../components/landing/LandingIcons';
+import { LANDING_CONTENT, SUPPORT_EMAIL } from '../data/landingContent';
 import './Landing.css';
 
 export default function LandingDesktop() {
   const navigate = useNavigate();
   const [openFaqIndex, setOpenFaqIndex] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [howVisible, setHowVisible] = useState(false);
+  const howSectionRef = useRef(null);
 
   const toggleFaq = (index) => {
     setOpenFaqIndex(prev => prev === index ? null : index);
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Scroll reveal observer (triggers once)
+    const elements = document.querySelectorAll('.reveal-on-scroll');
+    const revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-revealed');
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 }
+    );
+    elements.forEach((el) => revealObserver.observe(el));
+
+    // How it works step connector animation observer
+    let howObserver;
+    if (howSectionRef.current) {
+      howObserver = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setHowVisible(true);
+            if (howObserver) howObserver.disconnect();
+          }
+        },
+        { threshold: 0.2 }
+      );
+      howObserver.observe(howSectionRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      revealObserver.disconnect();
+      if (howObserver) howObserver.disconnect();
+    };
+  }, []);
 
   const {
     nav,
@@ -31,7 +95,7 @@ export default function LandingDesktop() {
   return (
     <div className="landing-desktop landing-janjiyuk">
       {/* ---------------- NAVIGATION ---------------- */}
-      <header className="landing-nav-wrap">
+      <header className={`landing-nav-wrap ${isScrolled ? 'is-scrolled' : ''}`}>
         <div className="landing-nav">
           <BrandLogo size="md" />
 
@@ -104,20 +168,53 @@ export default function LandingDesktop() {
             </div>
           </div>
 
-          {/* Right: Dual Mockups (Phone + Dashboard Together) */}
+          {/* Right: Dual Mockups (Phone + Dashboard Together + Floating Cards) */}
           <div className="hero-mockups-col">
             <div className="desktop-hero-visual-combo">
               <DashboardMockup />
               <div className="desktop-overlapping-phone">
                 <PhoneMockup />
+
+                {/* Floating Card 1: Top Left */}
+                <div className="hero-floating-card floating-card-1" aria-hidden="true">
+                  <div className="floating-card-icon lime-tile">
+                    <CalendarCheck size={16} strokeWidth={2} />
+                  </div>
+                  <div className="floating-card-text">
+                    <span className="floating-card-title">New booking</span>
+                    <span className="floating-card-sub">Aarav · 10:00 AM</span>
+                  </div>
+                </div>
+
+                {/* Floating Card 2: Bottom Right */}
+                <div className="hero-floating-card floating-card-2" aria-hidden="true">
+                  <div className="floating-card-icon lime-tile">
+                    <ShieldCheck size={16} strokeWidth={2} />
+                  </div>
+                  <div className="floating-card-text">
+                    <span className="floating-card-title">Payment approved</span>
+                    <span className="floating-card-sub">₹1,500 · Direct UPI</span>
+                  </div>
+                </div>
+
+                {/* Floating Card 3: Top Right */}
+                <div className="hero-floating-card floating-card-3" aria-hidden="true">
+                  <div className="floating-card-icon lime-tile">
+                    <Video size={16} strokeWidth={2} />
+                  </div>
+                  <div className="floating-card-text">
+                    <span className="floating-card-title">Meet link sent</span>
+                    <span className="floating-card-sub">Calendar synced</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ---------------- 2. PROBLEM SECTION ---------------- */}
-      <section className="landing-problem-section">
+      {/* ---------------- 2. PROBLEM SECTION: BEFORE / AFTER ---------------- */}
+      <section className="landing-problem-section reveal-on-scroll">
         <div className="container">
           <div className="section-title-wrap text-center">
             <h2 className="section-headline">
@@ -125,31 +222,70 @@ export default function LandingDesktop() {
             </h2>
           </div>
 
-          <div className="problem-chat-row">
-            {problem.chatBubbles.map((bubble, idx) => (
-              <div key={idx} className="problem-chat-card animate-scale-in">
-                <div className="chat-bubble-tail" />
-                <div className="chat-bubble-header">
-                  <div className="chat-avatar-dot">💬</div>
-                  <span className="chat-sender-label">Client</span>
-                  <span className="chat-time-label">{bubble.time}</span>
+          <div className="problem-comparison-grid">
+            {/* Left: Before (WhatsApp chat bubbles) */}
+            <div className="problem-before-col">
+              <div className="problem-col-badge before-badge">Before · The back-and-forth</div>
+              <div className="problem-chat-bubbles-stack">
+                {problem.chatBubbles.map((bubble, idx) => (
+                  <div key={idx} className="problem-chat-bubble-wa">
+                    <div className="wa-bubble-content">
+                      <span className="wa-message-text">"{bubble.text}"</span>
+                      <span className="wa-message-meta">
+                        <span className="wa-time">{bubble.time}</span>
+                        <svg width="15" height="10" viewBox="0 0 16 11" fill="none" className="wa-ticks" aria-hidden="true">
+                          <path d="M1 5.5L4.5 9L11 1.5M5 5.5L8.5 9L15 1.5" stroke="#4FC3F7" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Middle: Arrow indicator */}
+            <div className="problem-arrow-divider" aria-hidden="true">
+              <div className="problem-arrow-circle">
+                <ArrowRight size={22} strokeWidth={2.5} />
+              </div>
+            </div>
+
+            {/* Right: After (Single clean card) */}
+            <div className="problem-after-col">
+              <div className="problem-col-badge after-badge">With Calup</div>
+              <div className="problem-after-card">
+                <div className="after-card-header">
+                  <div className="after-icon-tile">
+                    <Check size={20} strokeWidth={2.5} />
+                  </div>
+                  <h3 className="after-card-title">Booked. Paid. Meet link sent.</h3>
                 </div>
-                <div className="chat-bubble-text">
-                  "{bubble.text}"
+                <p className="after-card-desc">
+                  {problem.resolution}
+                </p>
+
+                <div className="after-checklist">
+                  <div className="after-check-item">
+                    <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
+                    <span>Client picks an available time slot</span>
+                  </div>
+                  <div className="after-check-item">
+                    <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
+                    <span>Direct UPI payment with instant proof</span>
+                  </div>
+                  <div className="after-check-item">
+                    <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
+                    <span>Google Calendar invite + Meet link attached</span>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="problem-resolution-banner animate-fade-in-up">
-            <div className="resolution-sparkle">✓</div>
-            <div className="resolution-text">{problem.resolution}</div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ---------------- 3. HOW IT WORKS ---------------- */}
-      <section className="landing-how-section" id="how-it-works">
+      <section className="landing-how-section reveal-on-scroll" id="how-it-works" ref={howSectionRef}>
         <div className="container">
           <div className="section-title-wrap text-center">
             <span className="section-tag-pill">3-Step Flow</span>
@@ -158,7 +294,7 @@ export default function LandingDesktop() {
             </h2>
           </div>
 
-          <div className="how-steps-grid">
+          <div className="how-steps-flow">
             {/* Step 1 */}
             <div className="how-step-card">
               <div className="how-step-badge">{howItWorks.steps[0].number}</div>
@@ -178,6 +314,27 @@ export default function LandingDesktop() {
               </div>
             </div>
 
+            {/* Connector 1 -> 2 */}
+            <div className={`step-connector-desktop ${howVisible ? 'is-animated' : ''}`} aria-hidden="true">
+              <svg width="48" height="24" viewBox="0 0 48 24" fill="none" className="connector-svg">
+                <path
+                  d="M 2 12 H 38"
+                  stroke="#0E0E0E"
+                  strokeWidth="2"
+                  strokeDasharray="5 4"
+                  className="connector-line"
+                />
+                <polyline
+                  points="34,7 42,12 34,17"
+                  stroke="#0E0E0E"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="connector-arrow"
+                />
+              </svg>
+            </div>
+
             {/* Step 2 */}
             <div className="how-step-card">
               <div className="how-step-badge">{howItWorks.steps[1].number}</div>
@@ -186,15 +343,36 @@ export default function LandingDesktop() {
 
               <div className="how-mini-ui step-ui-2">
                 <div className="mini-link-box">
-                  <span className="mini-link-icon">🔗</span>
+                  <span className="mini-link-icon"><Link2 size={13} strokeWidth={2} /></span>
                   <span className="mini-link-text">calup.in/book/yourname</span>
                   <span className="mini-copy-pill">Copy</span>
                 </div>
                 <div className="mini-channels-row">
-                  <span className="mini-channel-badge">📱 Instagram Bio</span>
-                  <span className="mini-channel-badge">💬 WhatsApp</span>
+                  <span className="mini-channel-badge"><InstagramIcon size={14} /> Instagram Bio</span>
+                  <span className="mini-channel-badge"><WhatsAppIcon size={14} /> WhatsApp</span>
                 </div>
               </div>
+            </div>
+
+            {/* Connector 2 -> 3 */}
+            <div className={`step-connector-desktop ${howVisible ? 'is-animated' : ''}`} aria-hidden="true">
+              <svg width="48" height="24" viewBox="0 0 48 24" fill="none" className="connector-svg">
+                <path
+                  d="M 2 12 H 38"
+                  stroke="#0E0E0E"
+                  strokeWidth="2"
+                  strokeDasharray="5 4"
+                  className="connector-line"
+                />
+                <polyline
+                  points="34,7 42,12 34,17"
+                  stroke="#0E0E0E"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="connector-arrow"
+                />
+              </svg>
             </div>
 
             {/* Step 3 */}
@@ -207,13 +385,19 @@ export default function LandingDesktop() {
                 <div className="mini-payment-receipt">
                   <div className="mini-receipt-top">
                     <span>UPI Direct Pay</span>
-                    <span className="mini-green-check">✓ Paid</span>
+                    <span className="mini-green-check" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Check size={12} strokeWidth={2.5} /> Paid
+                    </span>
                   </div>
-                  <div className="mini-meet-pill">
-                    <span>📹 Google Meet Link Attached</span>
+                  <div className="mini-meet-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <GoogleMeetIcon size={13} />
+                    <span>Google Meet Link Attached</span>
                   </div>
                 </div>
-                <div className="mini-approve-btn">1-Tap Approve ✓</div>
+                <div className="mini-approve-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <span>1-Tap Approve</span>
+                  <Check size={14} strokeWidth={2.5} />
+                </div>
               </div>
             </div>
           </div>
@@ -221,7 +405,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 4. FEATURES ---------------- */}
-      <section className="landing-features-section" id="features">
+      <section className="landing-features-section reveal-on-scroll" id="features">
         <div className="container">
           <div className="section-title-wrap text-center">
             <span className="section-tag-pill">Features</span>
@@ -235,38 +419,12 @@ export default function LandingDesktop() {
               <div key={idx} className="feature-card">
                 <div className="feature-card-header">
                   <div className="feature-icon-bubble">
-                    {item.icon === 'calendar' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    )}
-                    {item.icon === 'upi' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                      </svg>
-                    )}
-                    {item.icon === 'video' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                      </svg>
-                    )}
-                    {item.icon === 'mail' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" />
-                      </svg>
-                    )}
-                    {item.icon === 'link' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                      </svg>
-                    )}
-                    {item.icon === 'dashboard' && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
-                      </svg>
-                    )}
+                    {item.icon === 'calendar' && <Calendar size={20} strokeWidth={1.75} />}
+                    {item.icon === 'upi' && <UpiFlashIcon size={20} />}
+                    {item.icon === 'video' && <Video size={20} strokeWidth={1.75} />}
+                    {item.icon === 'mail' && <Mail size={20} strokeWidth={1.75} />}
+                    {item.icon === 'link' && <Link2 size={20} strokeWidth={1.75} />}
+                    {item.icon === 'dashboard' && <LayoutDashboard size={20} strokeWidth={1.75} />}
                   </div>
                   <h3 className="feature-card-title">{item.title}</h3>
                 </div>
@@ -284,7 +442,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 5. WHO IT'S FOR ---------------- */}
-      <section className="landing-audience-section" id="who-its-for">
+      <section className="landing-audience-section reveal-on-scroll" id="who-its-for">
         <div className="container">
           <div className="section-title-wrap text-center">
             <span className="section-tag-pill">Target Audience</span>
@@ -296,10 +454,22 @@ export default function LandingDesktop() {
           <div className="audience-3card-grid">
             {whoItsFor.categories.map((cat, idx) => (
               <div key={idx} className="audience-card">
-                <div className="audience-icon-large">{cat.icon}</div>
+                <div className="audience-icon-tile">
+                  {cat.icon === 'dumbbell' && <Dumbbell size={24} strokeWidth={1.75} />}
+                  {cat.icon === 'briefcase' && <Briefcase size={24} strokeWidth={1.75} />}
+                  {cat.icon === 'graduation-cap' && <GraduationCap size={24} strokeWidth={1.75} />}
+                </div>
                 <div className="audience-badge">{cat.badge}</div>
                 <h3 className="audience-title">{cat.title}</h3>
                 <p className="audience-desc">{cat.desc}</p>
+
+                {/* Example Snippet */}
+                {cat.snippet && (
+                  <div className="audience-snippet-box">
+                    <span className="snippet-bullet">●</span>
+                    <span className="snippet-text">{cat.snippet}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -307,7 +477,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 6. LIVE DEMO ---------------- */}
-      <section className="landing-demo-section">
+      <section className="landing-demo-section reveal-on-scroll">
         <div className="container">
           <div className="demo-highlight-card">
             <div className="demo-text-side">
@@ -329,7 +499,9 @@ export default function LandingDesktop() {
             </div>
 
             <div className="demo-interactive-preview">
-              <div className="demo-pill-badge">⚡ Instant preview</div>
+              <div className="demo-pill-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Zap size={12} strokeWidth={2} /> Instant preview
+              </div>
               <PhoneMockup style={{ maxWidth: 220 }} />
             </div>
           </div>
@@ -337,7 +509,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 7. FAQ (ACCORDION) ---------------- */}
-      <section className="landing-faq-section" id="faq">
+      <section className="landing-faq-section reveal-on-scroll" id="faq">
         <div className="container" style={{ maxWidth: 840 }}>
           <div className="section-title-wrap text-center">
             <span className="section-tag-pill">Got Questions?</span>
@@ -361,7 +533,9 @@ export default function LandingDesktop() {
                     aria-expanded={isOpen}
                   >
                     <span className="faq-question-text">{item.question}</span>
-                    <span className="faq-toggle-icon">{isOpen ? '−' : '+'}</span>
+                    <span className="faq-toggle-icon">
+                      {isOpen ? <Minus size={18} strokeWidth={2} /> : <Plus size={18} strokeWidth={2} />}
+                    </span>
                   </button>
                   {isOpen && (
                     <div className="faq-accordion-body animate-fade-in-up">
@@ -376,7 +550,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 8. FINAL CTA ---------------- */}
-      <section className="landing-final-cta-section">
+      <section className="landing-final-cta-section reveal-on-scroll">
         <div className="container">
           <div className="final-cta-card">
             <h2 className="final-cta-headline">
@@ -416,8 +590,9 @@ export default function LandingDesktop() {
 
             <div className="footer-links-col">
               <h4>Contact</h4>
-              <a href={`mailto:${footer.contactEmail}`} className="footer-email-link">
-                ✉ {footer.contactEmail}
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="footer-email-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Mail size={15} strokeWidth={1.75} />
+                <span>{SUPPORT_EMAIL}</span>
               </a>
               <div className="footer-direct-note">
                 Early access support for verified coaches & tutors.
@@ -426,7 +601,7 @@ export default function LandingDesktop() {
           </div>
 
           <div className="footer-bottom-row">
-            <p>© {new Date().getFullYear()} CalUp. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Calup. All rights reserved.</p>
             <div className="footer-legal">
               <span>0% Commission Booking</span>
             </div>

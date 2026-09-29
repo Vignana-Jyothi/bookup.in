@@ -74,7 +74,18 @@ export default function PillButton({
 
       {loading ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block' }}
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
           Loading...
         </span>
       ) : (
@@ -82,9 +93,21 @@ export default function PillButton({
       )}
 
       {arrow && !loading && (
-        <span style={{ fontSize: '1.1em', lineHeight: 1, transition: 'transform 0.15s ease' }}>
-          →
-        </span>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ transition: 'transform 0.15s ease', display: 'inline-block', verticalAlign: 'middle' }}
+          className="pill-btn-arrow"
+        >
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
       )}
     </Component>
   );

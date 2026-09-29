@@ -3,6 +3,8 @@
  * Shared across both Desktop and Mobile layouts to ensure zero copy drift.
  */
 
+export const SUPPORT_EMAIL = 'support@calup.in';
+
 export const LANDING_CONTENT = {
   nav: {
     links: [
@@ -112,19 +114,22 @@ export const LANDING_CONTENT = {
         title: "Coaches & trainers",
         desc: "Fitness trainers, executive coaches, sports coaches, and life mentors.",
         badge: "1-on-1 & Series",
-        icon: "🏋️",
+        snippet: "Fitness coaching · 60 min · ₹1,200",
+        icon: "dumbbell",
       },
       {
         title: "Consultants",
         desc: "Business strategists, independent advisors, legal experts, and financial consultants.",
         badge: "Strategy Calls",
-        icon: "💼",
+        snippet: "Strategy advisory · 45 min · ₹2,500",
+        icon: "briefcase",
       },
       {
         title: "Tutors & teachers",
         desc: "Language teachers, academic tutors, music instructors, and test prep coaches.",
         badge: "Hourly Sessions",
-        icon: "📚",
+        snippet: "Math tutoring · 60 min · ₹800",
+        icon: "graduation-cap",
       },
     ],
   },
@@ -173,6 +178,6 @@ export const LANDING_CONTENT = {
       { label: "Login", href: "/login" },
       { label: "Start free", href: "/signup" },
     ],
-    contactEmail: "support@calup.in",
+    contactEmail: SUPPORT_EMAIL,
   },
 };
