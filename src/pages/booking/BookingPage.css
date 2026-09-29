@@ -259,6 +259,12 @@
   opacity: 0.3;
 }
 
+.cal-strip-day-btn:disabled {
+  opacity: 0.25 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
 /* Time Slots */
 .time-slots-container {
   display: flex;

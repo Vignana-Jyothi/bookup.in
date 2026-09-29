@@ -1035,13 +1035,17 @@ export const dbService = {
   /**
    * Get provider busy time intervals without exposing customer PII
    */
-  async getBusySlots(providerId, date) {
+  async getBusySlots(providerId, date, excludeBookingId = null) {
     if (!providerId || !date) return [];
 
     // 1. Fetch from backend endpoint (service-role backed, highly reliable)
     try {
       const apiBase = getApiBase();
-      const res = await fetch(`${apiBase}/public/busy-slots?providerId=${encodeURIComponent(providerId)}&date=${encodeURIComponent(date)}`);
+      let url = `${apiBase}/public/busy-slots?providerId=${encodeURIComponent(providerId)}&date=${encodeURIComponent(date)}`;
+      if (excludeBookingId) {
+        url += `&excludeBookingId=${encodeURIComponent(excludeBookingId)}`;
+      }
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.busySlots)) {

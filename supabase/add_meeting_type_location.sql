@@ -296,6 +296,9 @@ BEGIN
   IF v_booking.status = 'completed' THEN
     RETURN json_build_object('success', false, 'error', 'Completed appointments cannot be rescheduled.');
   END IF;
+  IF v_booking.status = 'rejected' OR COALESCE(v_booking.payment_status, '') = 'rejected' THEN
+    RETURN json_build_object('success', false, 'error', 'Rejected appointments cannot be rescheduled.');
+  END IF;
 
   -- 2. Fetch provider for buffer time and serialize concurrent reschedule attempts
   SELECT * INTO v_provider FROM public.providers WHERE id = v_booking.provider_id FOR UPDATE;
@@ -318,7 +321,7 @@ BEGIN
   WHERE provider_id = v_booking.provider_id
     AND booking_date = p_new_date
     AND id != p_booking_id
-    AND status IN ('confirmed', 'completed')
+    AND status IN ('pending', 'pending_payment', 'confirmed', 'completed')
     AND COALESCE(payment_status, '') != 'rejected'
     AND (
       v_cand_start < (

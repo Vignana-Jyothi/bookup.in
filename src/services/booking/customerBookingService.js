@@ -108,9 +108,12 @@ export const customerBookingService = {
       body: JSON.stringify({ newDate, newTime }),
     });
 
-    const result = await res.json();
+    const result = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(result.error || 'Failed to reschedule appointment');
+      const err = new Error(result.error || 'Failed to reschedule appointment');
+      err.status = res.status;
+      err.isConflict = res.status === 409;
+      throw err;
     }
     return result;
   },

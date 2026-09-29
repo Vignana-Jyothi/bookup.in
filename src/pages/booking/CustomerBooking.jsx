@@ -4,7 +4,7 @@
  * Allows customers to view confirmation, reschedule slots, and cancel with policy evaluation.
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useStore,
@@ -20,7 +20,13 @@ import { ACTIONS } from '../../data/actions';
 import {
   getInitials,
   getTimeSlotsDetailedForDate,
+  getCalendarDays,
+  isDateAvailable,
+  isPastDate,
+  isFutureDate,
 } from '../../utils/helpers';
+import { dbService } from '../../services/supabase/dbService';
+import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
 import { buildManagementUrl } from '../../utils/token';
 import { getCustomerTrackUrl } from '../../utils/url';
 import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
@@ -29,6 +35,11 @@ import { clearLastBooking } from '../../utils/lastBooking';
 import PillButton from '../../components/ui/PillButton';
 import BrandLogo from '../../components/ui/BrandLogo';
 import './BookingPage.css';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 export default function CustomerBooking() {
   const { token, id } = useParams();
@@ -44,6 +55,17 @@ export default function CustomerBooking() {
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [rescheduledSuccess, setRescheduledSuccess] = useState(false);
+  const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
+
+  // Month navigation for calendar picker in reschedule modal
+  const [rescheduleCalMonth, setRescheduleCalMonth] = useState(() => new Date().getMonth());
+  const [rescheduleCalYear, setRescheduleCalYear] = useState(() => new Date().getFullYear());
+
+  // Slot fetching state for reschedule modal
+  const [rescheduleDbBusySlots, setRescheduleDbBusySlots] = useState([]);
+  const [rescheduleGcalBusyTimes, setRescheduleGcalBusyTimes] = useState([]);
+  const [isLoadingRescheduleSlots, setIsLoadingRescheduleSlots] = useState(false);
+  const [rescheduleSlotsError, setRescheduleSlotsError] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -173,30 +195,117 @@ export default function CustomerBooking() {
 
   const managementUrl = buildManagementUrl(resolvedBooking?.managementToken || lookupIdentifier);
 
-  // Available slots for customer rescheduling (excluding current booking to avoid self-conflict)
-  const availableSlotsDetailed = useMemo(() => {
-    if (!resolvedBooking || !newDate || !availability) return [];
-    // Live GCal busy slots are checked on server/backend; frontend holds no mock events
-    const gcalEvents = [];
+  const targetServiceId = resolvedBooking?.serviceId || resolvedBooking?.service_id || supabaseBookingData?.service?.id;
 
-    return getTimeSlotsDetailedForDate(
-      newDate,
-      availability,
-      services.length > 0 ? services : (isStateBooking ? (state.services || []) : []),
-      resolvedBooking.serviceId,
-      isStateBooking ? (state.bookings || []) : [],
-      gcalEvents,
-      resolvedBooking.id // Exclude self
-    );
-  }, [resolvedBooking, newDate, availability, services, isStateBooking, state.services, state.bookings, isGcal]);
+  const effectiveServices = useMemo(() => {
+    let list = [...services];
+    if (supabaseBookingData?.service?.id && !list.some(s => s.id === supabaseBookingData.service.id)) {
+      list.push(supabaseBookingData.service);
+    }
+    if (targetServiceId && !list.some(s => s.id === targetServiceId)) {
+      list.push({
+        id: targetServiceId,
+        name: resolvedBooking?.serviceName || 'Session',
+        duration: resolvedBooking?.duration || 60,
+      });
+    }
+    return list;
+  }, [services, supabaseBookingData?.service, targetServiceId, resolvedBooking]);
 
-  // Max advance date
   const maxAdvanceDays = availability?.maxAdvanceBooking ?? 30;
   const maxDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + maxAdvanceDays);
     return d.toISOString().split('T')[0];
   }, [maxAdvanceDays]);
+
+  const rescheduleCalDays = useMemo(() => {
+    return getCalendarDays(rescheduleCalYear, rescheduleCalMonth);
+  }, [rescheduleCalYear, rescheduleCalMonth]);
+
+  const fetchRescheduleSlots = useCallback(async (date) => {
+    if (!date || !provider?.id) return;
+    setIsLoadingRescheduleSlots(true);
+    setRescheduleSlotsError(null);
+
+    const tz = provider.timezone || 'Asia/Kolkata';
+    try {
+      const [busySlots, gcalTimes] = await Promise.all([
+        dbService.getBusySlots(provider.id, date, resolvedBooking?.id).catch(err => {
+          console.warn('[CustomerBooking] dbService.getBusySlots failed:', err);
+          return [];
+        }),
+        realGoogleCalendarService.getBusyTimes(date, provider.id, tz).catch(err => {
+          console.warn('[CustomerBooking] realGoogleCalendarService.getBusyTimes failed:', err);
+          return [];
+        }),
+      ]);
+
+      setRescheduleDbBusySlots(Array.isArray(busySlots) ? busySlots : []);
+      setRescheduleGcalBusyTimes(Array.isArray(gcalTimes) ? gcalTimes : []);
+    } catch (err) {
+      console.error('[CustomerBooking] Error fetching slots for date:', err);
+      setRescheduleSlotsError('Unable to load available slots. Please try again.');
+    } finally {
+      setIsLoadingRescheduleSlots(false);
+    }
+  }, [provider?.id, provider?.timezone, resolvedBooking?.id]);
+
+  useEffect(() => {
+    if (showRescheduleModal && newDate) {
+      fetchRescheduleSlots(newDate);
+    }
+  }, [showRescheduleModal, newDate, fetchRescheduleSlots]);
+
+  // Available slots for customer rescheduling (strictly available, excluding own current slot)
+  const availableRescheduleSlots = useMemo(() => {
+    if (!resolvedBooking || !newDate || !availability || !targetServiceId) return [];
+
+    const formattedDbBookings = rescheduleDbBusySlots.map(s => ({
+      date: newDate,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      actualEndTime: s.actual_end_time,
+      status: 'confirmed',
+    }));
+
+    const allBookingsToCheck = [
+      ...formattedDbBookings,
+      ...(supabaseBookingData?.bookings || []),
+      ...(isStateBooking ? (state.bookings || []) : []),
+    ];
+
+    const slots = getTimeSlotsDetailedForDate(
+      newDate,
+      availability,
+      effectiveServices,
+      targetServiceId,
+      allBookingsToCheck,
+      rescheduleGcalBusyTimes,
+      resolvedBooking.id // Exclude self
+    );
+
+    return slots
+      .filter(s => s.available)
+      .filter(s => {
+        // Exclude customer's own current slot if on the same date
+        if (newDate === resolvedBooking.date && s.time === resolvedBooking.startTime) {
+          return false;
+        }
+        return true;
+      });
+  }, [
+    resolvedBooking,
+    newDate,
+    availability,
+    effectiveServices,
+    targetServiceId,
+    rescheduleDbBusySlots,
+    rescheduleGcalBusyTimes,
+    supabaseBookingData?.bookings,
+    isStateBooking,
+    state.bookings,
+  ]);
 
   // Evaluate cancellation policy timing
   const cancellationWindow = policies?.cancellationWindow ?? 12;
@@ -358,17 +467,42 @@ export default function CustomerBooking() {
       addToast(`Rescheduling is not allowed within ${cancellationWindow} hours of the appointment. Please contact your provider directly.`, 'error');
       return;
     }
-    setNewDate(resolvedBooking.date >= today ? resolvedBooking.date : today);
+
+    let initialDate = (resolvedBooking?.date && resolvedBooking.date >= today) ? resolvedBooking.date : today;
+    if (!isDateAvailable(initialDate, availability) || isPastDate(initialDate)) {
+      const baseD = new Date();
+      for (let i = 0; i <= 30; i++) {
+        const nextD = new Date(baseD);
+        nextD.setDate(baseD.getDate() + i);
+        const yStr = nextD.getFullYear();
+        const mStr = String(nextD.getMonth() + 1).padStart(2, '0');
+        const dStr = String(nextD.getDate()).padStart(2, '0');
+        const cand = `${yStr}-${mStr}-${dStr}`;
+        if (!isPastDate(cand) && isDateAvailable(cand, availability)) {
+          initialDate = cand;
+          break;
+        }
+      }
+    }
+
+    const [initY, initM] = initialDate.split('-').map(Number);
+    if (!isNaN(initY) && !isNaN(initM)) {
+      setRescheduleCalYear(initY);
+      setRescheduleCalMonth(initM - 1);
+    }
+    setNewDate(initialDate);
     setNewTime('');
     setShowRescheduleModal(true);
   };
 
   const handleConfirmReschedule = async () => {
-    if (!newDate || !newTime) return;
+    if (!newDate || !newTime || isSubmittingReschedule) return;
 
-    const slotObj = availableSlotsDetailed.find(s => s.time === newTime);
-    if (!slotObj || !slotObj.available) {
-      addToast('Selected time slot is no longer available. Please select another slot.', 'error');
+    const isSlotValid = availableRescheduleSlots.some(s => s.time === newTime);
+    if (!isSlotValid) {
+      addToast('That slot was just booked, please pick another', 'error');
+      setNewTime('');
+      fetchRescheduleSlots(newDate);
       return;
     }
 
@@ -376,6 +510,7 @@ export default function CustomerBooking() {
     const endMinutes = h * 60 + m + (resolvedBooking.duration || 60);
     const calculatedEndTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
+    setIsSubmittingReschedule(true);
     try {
       const result = await customerBookingService.rescheduleBooking(lookupIdentifier, newDate, newTime);
       const finalEndTime = result?.booking?.endTime || calculatedEndTime;
@@ -406,7 +541,16 @@ export default function CustomerBooking() {
       setShowRescheduleModal(false);
     } catch (err) {
       console.error('Failed to reschedule:', err);
-      addToast(err.message || 'Failed to reschedule appointment.', 'error');
+      const isConflict = err.isConflict || err.status === 409 || (err.message && (err.message.includes('no longer available') || err.message.includes('conflict')));
+      if (isConflict) {
+        addToast('That slot was just booked, please pick another', 'error');
+        setNewTime('');
+        fetchRescheduleSlots(newDate);
+      } else {
+        addToast(err.message || 'Failed to reschedule appointment.', 'error');
+      }
+    } finally {
+      setIsSubmittingReschedule(false);
     }
   };
 
@@ -468,6 +612,7 @@ export default function CustomerBooking() {
 
   const isCancelled = resolvedBooking?.status === 'cancelled' || resolvedBooking?.status === 'late-cancellation';
   const isCompleted = resolvedBooking?.status === 'completed';
+  const isReschedulable = !isCancelled && !isCompleted && resolvedBooking?.status !== 'rejected' && paymentStatus !== 'rejected';
 
   const providerName = provider?.name || provider?.businessName || 'Coach';
   const providerUpiId = supabaseBookingData?.provider?.upiId || null;
@@ -666,7 +811,7 @@ export default function CustomerBooking() {
 
         <div className="booking-step-pane" style={{ paddingTop: 0 }}>
           {/* Rescheduled Success Alert */}
-          {rescheduledSuccess && isConfirmed && (
+          {rescheduledSuccess && (
             <div className="animate-fade-in-up" style={{
               padding: '12px 16px',
               background: 'var(--color-lime-light)',
@@ -1327,8 +1472,22 @@ export default function CustomerBooking() {
             </div>
           )}
 
-          {!isConfirmed && !isCancelled && !isCompleted && (
+          {!isConfirmed && !isCancelled && !isCompleted && isReschedulable && (
             <div className="manage-actions-stack" style={{ marginTop: '16px' }}>
+              <PillButton
+                variant={isWithinFreeCancellation ? "primary" : "secondary"}
+                onClick={handleOpenReschedule}
+                disabled={!isWithinFreeCancellation}
+                title={!isWithinFreeCancellation ? `Rescheduling is not allowed within ${cancellationWindow} hours of appointment.` : ''}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  opacity: !isWithinFreeCancellation ? 0.6 : 1,
+                  cursor: !isWithinFreeCancellation ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Reschedule Appointment
+              </PillButton>
               <PillButton
                 variant="secondary"
                 onClick={handleBookAnotherSession}
@@ -1349,97 +1508,197 @@ export default function CustomerBooking() {
 
         {/* Reschedule Modal */}
         {showRescheduleModal && (
-          <div className="modal-overlay" onClick={() => setShowRescheduleModal(false)}>
-            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px' }}>
+          <div className="modal-overlay" onClick={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px', maxWidth: 440 }}>
               <div className="modal-header">
                 <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Reschedule Your Session</h3>
-                <button className="modal-close" onClick={() => setShowRescheduleModal(false)}>✕</button>
+                <button className="modal-close" onClick={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--theme-text-muted)', marginBottom: 'var(--space-4)' }}>
                   Current slot: <strong>{formatDate(resolvedBooking.date)} at {formatTime(resolvedBooking.startTime)}</strong>
                 </p>
 
+                {/* Calendar Month Strip Date Picker */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label">Pick a New Date</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    min={today}
-                    max={maxDate}
-                    value={newDate}
-                    onChange={e => {
-                      setNewDate(e.target.value);
-                      setNewTime('');
-                    }}
-                  />
+                  <label className="form-label" style={{ fontWeight: 600 }}>Choose a New Date</label>
+                  <div className="calendar-month-strip" style={{ marginTop: '6px' }}>
+                    <div className="cal-strip-header">
+                      <button
+                        type="button"
+                        className="cal-nav-arrow"
+                        onClick={() => {
+                          if (rescheduleCalMonth === 0) {
+                            setRescheduleCalMonth(11);
+                            setRescheduleCalYear(rescheduleCalYear - 1);
+                          } else {
+                            setRescheduleCalMonth(rescheduleCalMonth - 1);
+                          }
+                        }}
+                      >
+                        ‹
+                      </button>
+                      <span className="cal-strip-title">
+                        {MONTH_NAMES[rescheduleCalMonth]} {rescheduleCalYear}
+                      </span>
+                      <button
+                        type="button"
+                        className="cal-nav-arrow"
+                        onClick={() => {
+                          if (rescheduleCalMonth === 11) {
+                            setRescheduleCalMonth(0);
+                            setRescheduleCalYear(rescheduleCalYear + 1);
+                          } else {
+                            setRescheduleCalMonth(rescheduleCalMonth + 1);
+                          }
+                        }}
+                      >
+                        ›
+                      </button>
+                    </div>
+
+                    <div className="cal-strip-weekdays">
+                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((w, idx) => (
+                        <span key={idx} className="cal-strip-weekday">{w}</span>
+                      ))}
+                    </div>
+
+                    <div className="cal-strip-days">
+                      {rescheduleCalDays.map((d, i) => {
+                        const isAvailable = d.isCurrentMonth && d.date && !isPastDate(d.date) && isFutureDate(d.date, maxAdvanceDays) && isDateAvailable(d.date, availability);
+                        const isSelected = d.date === newDate;
+
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={!isAvailable}
+                            className={`cal-strip-day-btn ${!d.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''}`}
+                            onClick={() => {
+                              if (isAvailable) {
+                                setNewDate(d.date);
+                                setNewTime('');
+                              }
+                            }}
+                          >
+                            {d.day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
+                {/* Available Time Slots Section */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label">Select Available Time Slot</label>
-                  {availableSlotsDetailed.length > 0 ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ fontWeight: 600, margin: 0 }}>Select Available Time Slot</label>
+                    {newDate && (
+                      <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>
+                        {formatDate(newDate)}
+                      </span>
+                    )}
+                  </div>
+
+                  {isLoadingRescheduleSlots ? (
+                    <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                      <div className="spinner" style={{ margin: '0 auto 8px', width: 24, height: 24 }} />
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--theme-text-muted)' }}>
+                        Checking coach availability...
+                      </span>
+                    </div>
+                  ) : rescheduleSlotsError ? (
+                    <div style={{
+                      padding: 'var(--space-4)',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      textAlign: 'center',
+                      border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
+                      <p style={{ fontSize: 'var(--font-size-xs)', color: '#EF4444', margin: '0 0 8px 0' }}>
+                        {rescheduleSlotsError}
+                      </p>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => fetchRescheduleSlots(newDate)}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : availableRescheduleSlots.length > 0 ? (
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(95px, 1fr))',
-                      gap: 'var(--space-2)',
-                      maxHeight: 220,
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+                      gap: '8px',
+                      maxHeight: 200,
                       overflowY: 'auto',
                       padding: '2px',
                     }}>
-                      {availableSlotsDetailed.map(slot => (
-                        <button
-                          key={slot.time}
-                          type="button"
-                          disabled={!slot.available}
-                          className={`btn btn-sm ${newTime === slot.time ? 'btn-primary' : 'btn-secondary'}`}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 'var(--font-size-xs)',
-                            padding: '8px 4px',
-                            borderRadius: '12px',
-                            opacity: slot.available ? 1 : 0.45,
-                            cursor: slot.available ? 'pointer' : 'not-allowed',
-                            background: newTime === slot.time ? 'var(--color-lime)' : undefined,
-                            color: newTime === slot.time ? '#0E0E0E' : undefined,
-                            fontWeight: newTime === slot.time ? 700 : 500,
-                          }}
-                          onClick={() => slot.available && setNewTime(slot.time)}
-                        >
-                          <span>{formatTime(slot.time)}</span>
-                          {!slot.available && (
-                            <span style={{ fontSize: '0.625rem', opacity: 0.85, fontWeight: 500 }}>
-                              {slot.reason === 'booked' ? 'Booked' : 'Unavailable'}
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                      {availableRescheduleSlots.map(slot => {
+                        const isSelected = newTime === slot.time;
+                        return (
+                          <button
+                            key={slot.time}
+                            type="button"
+                            className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{
+                              padding: '10px 6px',
+                              borderRadius: '12px',
+                              fontSize: '13px',
+                              fontWeight: isSelected ? 700 : 500,
+                              background: isSelected ? 'var(--color-lime, #d4f933)' : undefined,
+                              color: isSelected ? '#0E0E0E' : undefined,
+                              borderColor: isSelected ? 'transparent' : undefined,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onClick={() => setNewTime(slot.time)}
+                          >
+                            {formatTime(slot.time)}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--theme-input-bg)', borderRadius: 'var(--radius-md)', color: 'var(--theme-text-muted)', fontSize: 'var(--font-size-xs)', textAlign: 'center' }}>
+                    <div style={{
+                      padding: 'var(--space-4)',
+                      background: 'var(--theme-input-bg, #F8FAFC)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--theme-text-muted, #64748B)',
+                      fontSize: 'var(--font-size-xs)',
+                      textAlign: 'center',
+                      border: '1px dashed #CBD5E1'
+                    }}>
                       No available slots on this date. Please pick another date.
                     </div>
                   )}
                 </div>
 
                 {newTime && (
-                  <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-lime-light)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-sm)', color: '#0E0E0E', fontWeight: 600 }}>
+                  <div style={{
+                    padding: '10px 14px',
+                    background: 'var(--color-lime-light, rgba(212, 249, 51, 0.15))',
+                    border: '1px solid var(--color-lime, #d4f933)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--font-size-sm)',
+                    color: '#0E0E0E',
+                    fontWeight: 600,
+                  }}>
                     Rescheduling to: <strong>{formatDate(newDate)} at {formatTime(newTime)}</strong>
                   </div>
                 )}
               </div>
               <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                <PillButton variant="ghost" onClick={() => setShowRescheduleModal(false)}>
+                <PillButton variant="ghost" onClick={() => setShowRescheduleModal(false)} disabled={isSubmittingReschedule}>
                   Cancel
                 </PillButton>
                 <PillButton
                   variant="primary"
-                  disabled={!newDate || !newTime}
+                  disabled={!newDate || !newTime || isSubmittingReschedule || isLoadingRescheduleSlots}
                   onClick={handleConfirmReschedule}
                 >
-                  Confirm Reschedule
+                  {isSubmittingReschedule ? 'Rescheduling...' : 'Confirm Reschedule'}
                 </PillButton>
               </div>
             </div>

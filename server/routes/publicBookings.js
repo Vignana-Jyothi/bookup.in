@@ -673,7 +673,7 @@ router.post('/create', handleCreateBooking);
  * Never exposes customer name, email, phone, or notes.
  */
 router.get('/busy-slots', async (req, res) => {
-  const { providerId, date } = req.query;
+  const { providerId, date, excludeBookingId } = req.query;
 
   if (!providerId || !date) {
     return res.status(400).json({ success: false, error: 'providerId and date are required query parameters' });
@@ -685,12 +685,18 @@ router.get('/busy-slots', async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('bookings')
-      .select('start_time, end_time, actual_end_time, status, payment_status, created_at')
+      .select('id, start_time, end_time, actual_end_time, status, payment_status, created_at')
       .eq('provider_id', providerId)
       .eq('booking_date', date)
-      .in('status', ['confirmed', 'completed']);
+      .in('status', ['pending', 'pending_payment', 'confirmed', 'completed']);
+
+    if (excludeBookingId) {
+      query = query.neq('id', excludeBookingId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('[PublicBookings] Error fetching busy slots:', error.message);
@@ -809,6 +815,7 @@ router.get('/:token', async (req, res) => {
       success: true,
       booking: {
         id: bookingRow.id,
+        serviceId: bookingRow.service_id,
         customerName: bookingRow.customer_name,
         customerPhone: bookingRow.customer_phone,
         customerWhatsApp: bookingRow.customer_whatsapp || bookingRow.customer_phone,
@@ -909,12 +916,15 @@ router.post('/:token/reschedule', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Appointment not found' });
     }
 
-    // Restriction: Cancelled or completed bookings cannot be rescheduled
+    // Restriction: Cancelled, completed, or rejected bookings cannot be rescheduled
     if (booking.status === 'cancelled' || booking.status === 'late-cancellation') {
       return res.status(400).json({ success: false, error: 'Cancelled appointments cannot be rescheduled.' });
     }
     if (booking.status === 'completed') {
       return res.status(400).json({ success: false, error: 'Completed appointments cannot be rescheduled.' });
+    }
+    if (booking.status === 'rejected' || booking.payment_status === 'rejected') {
+      return res.status(400).json({ success: false, error: 'Rejected appointments cannot be rescheduled.' });
     }
 
     const providerId = booking.provider_id;
@@ -956,6 +966,46 @@ router.post('/:token/reschedule', async (req, res) => {
     const startMin = hh * 60 + mm;
     const endMin = startMin + duration;
     const newEndTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+
+    // Validate rescheduled appointment is strictly in the future
+    const newDateTime = new Date(`${newDate}T${newTime}:00`);
+    if (isNaN(newDateTime.getTime()) || newDateTime.getTime() <= Date.now()) {
+      return res.status(400).json({ success: false, error: 'Rescheduled appointment must be in the future.' });
+    }
+
+    // Validate coach working hours on new date
+    const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const targetDay = DAYS[new Date(`${newDate}T00:00:00`).getDay()];
+
+    const { data: availRow } = await supabase
+      .from('availability')
+      .select('active, start_time, end_time')
+      .eq('provider_id', providerId)
+      .eq('day_of_week', targetDay)
+      .maybeSingle();
+
+    if (availRow) {
+      if (!availRow.active) {
+        return res.status(400).json({ success: false, error: 'Coach has no working hours on this day.' });
+      }
+      const provStart = availRow.start_time ? String(availRow.start_time).substring(0, 5) : '09:00';
+      const provEnd = availRow.end_time ? String(availRow.end_time).substring(0, 5) : '18:00';
+      if (newTime < provStart || newEndTime > provEnd) {
+        return res.status(400).json({ success: false, error: 'Selected time slot is outside coach working hours.' });
+      }
+    }
+
+    // Validate minimum notice
+    const minNoticeHours = Number(provider.min_notice) || 0;
+    if (minNoticeHours > 0) {
+      const hoursNoticeNew = (newDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+      if (hoursNoticeNew < minNoticeHours) {
+        return res.status(400).json({
+          success: false,
+          error: `Minimum notice of ${minNoticeHours} hours required to reschedule.`
+        });
+      }
+    }
 
     try {
       const tz = provider.timezone || 'Asia/Kolkata';
@@ -1013,7 +1063,7 @@ router.post('/:token/reschedule', async (req, res) => {
         .eq('provider_id', providerId)
         .eq('booking_date', newDate)
         .neq('id', booking.id)
-        .in('status', ['confirmed', 'completed']);
+        .in('status', ['pending', 'pending_payment', 'confirmed', 'completed']);
 
       const hasConflict = (ebData || [])
         .filter(b => b.payment_status !== 'rejected')
@@ -1100,6 +1150,21 @@ router.post('/:token/reschedule', async (req, res) => {
             })
           : Promise.resolve({ success: false, skipped: true }),
       ]);
+
+      // WhatsApp reschedule notifications (non-blocking)
+      try {
+        const provPhone = provider.whatsapp || provider.phone;
+        if (provPhone) {
+          richAutomateService.sendProviderNotification({
+            phone: provPhone,
+            customerName: `${booking.customer_name} (Rescheduled)`,
+            serviceName,
+            bookingDate: newDate,
+            startTime: newTime,
+            duration,
+          }).catch(() => {});
+        }
+      } catch (_waErr) {}
     } catch (_emailErr) {
       console.warn('[PublicBookings] Reschedule notification emails failed (non-blocking):', _emailErr.message);
     }
