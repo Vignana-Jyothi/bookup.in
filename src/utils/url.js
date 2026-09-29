@@ -64,3 +64,12 @@ export function getCustomerBookingStatusUrl(token) {
   const base = getAppBaseUrl();
   return `${base}/booking-status/${encodeURIComponent(token || '')}`;
 }
+
+/**
+ * Returns the customer booking tracking URL under /track route.
+ * e.g. "https://calup-in.vercel.app/track/c8a9f..."
+ */
+export function getCustomerTrackUrl(token) {
+  const base = getAppBaseUrl();
+  return `${base}/track/${encodeURIComponent(token || '')}`;
+}

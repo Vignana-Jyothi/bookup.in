@@ -16,6 +16,7 @@ const testFiles = [
   'tests/test-complete-real-user-flow.js',
   'tests/test-upi-scoping.js',
   'tests/test-payment-flow-fixes.js',
+  'tests/test-returning-customer-redirect.js',
 ];
 
 console.log('Running test suite (' + testFiles.length + ' test files)...');

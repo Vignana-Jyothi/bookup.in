@@ -95,6 +95,21 @@ function AppRoutes() {
           <PublicBookingPage />
         </ErrorBoundary>
       } />
+      <Route path="/track/:token" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
+        </ErrorBoundary>
+      } />
+      <Route path="/track/:id" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
+        </ErrorBoundary>
+      } />
+      <Route path="/track" element={
+        <ErrorBoundary title="Something went wrong, please refresh">
+          <CustomerBooking />
+        </ErrorBoundary>
+      } />
       <Route path="/booking-status/:token" element={
         <ErrorBoundary title="Something went wrong, please refresh">
           <CustomerBooking />

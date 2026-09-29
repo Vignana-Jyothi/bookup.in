@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   useStore,
   formatCurrency,
@@ -21,10 +21,11 @@ import {
   getInitials,
   getTimeSlotsDetailedForDate,
 } from '../../utils/helpers';
-import { buildManagementUrl, buildTrackingUrl } from '../../utils/token';
-import { getCustomerBookingStatusUrl } from '../../utils/url';
+import { buildManagementUrl } from '../../utils/token';
+import { getCustomerTrackUrl } from '../../utils/url';
 import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
+import { clearLastBooking } from '../../utils/lastBooking';
 import PillButton from '../../components/ui/PillButton';
 import BrandLogo from '../../components/ui/BrandLogo';
 import './BookingPage.css';
@@ -584,10 +585,20 @@ export default function CustomerBooking() {
   const locationAddress = resolvedBooking?.locationAddressSnapshot || resolvedBooking?.location_address_snapshot || resolvedBooking?.locationAddress || resolvedBooking?.location_address || null;
   const mapsLink = locationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress)}` : null;
 
+  const handleBookAnotherSession = () => {
+    clearLastBooking();
+    const targetSlug = providerSlug || provider?.slug || '';
+    if (targetSlug) {
+      navigate(`/book/${encodeURIComponent(targetSlug)}?fresh=1`);
+    } else {
+      navigate('/');
+    }
+  };
+
   const trackingIdentifier = resolvedBooking?.managementToken || lookupIdentifier || resolvedBooking?.id;
   const fullTrackingUrl = (typeof window !== 'undefined')
-    ? `${window.location.origin}/booking-status/${encodeURIComponent(trackingIdentifier || '')}`
-    : getCustomerBookingStatusUrl(trackingIdentifier);
+    ? `${window.location.origin}/track/${encodeURIComponent(trackingIdentifier || '')}`
+    : getCustomerTrackUrl(trackingIdentifier);
 
   return (
     <div className="janjiyuk-booking-canvas">
@@ -614,7 +625,27 @@ export default function CustomerBooking() {
               <div className="header-step-sub">Booking Status & Verification</div>
             </div>
           </div>
-          <BrandLogo iconOnly size={26} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={handleBookAnotherSession}
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--color-primary-600, #4f46e5)',
+                background: 'rgba(79, 70, 229, 0.08)',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+              title="Book another session"
+            >
+              Book another ↗
+            </button>
+            <BrandLogo iconOnly size={26} />
+          </div>
         </div>
 
         {/* Confirmation / Management Header */}
@@ -1273,19 +1304,38 @@ export default function CustomerBooking() {
               >
                 Cancel Appointment
               </button>
+
+              <PillButton
+                variant="secondary"
+                onClick={handleBookAnotherSession}
+                style={{ width: '100%', justifyContent: 'center', marginTop: '6px' }}
+              >
+                Book another session
+              </PillButton>
             </div>
           )}
 
           {(isCancelled || isCompleted) && (
             <div className="manage-actions-stack">
-              <Link to={`/book/${providerSlug}`} style={{ textDecoration: 'none' }}>
-                <PillButton
-                  variant="primary"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  Book Another Appointment
-                </PillButton>
-              </Link>
+              <PillButton
+                variant="primary"
+                onClick={handleBookAnotherSession}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Book another session
+              </PillButton>
+            </div>
+          )}
+
+          {!isConfirmed && !isCancelled && !isCompleted && (
+            <div className="manage-actions-stack" style={{ marginTop: '16px' }}>
+              <PillButton
+                variant="secondary"
+                onClick={handleBookAnotherSession}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Book another session
+              </PillButton>
             </div>
           )}
         </div>

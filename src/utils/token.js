@@ -22,7 +22,7 @@ export function generateManagementToken() {
   );
 }
 
-import { getCustomerManagementUrl, getCustomerBookingStatusUrl } from './url.js';
+import { getCustomerManagementUrl, getCustomerBookingStatusUrl, getCustomerTrackUrl } from './url.js';
 
 /**
  * Computes SHA-256 hex digest of a management token.
@@ -69,4 +69,11 @@ export function buildManagementUrl(token) {
  */
 export function buildTrackingUrl(token) {
   return getCustomerBookingStatusUrl(token);
+}
+
+/**
+ * Build the customer-facing booking tracking URL under /track route.
+ */
+export function buildTrackUrl(token) {
+  return getCustomerTrackUrl(token);
 }
