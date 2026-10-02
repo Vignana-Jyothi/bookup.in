@@ -120,7 +120,11 @@ async function run() {
   console.log('\n--- [PART 2] GET DIRECTIONS BUTTON VERIFICATION ---');
 
   // Fetch real provider and service
-  const { data: providers } = await supabase.from('providers').select('*').limit(1);
+  let { data: providers } = await supabase.from('providers').select('*').eq('slug', 'dr-arjun-patel');
+  if (!providers || providers.length === 0) {
+    const res = await supabase.from('providers').select('*').limit(1);
+    providers = res.data;
+  }
   assert(providers && providers.length > 0, 'Found provider in database');
   const provider = providers[0];
 

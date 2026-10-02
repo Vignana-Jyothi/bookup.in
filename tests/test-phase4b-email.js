@@ -291,7 +291,11 @@ async function runPhase4bSuite() {
 
   // --- [TEST 5] SERVER-SIDE BOOKING CREATION WITH MEET LINK & EMAIL ---
   console.log('\n--- [TEST 5] SERVER-SIDE BOOKING CREATION WITH MEET LINK & EMAIL ---');
-  const { data: providers } = await supabase.from('providers').select('*').limit(1);
+  let { data: providers } = await supabase.from('providers').select('*').eq('slug', 'dr-arjun-patel');
+  if (!providers || providers.length === 0) {
+    const res = await supabase.from('providers').select('*').limit(1);
+    providers = res.data;
+  }
   const provider = providers?.[0];
   assert(Boolean(provider), 'Test provider exists in Supabase');
 

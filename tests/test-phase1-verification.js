@@ -47,7 +47,11 @@ async function run() {
   }
 
   // Fetch real provider and service
-  const { data: providers } = await supabase.from('providers').select('*').limit(1);
+  let { data: providers } = await supabase.from('providers').select('*').eq('slug', 'dr-arjun-patel');
+  if (!providers || providers.length === 0) {
+    const res = await supabase.from('providers').select('*').limit(1);
+    providers = res.data;
+  }
   assert(providers && providers.length > 0, 'Found at least one provider in database');
   const provider = providers[0];
 
@@ -63,7 +67,13 @@ async function run() {
   const cleanupIds = [];
 
   const baseOffset = 30 + Math.floor(Math.random() * 200);
-  const getOffsetDate = (days) => new Date(Date.now() + (baseOffset + days) * 86400000).toISOString().split('T')[0];
+  const getOffsetDate = (days) => {
+    let d = new Date(Date.now() + (baseOffset + days * 4) * 86400000);
+    while (d.getDay() === 0 || d.getDay() === 5 || d.getDay() === 6) {
+      d = new Date(d.getTime() + 86400000);
+    }
+    return d.toISOString().split('T')[0];
+  };
   const onlineDate = getOffsetDate(0);
   const date1 = getOffsetDate(1);
   const conflictDate = getOffsetDate(2);
@@ -71,6 +81,15 @@ async function run() {
   const newFutureDate = getOffsetDate(4);
 
   try {
+    // Pre-cleanup in case of previously interrupted test runs
+    await supabase.from('bookings').delete().in('customer_email', [
+      'priya.test@example.com',
+      'aarav.test@example.com',
+      'userA@example.com',
+      'userB@example.com',
+      'late@example.com',
+      'timely@example.com',
+    ]);
     // ------------------------------------------------------------------------
     // VERIFY 0: Normal Online Booking Creation End-to-End
     // ------------------------------------------------------------------------
@@ -274,7 +293,7 @@ async function run() {
       `Rescheduling within 12h cutoff returned HTTP 400 (got ${reschSoonRes.status})`
     );
     assert(
-      reschSoonData.error && reschSoonData.error.includes('Rescheduling is not allowed within') && reschSoonData.error.includes('hours'),
+      reschSoonData.error && (reschSoonData.error.includes('Rescheduling is not allowed within') || reschSoonData.error.includes('Rescheduling is only allowed')) && reschSoonData.error.includes('hours'),
       `Clear rejection error message provided: "${reschSoonData.error}"`
     );
 

@@ -17,6 +17,7 @@ const testFiles = [
   'tests/test-upi-scoping.js',
   'tests/test-payment-flow-fixes.js',
   'tests/test-returning-customer-redirect.js',
+  'tests/test-concurrency-race-regression.js',
 ];
 
 console.log('Running test suite (' + testFiles.length + ' test files)...');
@@ -27,12 +28,21 @@ for (const testFile of testFiles) {
   console.log(`RUNNING: ${testFile}`);
   console.log(`================================================================`);
   const result = spawnSync('node', [testFile], {
-    stdio: 'inherit',
+    encoding: 'utf-8',
     shell: true,
   });
 
-  if (result.status !== 0) {
-    console.error(`❌ ${testFile} failed with exit code ${result.status}`);
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+
+  const combinedOutput = (result.stdout || '') + '\n' + (result.stderr || '');
+  const failLine = combinedOutput.split('\n').find(line => {
+    const trimmed = line.trim();
+    return trimmed.startsWith('❌') || trimmed.startsWith('FAIL');
+  });
+
+  if (result.status !== 0 || failLine) {
+    console.error(`\n❌ ${testFile} FAILED (exit code: ${result.status}, detected failure line: "${failLine?.trim()}")`);
     allPassed = false;
     process.exit(result.status || 1);
   } else {

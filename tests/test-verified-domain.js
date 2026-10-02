@@ -9,6 +9,8 @@ import { getAppBaseUrl, getBookingUrl, getBookingDisplayUrl, getCustomerManageme
 import { buildManagementUrl } from '../src/utils/token.js';
 import { generateIcsCalendar } from '../server/utils/ics.js';
 import { MockWhatsAppProvider } from '../src/services/notifications/MockWhatsAppProvider.js';
+import { EmailService } from '../server/services/email.js';
+import { config } from '../server/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -100,6 +102,16 @@ if (badOccurrences.length > 0) {
 } else {
   console.log('  ✓ 0 hardcoded "bookup.in" URL occurrences found across src/ and server/');
 }
+
+// 5. RESEND Email Sender & Branding Verification
+console.log('\n--- [TEST 5] RESEND EMAIL SENDER & BRANDING VERIFICATION ---');
+const emailService = new EmailService();
+const expectedFrom = (process.env.RESEND_FROM_EMAIL || config.resendFromEmail || '').trim();
+console.log(`  Configured RESEND_FROM_EMAIL: "${expectedFrom}"`);
+console.log(`  EmailService resolved fromEmail: "${emailService.fromEmail}"`);
+assert.strictEqual(emailService.fromEmail, expectedFrom, 'EmailService.fromEmail matches RESEND_FROM_EMAIL env variable');
+assert(!emailService.fromEmail.includes('BookUp'), 'EmailService fromEmail does NOT contain outdated "BookUp" brand');
+console.log('  ✓ Verified sender reflects dynamic RESEND_FROM_EMAIL environment configuration');
 
 console.log('\n================================================================');
 console.log('✅ ALL DOMAIN & LINK VERIFICATIONS PASSED SUCCESSFULLY');

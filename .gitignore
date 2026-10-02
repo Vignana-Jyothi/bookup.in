@@ -19,6 +19,8 @@ scratch
 !.env.example
 supabase/backups/
 supabase/backup_policies_*.sql
+supabase/part1_*.sql
+tests-output.txt
 
 # Server local token storage (encrypted tokens tracked)
 

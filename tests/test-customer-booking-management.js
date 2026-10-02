@@ -52,7 +52,11 @@ async function runComprehensiveSuite() {
   }
 
   // Retrieve provider and service for testing
-  const { data: providers } = await supabase.from('providers').select('*').limit(1);
+  let { data: providers } = await supabase.from('providers').select('*').eq('slug', 'dr-arjun-patel');
+  if (!providers || providers.length === 0) {
+    const res = await supabase.from('providers').select('*').limit(1);
+    providers = res.data;
+  }
   if (!providers || providers.length === 0) {
     console.error('❌ No provider available in database');
     process.exit(1);
