@@ -60,8 +60,8 @@ export function validateConfig() {
   if (!config.supabaseUrl) {
     missing.push('SUPABASE_URL (or VITE_SUPABASE_URL)');
   }
-  if (!config.supabaseKey) {
-    missing.push('SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY / VITE_SUPABASE_PUBLISHABLE_KEY)');
+  if (!config.supabaseServiceRoleKey) {
+    missing.push('SUPABASE_SERVICE_ROLE_KEY');
   }
   if (!config.frontendUrl) {
     missing.push('FRONTEND_URL (or VITE_APP_URL)');

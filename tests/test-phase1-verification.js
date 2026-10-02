@@ -66,7 +66,7 @@ async function run() {
 
   const cleanupIds = [];
 
-  const baseOffset = 30 + Math.floor(Math.random() * 200);
+  const baseOffset = 800 + Math.floor(Math.random() * 500);
   const getOffsetDate = (days) => {
     let d = new Date(Date.now() + (baseOffset + days * 4) * 86400000);
     while (d.getDay() === 0 || d.getDay() === 5 || d.getDay() === 6) {

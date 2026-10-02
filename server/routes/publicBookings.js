@@ -33,10 +33,13 @@ const router = Router();
 
 const DAYS_LIST = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-// Backend Supabase client (using service role key if available, falling back to general key)
+// Backend Supabase client (strictly service role key; throws if not configured)
 function getSupabaseClient() {
-  const key = config.supabaseServiceRoleKey || config.supabaseKey;
-  if (!config.supabaseUrl || !key) return null;
+  const key = config.supabaseServiceRoleKey;
+  if (!key) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for backend database operations');
+  }
+  if (!config.supabaseUrl) return null;
   return createClient(config.supabaseUrl, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

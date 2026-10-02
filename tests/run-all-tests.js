@@ -18,6 +18,7 @@ const testFiles = [
   'tests/test-payment-flow-fixes.js',
   'tests/test-returning-customer-redirect.js',
   'tests/test-concurrency-race-regression.js',
+  'tests/test-customer-booking-hooks-order.js',
 ];
 
 console.log('Running test suite (' + testFiles.length + ' test files)...');
