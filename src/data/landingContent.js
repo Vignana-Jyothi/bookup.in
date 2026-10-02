@@ -3,7 +3,15 @@
  * Shared across both Desktop and Mobile layouts to ensure zero copy drift.
  */
 
-export const SUPPORT_EMAIL = 'support@calup.in';
+export const SUPPORT_EMAIL =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPPORT_EMAIL) ||
+  (typeof process !== 'undefined' && (process.env?.VITE_SUPPORT_EMAIL || process.env?.SUPPORT_EMAIL)) ||
+  '';
+
+export const DEMO_SLUG =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEMO_SLUG) ||
+  (typeof process !== 'undefined' && process.env?.VITE_DEMO_SLUG) ||
+  '';
 
 export const LANDING_CONTENT = {
   nav: {
@@ -23,7 +31,7 @@ export const LANDING_CONTENT = {
     subline: "Calup is the booking page for coaches, consultants and tutors. Clients pick a time, pay you directly on UPI, and get a Google Meet link. No WhatsApp back-and-forth.",
     primaryCta: "Start free",
     secondaryCta: "See a live booking page",
-    demoUrl: "/book/dr-arjun-patel",
+    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
     badges: "Free during early access · No client sign-up · 0% commission",
   },
 
@@ -138,7 +146,7 @@ export const LANDING_CONTENT = {
     headline: "Try it as a client",
     desc: "See how smooth and simple booking feels from your client's perspective.",
     cta: "See a live booking page",
-    demoUrl: "/book/dr-arjun-patel",
+    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
   },
 
   faq: {

@@ -321,6 +321,42 @@ export default function CustomerBooking() {
     }
   }, [resolvedBooking, cancellationWindow]);
 
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeType, setDisputeType] = useState('refund');
+  const [disputeNote, setDisputeNote] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
+  const liveRefundConsequence = useMemo(() => {
+    if (!resolvedBooking) return null;
+    return calculateCancellationRefund({
+      booking: resolvedBooking,
+      currentTime: new Date(),
+      timezone: provider?.timezone || 'Asia/Kolkata',
+    });
+  }, [resolvedBooking, provider?.timezone]);
+
+  const canReportCoachNoShow = useMemo(() => {
+    if (!resolvedBooking || resolvedBooking.status !== 'confirmed') return false;
+    const policy = resolvedBooking.policySnapshot || DEFAULT_POLICY;
+    const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
+    try {
+      const sessionStart = new Date(`${resolvedBooking.date}T${resolvedBooking.startTime}:00`).getTime();
+      return Date.now() >= sessionStart + (graceMinutes * 60 * 1000);
+    } catch (_) {
+      return false;
+    }
+  }, [resolvedBooking]);
+
+  const canDisputeNoShow = useMemo(() => {
+    if (!resolvedBooking || resolvedBooking.status !== 'no-show') return false;
+    try {
+      const markedAt = resolvedBooking.customerNoShowAt ? new Date(resolvedBooking.customerNoShowAt).getTime() : new Date(resolvedBooking.createdAt).getTime();
+      return Date.now() - markedAt <= 48 * 60 * 60 * 1000;
+    } catch (_) {
+      return false;
+    }
+  }, [resolvedBooking]);
+
   // Loading state (avoids flashing "Appointment Not Found" during initial fetch)
   if (isLoading) {
     return (
@@ -596,42 +632,6 @@ export default function CustomerBooking() {
     const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${cleanDate}T${startClean}/${cleanDate}T${endClean}&details=${details}`;
     window.open(gcalUrl, '_blank', 'noopener,noreferrer');
   };
-
-  const [showDisputeModal, setShowDisputeModal] = useState(false);
-  const [disputeType, setDisputeType] = useState('refund');
-  const [disputeNote, setDisputeNote] = useState('');
-  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
-
-  const liveRefundConsequence = useMemo(() => {
-    if (!resolvedBooking) return null;
-    return calculateCancellationRefund({
-      booking: resolvedBooking,
-      currentTime: new Date(),
-      timezone: provider?.timezone || 'Asia/Kolkata',
-    });
-  }, [resolvedBooking, provider?.timezone]);
-
-  const canReportCoachNoShow = useMemo(() => {
-    if (!resolvedBooking || resolvedBooking.status !== 'confirmed') return false;
-    const policy = resolvedBooking.policySnapshot || DEFAULT_POLICY;
-    const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
-    try {
-      const sessionStart = new Date(`${resolvedBooking.date}T${resolvedBooking.startTime}:00`).getTime();
-      return Date.now() >= sessionStart + (graceMinutes * 60 * 1000);
-    } catch (_) {
-      return false;
-    }
-  }, [resolvedBooking]);
-
-  const canDisputeNoShow = useMemo(() => {
-    if (!resolvedBooking || resolvedBooking.status !== 'no-show') return false;
-    try {
-      const markedAt = resolvedBooking.customerNoShowAt ? new Date(resolvedBooking.customerNoShowAt).getTime() : new Date(resolvedBooking.createdAt).getTime();
-      return Date.now() - markedAt <= 48 * 60 * 60 * 1000;
-    } catch (_) {
-      return false;
-    }
-  }, [resolvedBooking]);
 
   const handleConfirmRefundReceived = async () => {
     setIsSubmittingDispute(true);

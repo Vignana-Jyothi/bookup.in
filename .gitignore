@@ -17,6 +17,8 @@ scratch
 .env
 .env.*
 !.env.example
+supabase/backups/
+supabase/backup_policies_*.sql
 
 # Server local token storage (encrypted tokens tracked)
 

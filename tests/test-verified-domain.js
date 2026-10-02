@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
@@ -17,23 +20,25 @@ console.log('================================================================');
 
 // 1. URL Helper Verification
 console.log('\n--- [TEST 1] FRONTEND URL RESOLUTION UTILITY ---');
+const expectedBase = (process.env.VITE_APP_URL || 'https://calup-in.vercel.app').replace(/\/+$/, '');
+const expectedHost = new URL(expectedBase).hostname;
 const baseUrl = getAppBaseUrl();
 console.log(`  Resolved Base URL: ${baseUrl}`);
-assert.strictEqual(baseUrl, 'https://calup-in.vercel.app', 'Base URL correctly defaults/resolves to https://calup-in.vercel.app');
+assert.strictEqual(baseUrl, expectedBase, `Base URL correctly defaults/resolves to ${expectedBase}`);
 
 const testSlug = 'yourslovely';
 const fullBookingUrl = getBookingUrl(testSlug);
 console.log(`  Full Booking URL: ${fullBookingUrl}`);
-assert.strictEqual(fullBookingUrl, 'https://calup-in.vercel.app/book/yourslovely', 'Booking URL matches exact production structure');
+assert.strictEqual(fullBookingUrl, `${expectedBase}/book/yourslovely`, 'Booking URL matches exact production structure');
 
 const displayBookingUrl = getBookingDisplayUrl(testSlug);
 console.log(`  Display Booking URL: ${displayBookingUrl}`);
-assert.strictEqual(displayBookingUrl, 'calup-in.vercel.app/book/yourslovely', 'Display booking URL strips protocol cleanly');
+assert.strictEqual(displayBookingUrl, `${expectedHost}/book/yourslovely`, 'Display booking URL strips protocol cleanly');
 
 const testToken = 'mgmt_token_abc123';
 const customerMgmtUrl = getCustomerManagementUrl(testToken);
 console.log(`  Customer Management URL: ${customerMgmtUrl}`);
-assert.strictEqual(customerMgmtUrl, 'https://calup-in.vercel.app/manage/mgmt_token_abc123', 'Management URL formatted properly');
+assert.strictEqual(customerMgmtUrl, `${expectedBase}/manage/mgmt_token_abc123`, 'Management URL formatted properly');
 
 const builtMgmtUrl = buildManagementUrl(testToken);
 assert.strictEqual(builtMgmtUrl, customerMgmtUrl, 'buildManagementUrl delegates to getCustomerManagementUrl');
@@ -49,7 +54,7 @@ const icsOutput = generateIcsCalendar({
   duration: 60,
   bookingId: 'test-booking-id-999',
 });
-assert(icsOutput.includes('UID:test-booking-id-999@calup-in.vercel.app\r\n'), 'ICS UID uses @calup-in.vercel.app domain');
+assert(icsOutput.includes(`UID:test-booking-id-999@${expectedHost}\r\n`), `ICS UID uses @${expectedHost} domain`);
 assert(!icsOutput.includes('@bookup.in'), 'ICS output does NOT contain @bookup.in');
 console.log('  ✓ ICS calendar UID domain verified');
 
@@ -61,7 +66,7 @@ const cancelMsg = waProvider.generateCancellationMessage(
   { name: 'Coach Alex', slug: 'alex-fit' }
 );
 console.log(`  Sample cancellation notice:\n  "${cancelMsg.replace(/\n/g, ' ')}"`);
-assert(cancelMsg.includes('https://calup-in.vercel.app/book/alex-fit'), 'Cancellation message embeds real booking URL');
+assert(cancelMsg.includes(`${expectedBase}/book/alex-fit`), 'Cancellation message embeds real booking URL');
 assert(!cancelMsg.includes('bookup.in/'), 'Cancellation message does NOT reference bookup.in');
 console.log('  ✓ WhatsApp templates verified');
 

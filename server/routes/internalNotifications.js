@@ -105,7 +105,7 @@ export async function processReminders() {
 
   results.totalCandidates = candidates.length;
   const nowMs = Date.now();
-  const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+  const frontendBase = (config.frontendUrl || '').replace(/\/+$/, '');
 
   for (const booking of candidates) {
     try {

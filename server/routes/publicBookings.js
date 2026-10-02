@@ -544,7 +544,7 @@ async function handleCreateBooking(req, res) {
     }
 
     // 8. SYNCHRONOUS SERVER-SIDE EMAIL NOTIFICATIONS (PRIMARY CHANNEL - Phase 4b)
-    const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+    const frontendBase = (config.frontendUrl || '').replace(/\/+$/, '');
     const trackingUrl = `${frontendBase}/booking-status/${encodeURIComponent(rawToken)}`;
     const managementUrl = trackingUrl;
 
@@ -837,7 +837,7 @@ router.get('/:token', async (req, res) => {
       .replace(/\[loc:[^\]]*\]/g, '')
       .replace(/\[maps:[^\]]*\]/g, '')
       .trim();
-    const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+    const frontendBase = (config.frontendUrl || '').replace(/\/+$/, '');
     const trackingUrl = `${frontendBase}/booking-status/${encodeURIComponent(token)}`;
     const managementUrl = trackingUrl;
 

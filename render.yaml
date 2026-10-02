@@ -31,3 +31,9 @@ services:
         sync: false
       - key: INTERNAL_CRON_SECRET
         sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_DOMAIN
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false

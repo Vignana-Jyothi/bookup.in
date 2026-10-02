@@ -223,7 +223,7 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
     const providerName = booking.providers?.name || booking.providers?.business_name || 'Coach';
     const serviceName = booking.services?.name || booking.service_name || 'Session';
     const amount = booking.price || booking.services?.price || 0;
-    const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+    const frontendBase = (config.frontendUrl || '').replace(/\/+$/, '');
     const dashboardUrl = `${frontendBase}/dashboard/appointments`;
 
     if (providerEmail) {
@@ -415,7 +415,7 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
     }
 
     // 2. Decrypt management token if available to construct customer management URL
-    const frontendBase = (config.frontendUrl || 'https://calup-in.vercel.app').replace(/\/$/, '');
+    const frontendBase = (config.frontendUrl || '').replace(/\/+$/, '');
     let managementUrl = '';
     if (booking.management_token_encrypted) {
       try {

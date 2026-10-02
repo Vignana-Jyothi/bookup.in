@@ -299,7 +299,7 @@ async function runPhase4bSuite() {
   const service = services?.[0];
   assert(Boolean(service), 'Test service exists in Supabase');
 
-  const testDate = '2026-12-18';
+  const testDate = '2026-12-22';
   const testTime = '11:00';
   const customToken = crypto.randomBytes(24).toString('hex');
 

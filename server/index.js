@@ -11,7 +11,7 @@ try {
   dns.setDefaultResultOrder('ipv4first');
 } catch (_e) {}
 import { createClient } from '@supabase/supabase-js';
-import { config } from './config.js';
+import { config, validateConfig } from './config.js';
 import authRoutes from './routes/auth.js';
 import calendarRoutes from './routes/calendar.js';
 import publicBookingsRoutes from './routes/publicBookings.js';
@@ -20,12 +20,19 @@ import paymentVerificationRoutes from './routes/paymentVerification.js';
 import policiesRoutes from './routes/policies.js';
 import refundsRoutes from './routes/refunds.js';
 
+// Validate required environment variables at startup (fails loudly if missing)
+validateConfig();
+
 const app = express();
 
 // CORS configuration: safely allow configured frontend origins without wildcard
-const allowedOrigins = (config.frontendUrl || 'http://localhost:5173')
-  .split(',')
-  .map(url => url.trim().replace(/\/$/, ''))
+const allowedOrigins = [
+  config.frontendUrl,
+  config.corsOrigin,
+]
+  .filter(Boolean)
+  .flatMap(str => str.split(','))
+  .map(url => url.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 app.use(cors({
@@ -33,10 +40,10 @@ app.use(cors({
     // Allow requests with no origin (e.g. server-to-server, curl, health probes)
     if (!origin) return callback(null, true);
 
-    const normalizedOrigin = origin.replace(/\/$/, '');
+    const normalizedOrigin = origin.replace(/\/+$/, '');
     if (
       allowedOrigins.includes(normalizedOrigin) ||
-      (process.env.NODE_ENV !== 'production' && normalizedOrigin.startsWith('http://localhost:'))
+      (process.env.NODE_ENV !== 'production' && (normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:')))
     ) {
       return callback(null, true);
     }

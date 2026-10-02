@@ -5,24 +5,9 @@
 
 import { dbService } from '../supabase/dbService.js';
 import { isSupabaseConfigured } from '../supabase/supabaseClient.js';
+import { getApiBase } from '../../utils/api.js';
 
-export function getApiBase() {
-  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-                 (typeof process !== 'undefined' && process.env?.VITE_API_URL) || '';
-  if (envUrl.trim()) {
-    return `${envUrl.trim().replace(/\/$/, '')}/api`;
-  }
-  if (typeof window !== 'undefined') {
-    const host = window.location?.hostname || '';
-    if (host.includes('vercel.app') || host.includes('calup.in') || (!host.includes('localhost') && !host.includes('127.0.0.1'))) {
-      return 'https://bookup-in.onrender.com/api';
-    }
-  }
-  if (typeof window === 'undefined' && typeof process !== 'undefined') {
-    return `http://localhost:${process.env.PORT || 3001}/api`;
-  }
-  return '/api';
-}
+export { getApiBase };
 
 export const customerBookingService = {
   /**

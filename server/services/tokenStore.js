@@ -94,11 +94,9 @@ export const tokenStore = {
     writeLocalTokens(all);
 
     // 2. Persist to Supabase so tokens survive Render container restarts & redeploys
+    // Writes strictly to the dedicated google_tokens table (no providers.bio fallback)
     const supabase = getSupabaseClient();
     if (supabase) {
-      let persisted = false;
-
-      // Strategy A: Dedicated google_tokens table
       try {
         const { error: gtErr } = await supabase
           .from('google_tokens')
@@ -116,61 +114,11 @@ export const tokenStore = {
             { onConflict: 'provider_id' }
           );
 
-        if (!gtErr) {
-          persisted = true;
+        if (gtErr) {
+          console.warn(`[TokenStore] Could not upsert to google_tokens: ${gtErr.message}`);
         }
-      } catch (_e) {}
-
-      // Strategy B: Dedicated columns on providers table
-      if (!persisted) {
-        try {
-          const { error: provColErr } = await supabase
-            .from('providers')
-            .update({
-              google_access_token_encrypted: encAccessToken,
-              google_refresh_token_encrypted: encRefreshToken || null,
-              google_token_expires_at: effectiveExpiresAt,
-              google_calendar_email: effectiveEmail,
-              google_calendar_connected_at: connectedAt,
-              updated_at: updatedAt,
-            })
-            .eq('id', providerId);
-
-          if (!provColErr) {
-            persisted = true;
-          }
-        } catch (_e) {}
-      }
-
-      // Strategy C: Fallback storage inside providers.bio tagged bundle [gcal_tokens:<encrypted>]
-      if (!persisted) {
-        try {
-          const { data: prov } = await supabase
-            .from('providers')
-            .select('bio')
-            .eq('id', providerId)
-            .maybeSingle();
-
-          const currentBio = prov?.bio || '';
-          const cleanBio = currentBio.replace(/\n?\[gcal_tokens:[^\]]+\]/g, '').trim();
-          const tokensPayload = JSON.stringify({
-            email: effectiveEmail,
-            encAccessToken,
-            encRefreshToken,
-            expiresAt: effectiveExpiresAt,
-            scope: effectiveScope,
-            connectedAt,
-          });
-          const encryptedPayload = encryptToken(tokensPayload);
-          const newBio = cleanBio
-            ? `${cleanBio}\n[gcal_tokens:${encryptedPayload}]`
-            : `[gcal_tokens:${encryptedPayload}]`;
-
-          await supabase
-            .from('providers')
-            .update({ bio: newBio, updated_at: updatedAt })
-            .eq('id', providerId);
-        } catch (_e) {}
+      } catch (err) {
+        console.warn(`[TokenStore] Supabase error: ${err.message}`);
       }
     }
 
@@ -196,12 +144,9 @@ export const tokenStore = {
     all[providerId] = existing;
     writeLocalTokens(all);
 
-    // Sync to Supabase
+    // Sync to Supabase google_tokens table
     const supabase = getSupabaseClient();
     if (supabase) {
-      let updated = false;
-
-      // Strategy A: google_tokens table
       try {
         const { error: gtErr } = await supabase
           .from('google_tokens')
@@ -212,56 +157,11 @@ export const tokenStore = {
           })
           .eq('provider_id', providerId);
 
-        if (!gtErr) updated = true;
-      } catch (_e) {}
-
-      // Strategy B: providers table columns
-      if (!updated) {
-        try {
-          const { error: provErr } = await supabase
-            .from('providers')
-            .update({
-              google_access_token_encrypted: encAccessToken,
-              google_token_expires_at: newExpiresAt,
-              updated_at: updatedAt,
-            })
-            .eq('id', providerId);
-
-          if (!provErr) updated = true;
-        } catch (_e) {}
-      }
-
-      // Strategy C: providers.bio tagged bundle
-      if (!updated) {
-        try {
-          const { data: prov } = await supabase
-            .from('providers')
-            .select('bio')
-            .eq('id', providerId)
-            .maybeSingle();
-
-          if (prov) {
-            const currentBio = prov.bio || '';
-            const cleanBio = currentBio.replace(/\n?\[gcal_tokens:[^\]]+\]/g, '').trim();
-            const tokensPayload = JSON.stringify({
-              email: existing.email || '',
-              encAccessToken,
-              encRefreshToken: existing.encryptedRefreshToken || null,
-              expiresAt: newExpiresAt,
-              scope: existing.scope || '',
-              connectedAt: existing.connectedAt || updatedAt,
-            });
-            const encryptedPayload = encryptToken(tokensPayload);
-            const newBio = cleanBio
-              ? `${cleanBio}\n[gcal_tokens:${encryptedPayload}]`
-              : `[gcal_tokens:${encryptedPayload}]`;
-
-            await supabase
-              .from('providers')
-              .update({ bio: newBio, updated_at: updatedAt })
-              .eq('id', providerId);
-          }
-        } catch (_e) {}
+        if (gtErr) {
+          console.warn(`[TokenStore] Could not update access token in google_tokens for ${providerId}: ${gtErr.message}`);
+        }
+      } catch (err) {
+        console.warn(`[TokenStore] Supabase error: ${err.message}`);
       }
     }
 
@@ -271,7 +171,7 @@ export const tokenStore = {
   /**
    * Get decrypted tokens for server-side Google Calendar operations.
    * Checks local cache first; if empty (after Render redeploy or cold start),
-   * retrieves encrypted tokens from Supabase and restores them into local cache.
+   * retrieves encrypted tokens from Supabase google_tokens table and restores them into local cache.
    */
   async getDecryptedTokens(providerId) {
     if (!providerId) return null;
@@ -283,11 +183,10 @@ export const tokenStore = {
       record = all[providerId];
     }
 
-    // If not in local cache (or after Render container restart), recover from Supabase
+    // If not in local cache (or after Render container restart), recover from Supabase google_tokens
     if (!record) {
       const supabase = getSupabaseClient();
       if (supabase) {
-        // Strategy A: Check google_tokens table
         try {
           const { data: gtData, error: gtErr } = await supabase
             .from('google_tokens')
@@ -307,51 +206,6 @@ export const tokenStore = {
             };
           }
         } catch (_e) {}
-
-        // Strategy B: Check providers table columns
-        if (!record) {
-          try {
-            const { data: provData, error: provErr } = await supabase
-              .from('providers')
-              .select('id, email, bio, google_access_token_encrypted, google_refresh_token_encrypted, google_token_expires_at, google_calendar_email, google_calendar_connected_at')
-              .eq('id', providerId)
-              .maybeSingle();
-
-            if (!provErr && provData) {
-              if (provData.google_access_token_encrypted || provData.google_refresh_token_encrypted) {
-                record = {
-                  providerId,
-                  email: provData.google_calendar_email || provData.email || '',
-                  encryptedAccessToken: provData.google_access_token_encrypted || '',
-                  encryptedRefreshToken: provData.google_refresh_token_encrypted || null,
-                  expiresAt: Number(provData.google_token_expires_at) || 0,
-                  scope: '',
-                  connectedAt: provData.google_calendar_connected_at || null,
-                };
-              } else if (provData.bio && provData.bio.includes('[gcal_tokens:')) {
-                // Strategy C: Extract tagged bundle from bio
-                const match = provData.bio.match(/\[gcal_tokens:([^\]]+)\]/);
-                if (match && match[1]) {
-                  try {
-                    const decryptedPayload = decryptToken(match[1]);
-                    const parsed = JSON.parse(decryptedPayload);
-                    record = {
-                      providerId,
-                      email: parsed.email || provData.email || '',
-                      encryptedAccessToken: parsed.encAccessToken || '',
-                      encryptedRefreshToken: parsed.encRefreshToken || null,
-                      expiresAt: Number(parsed.expiresAt) || 0,
-                      scope: parsed.scope || '',
-                      connectedAt: parsed.connectedAt || null,
-                    };
-                  } catch (_decErr) {
-                    console.warn(`[TokenStore] Bio token tag decrypt error for ${providerId}:`, _decErr.message);
-                  }
-                }
-              }
-            }
-          } catch (_e) {}
-        }
 
         // Restore recovered record to local cache
         if (record) {
@@ -422,40 +276,11 @@ export const tokenStore = {
       writeLocalTokens(all);
     }
 
-    // 2. Delete from Supabase
+    // 2. Delete from Supabase google_tokens table
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
         await supabase.from('google_tokens').delete().eq('provider_id', providerId);
-      } catch (_e) {}
-
-      try {
-        await supabase
-          .from('providers')
-          .update({
-            google_access_token_encrypted: null,
-            google_refresh_token_encrypted: null,
-            google_token_expires_at: null,
-            google_calendar_email: null,
-            google_calendar_connected_at: null,
-          })
-          .eq('id', providerId);
-      } catch (_e) {}
-
-      try {
-        const { data: prov } = await supabase
-          .from('providers')
-          .select('bio')
-          .eq('id', providerId)
-          .maybeSingle();
-
-        if (prov?.bio && prov.bio.includes('[gcal_tokens:')) {
-          const cleanBio = prov.bio.replace(/\n?\[gcal_tokens:[^\]]+\]/g, '').trim();
-          await supabase
-            .from('providers')
-            .update({ bio: cleanBio })
-            .eq('id', providerId);
-        }
       } catch (_e) {}
     }
 

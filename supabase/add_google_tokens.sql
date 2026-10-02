@@ -34,10 +34,11 @@ create policy "Service role full access on google_tokens"
   using (true)
   with check (true);
 
--- 4. Fallback columns on providers table
-alter table public.providers
-  add column if not exists google_access_token_encrypted text default null,
-  add column if not exists google_refresh_token_encrypted text default null,
-  add column if not exists google_token_expires_at bigint default null,
-  add column if not exists google_calendar_email text default null,
-  add column if not exists google_calendar_connected_at timestamptz default null;
+-- Explicitly revoke access from anon and authenticated roles
+revoke all on public.google_tokens from anon, authenticated;
+grant all on public.google_tokens to service_role;
+
+-- 4. Clean any tagged [gcal_tokens:...] out of providers.bio
+update public.providers
+set bio = trim(regexp_replace(bio, '\n?\[gcal_tokens:[^\]]+\]', '', 'g'))
+where bio like '%[gcal_tokens:%';

@@ -4,14 +4,6 @@
  * or falls back to production URL https://calup-in.vercel.app.
  */
 
-export const DEFAULT_APP_URL = 'https://calup-in.vercel.app';
-
-/**
- * Returns the resolved base application URL (e.g. "https://calup-in.vercel.app").
- * Priority:
- * 1. import.meta.env.VITE_APP_URL (if defined and non-empty)
- * 2. DEFAULT_APP_URL ("https://calup-in.vercel.app")
- */
 export function getAppBaseUrl() {
   let envUrl = '';
   try {
@@ -19,14 +11,28 @@ export function getAppBaseUrl() {
       envUrl = import.meta.env.VITE_APP_URL;
     } else if (typeof process !== 'undefined' && process.env?.VITE_APP_URL) {
       envUrl = process.env.VITE_APP_URL;
+    } else if (typeof process !== 'undefined' && (process.env?.FRONTEND_URL || process.env?.APP_URL)) {
+      envUrl = process.env.FRONTEND_URL || process.env.APP_URL;
     }
   } catch (_e) {}
 
   if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
     return envUrl.trim().replace(/\/+$/, '');
   }
-  return DEFAULT_APP_URL;
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+    const port = process.env?.PORT || 5173;
+    return `http://localhost:${port}`;
+  }
+
+  throw new Error('Missing required environment variable: VITE_APP_URL (or FRONTEND_URL)');
 }
+
+export const DEFAULT_APP_URL = getAppBaseUrl();
 
 /**
  * Returns the full absolute public booking URL for a provider slug.

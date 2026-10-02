@@ -5,8 +5,18 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { hashManagementToken } from '../../utils/token.js';
+import { getApiBase } from '../../utils/api.js';
 
 const DAYS_LIST = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+/**
+ * Sanitizes provider bio to ensure sensitive Google OAuth token tags
+ * like [gcal_tokens:...] are never exposed in UI or public responses.
+ */
+export function sanitizeBio(bio) {
+  if (!bio || typeof bio !== 'string') return '';
+  return bio.replace(/\n?\[gcal_tokens:[^\]]+\]/g, '').trim();
+}
 
 export const dbService = {
   // ===========================================================================
@@ -35,7 +45,7 @@ export const dbService = {
       email: data.email || '',
       phone: data.phone || '',
       timezone: data.timezone || 'Asia/Kolkata',
-      bio: data.bio || '',
+      bio: sanitizeBio(data.bio),
       bufferTime: data.buffer_time ?? 15,
       minNotice: data.min_notice ?? 2,
       maxAdvanceBooking: data.max_advance_booking ?? 30,
@@ -70,7 +80,7 @@ export const dbService = {
       email: data.email || '',
       phone: data.phone || '',
       timezone: data.timezone || 'Asia/Kolkata',
-      bio: data.bio || '',
+      bio: sanitizeBio(data.bio),
       bufferTime: data.buffer_time ?? 15,
       minNotice: data.min_notice ?? 2,
       maxAdvanceBooking: data.max_advance_booking ?? 30,
@@ -108,7 +118,7 @@ export const dbService = {
           slug: slug || existing.slug,
           email: email || existing.email,
           phone: phone !== undefined ? phone : existing.phone,
-          bio: bio !== undefined ? bio : existing.bio,
+          bio: bio !== undefined ? sanitizeBio(bio) : existing.bio,
         });
         return await this.getProviderByUserId(userId);
       }
@@ -129,7 +139,7 @@ export const dbService = {
               name: name || emailMatch.name,
               businessName: businessName !== undefined ? businessName : emailMatch.business_name,
               phone: phone !== undefined ? phone : emailMatch.phone,
-              bio: bio !== undefined ? bio : emailMatch.bio,
+              bio: bio !== undefined ? sanitizeBio(bio) : emailMatch.bio,
             });
             const linked = await this.getProviderByUserId(userId);
             if (linked) return linked;
@@ -170,7 +180,7 @@ export const dbService = {
         slug: finalSlug,
         email: email || '',
         phone: phone || '',
-        bio: bio || '',
+        bio: sanitizeBio(bio),
         timezone: 'Asia/Kolkata',
         buffer_time: 15,
         min_notice: 2,
@@ -193,7 +203,7 @@ export const dbService = {
       email: data.email || '',
       phone: data.phone || '',
       timezone: data.timezone || 'Asia/Kolkata',
-      bio: data.bio || '',
+      bio: sanitizeBio(data.bio),
       bufferTime: data.buffer_time ?? 15,
       minNotice: data.min_notice ?? 2,
       maxAdvanceBooking: data.max_advance_booking ?? 30,
@@ -218,7 +228,7 @@ export const dbService = {
     if (fields.slug !== undefined) updatePayload.slug = fields.slug;
     if (fields.email !== undefined) updatePayload.email = fields.email;
     if (fields.phone !== undefined) updatePayload.phone = fields.phone;
-    if (fields.bio !== undefined) updatePayload.bio = fields.bio;
+    if (fields.bio !== undefined) updatePayload.bio = sanitizeBio(fields.bio);
     if (fields.bufferTime !== undefined) updatePayload.buffer_time = fields.bufferTime;
     if (fields.minNotice !== undefined) updatePayload.min_notice = fields.minNotice;
     if (fields.maxAdvanceBooking !== undefined) updatePayload.max_advance_booking = fields.maxAdvanceBooking;
@@ -1371,18 +1381,4 @@ export const dbService = {
     return result;
   },
 };
-
-function getApiBase() {
-  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || (typeof process !== 'undefined' && process.env?.VITE_API_URL) || '';
-  if (envUrl.trim()) {
-    return `${envUrl.trim().replace(/\/$/, '')}/api`;
-  }
-  if (typeof window !== 'undefined' && window.location?.hostname?.includes('vercel.app')) {
-    return 'https://bookup-in.onrender.com/api';
-  }
-  if (typeof window !== 'undefined') {
-    return '/api';
-  }
-  return 'http://localhost:3001/api';
-}
 

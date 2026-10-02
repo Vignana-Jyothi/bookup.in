@@ -7,6 +7,7 @@
  */
 
 import { emailService } from './email.js';
+import { config } from '../config.js';
 
 export class RefundService {
   constructor() {
@@ -213,7 +214,7 @@ export class RefundService {
             <p>Your coach has marked your refund of <strong>₹${refund.amount}</strong> as transferred.</p>
             <p>Please check your UPI app or bank account. You can confirm receipt or report an issue on your session tracking page.</p>
             <div style="margin-top: 24px;">
-              <a href="https://calup-in.vercel.app/track/${booking.management_token_hash || ''}" style="background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-block;">View Tracking Page</a>
+              <a href="${(config.frontendUrl || '').replace(/\/$/, '')}/track/${booking.management_token_hash || ''}" style="background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-block;">View Tracking Page</a>
             </div>
           </div>`,
         });

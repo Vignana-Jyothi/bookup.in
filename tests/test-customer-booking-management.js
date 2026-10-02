@@ -171,7 +171,7 @@ async function runComprehensiveSuite() {
     // [TEST E] RESCHEDULE PERSISTENCE & CONFLICTS
     // -------------------------------------------------------------------------
     console.log('\n--- [TEST E] RESCHEDULE PERSISTENCE & CONFLICT VALIDATION ---');
-    const newDateA = '2026-10-19';
+    const newDateA = '2026-10-23';
     const newTimeA = '14:00';
     const res7 = await fetch(`${API_BASE}/public/bookings/manage/${tokenA}/reschedule`, {
       method: 'POST',

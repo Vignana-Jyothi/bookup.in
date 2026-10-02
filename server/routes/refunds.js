@@ -348,7 +348,7 @@ router.post('/bookings/:id/mark-no-show', requireProviderAuth, async (req, res) 
               If there was a misunderstanding or technical issue, you can dispute this status until <strong>${disputeDeadline}</strong> on your tracking page.
             </div>
             <div>
-              <a href="https://calup-in.vercel.app/track/${booking.management_token_hash || ''}" style="background: #111; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 700; display: inline-block;">View Tracking Page & Dispute</a>
+              <a href="${(config.frontendUrl || '').replace(/\/$/, '')}/track/${booking.management_token_hash || ''}" style="background: #111; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 700; display: inline-block;">View Tracking Page & Dispute</a>
             </div>
           </div>`,
         });

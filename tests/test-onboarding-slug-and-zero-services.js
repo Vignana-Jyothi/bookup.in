@@ -7,6 +7,9 @@
  * 3. A provider with zero services shows "This coach is still setting up their page. Please check back soon."
  */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
@@ -38,15 +41,17 @@ async function runTests() {
   // The onboarding link must resolve strictly from sampleStoredProvider.slug
   const onboardingLink = getBookingUrl(sampleStoredProvider.slug);
   const onboardingDisplayLink = getBookingDisplayUrl(sampleStoredProvider.slug);
+  const expectedBase = (process.env.VITE_APP_URL || 'https://calup-in.vercel.app').replace(/\/+$/, '');
+  const expectedHost = new URL(expectedBase).hostname;
 
   assert.strictEqual(
     onboardingLink,
-    'https://calup-in.vercel.app/book/praacchi-shah-bhaannsali-e61b3',
+    `${expectedBase}/book/praacchi-shah-bhaannsali-e61b3`,
     'Onboarding URL embeds the exact permanent slug stored in providers table'
   );
   assert.strictEqual(
     onboardingDisplayLink,
-    'calup-in.vercel.app/book/praacchi-shah-bhaannsali-e61b3',
+    `${expectedHost}/book/praacchi-shah-bhaannsali-e61b3`,
     'Display URL strips protocol and retains exact permanent slug'
   );
   assert(

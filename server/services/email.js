@@ -27,12 +27,8 @@ export class EmailService {
   }
 
   get fromEmail() {
-    // TODO(hardcoded): Verified sender domain on Resend is bookup.work.gd until calup.in DNS verification is complete
     const configured = this._fromEmail !== null ? this._fromEmail : (process.env.RESEND_FROM_EMAIL || config.resendFromEmail || '');
-    if (configured && configured.includes('@bookup.work.gd')) {
-      return configured;
-    }
-    return 'Calup <bookings@bookup.work.gd>';
+    return (configured && typeof configured === 'string') ? configured.trim() : '';
   }
 
   isConfigured() {

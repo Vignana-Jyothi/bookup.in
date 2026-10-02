@@ -101,7 +101,21 @@ export function generateIcsCalendar({
   const dtStart = formatUtcIcs(startDate);
   const dtEnd = formatUtcIcs(endDate);
 
-  const uid = bookingId ? `${bookingId}@calup-in.vercel.app` : `${crypto.randomUUID()}@calup-in.vercel.app`;
+  function resolveIcsDomain(custom) {
+    if (custom && typeof custom === 'string' && custom.trim().length > 0) return custom.trim();
+    if (process.env.APP_DOMAIN && process.env.APP_DOMAIN.trim().length > 0) return process.env.APP_DOMAIN.trim();
+    const candidateUrl = process.env.VITE_APP_URL || process.env.FRONTEND_URL || process.env.APP_URL;
+    if (candidateUrl) {
+      try {
+        const host = new URL(candidateUrl).hostname;
+        if (host) return host;
+      } catch (_e) {}
+    }
+    return 'localhost';
+  }
+
+  const icsDomain = resolveIcsDomain();
+  const uid = bookingId ? `${bookingId}@${icsDomain}` : `${crypto.randomUUID()}@${icsDomain}`;
   const summary = `${serviceName} with ${providerName}`;
 
   const descriptionLines = [
