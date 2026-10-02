@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 
 process.env.DISABLE_RATE_LIMIT = 'true';
+process.env.ENABLE_TEST_ROUTES = 'true';
 
 const testFiles = [
   'tests/test-customer-booking-management.js',
@@ -34,6 +35,7 @@ for (const testFile of testFiles) {
   const result = spawnSync('node', [testFile], {
     encoding: 'utf-8',
     shell: true,
+    env: { ...process.env, ENABLE_TEST_ROUTES: 'true' },
   });
 
   if (result.stdout) process.stdout.write(result.stdout);

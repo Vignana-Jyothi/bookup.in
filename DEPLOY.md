@@ -99,6 +99,7 @@ CalUp is architected as a decoupled system:
    - `INTERNAL_CRON_SECRET`
    - `TRUST_PROXY` (default `1`; set to `0` when backend receives traffic directly, `2` if behind two proxies)
    - `DEBUG_ROUTES` (default `false`; set to `true` only for temporary diagnostics)
+   - `ENABLE_TEST_ROUTES` (default `false`; opt-in only for local automated tests, **never set in production**)
 3. Startup Validation:
    The backend runs strict validation at startup (`validateConfig()`). If any required variable (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`, `TOKEN_ENCRYPTION_KEY`, or conditional OAuth/email variables) is omitted, the process **fails loudly with exit code 1** to prevent runtime failures in production.
 

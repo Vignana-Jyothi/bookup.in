@@ -128,8 +128,8 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// Test-only endpoints for rate limiter control (never available in production)
-if (process.env.NODE_ENV !== 'production') {
+// Test-only endpoints for rate limiter control (opt-in only, never available in production)
+if (process.env.ENABLE_TEST_ROUTES === 'true') {
   app.post('/__test__/reset-rate-limits', (_req, res) => {
     resetAllLimiters();
     res.json({ success: true, message: 'All rate limiters reset' });

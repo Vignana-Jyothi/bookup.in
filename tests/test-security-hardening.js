@@ -6,7 +6,10 @@
  * 2. GET  /api/admin/disputed-bookings      → 404 (route removed)
  * 3. GET  booking-status with raw UUID       → 404 (allowUuid removed)
  * 4. Booking creation rate limit (21st req)  → 429
+ * 5. Rate limit per-IP isolation (X-Forwarded-For)
  */
+
+process.env.ENABLE_TEST_ROUTES = 'true';
 
 import { config } from '../server/config.js';
 
@@ -127,6 +130,84 @@ async function testBookingCreationRateLimit() {
   } catch (_) {}
 }
 
+async function testRateLimitPerIpIsolation() {
+  console.log('\n🔒 Test: Rate limit per IP isolation (X-Forwarded-For)');
+
+  // 1. Reset rate limiters and ensure override is enabled
+  try {
+    const resetRes = await fetch(`${API}/__test__/reset-rate-limits`, { method: 'POST' });
+    if (!resetRes.ok) {
+      assert('Rate limiter reset (per-IP)', false, `reset endpoint returned ${resetRes.status}`);
+      return;
+    }
+    await fetch(`${API}/__test__/rate-limit-override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled: false }),
+    });
+  } catch (err) {
+    assert('Rate limiter reset (per-IP)', false, err.message);
+    return;
+  }
+
+  // 2. Exhaust rate limit for IP A (198.51.100.1) with 21 requests
+  const ipA = '198.51.100.1';
+  const ipB = '198.51.100.2';
+  let ipAHit429 = false;
+
+  for (let i = 1; i <= 21; i++) {
+    try {
+      const res = await fetch(`${API}/api/public/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': ipA,
+        },
+        body: JSON.stringify({ providerId: 'ip-a-test' }),
+      });
+      if (res.status === 429) {
+        ipAHit429 = true;
+        break;
+      }
+    } catch (_) {}
+  }
+
+  assert('IP A exhausted rate limit (21st request → 429)', ipAHit429);
+
+  // 3. Send request from IP B (198.51.100.2) — should NOT be rate limited
+  let ipBStatus = 0;
+  try {
+    const resB = await fetch(`${API}/api/public/bookings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': ipB,
+      },
+      body: JSON.stringify({ providerId: 'ip-b-test' }),
+    });
+    ipBStatus = resB.status;
+  } catch (err) {
+    ipBStatus = `ERR:${err.message}`;
+  }
+
+  // IP B should get 400 (validation error), definitely NOT 429 (rate limited)
+  assert(
+    'IP B is NOT blocked by IP A rate limit (status !== 429)',
+    ipBStatus === 400,
+    `got ${ipBStatus}`
+  );
+
+  // 4. Reset again and disable override
+  try {
+    await fetch(`${API}/__test__/reset-rate-limits`, { method: 'POST' });
+    await fetch(`${API}/__test__/rate-limit-override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled: true }),
+    });
+  } catch (_) {}
+}
+
 async function main() {
   console.log('='.repeat(60));
   console.log('🛡️  CalUp Security Hardening Tests');
@@ -145,6 +226,7 @@ async function main() {
   await testDisputedBookingsRemoved();
   await testUuidBypassRemoved();
   await testBookingCreationRateLimit();
+  await testRateLimitPerIpIsolation();
 
   console.log('\n' + '='.repeat(60));
   console.log(results.join('\n'));
