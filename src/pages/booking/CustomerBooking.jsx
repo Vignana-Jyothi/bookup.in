@@ -29,7 +29,7 @@ import { dbService } from '../../services/supabase/dbService';
 import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
 import { buildManagementUrl } from '../../utils/token';
 import { getCustomerTrackUrl } from '../../utils/url';
-import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
+import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { clearLastBooking } from '../../utils/lastBooking';
 import { calculateCancellationRefund, DEFAULT_POLICY } from '../../utils/policyEngine';
@@ -118,63 +118,52 @@ export default function CustomerBooking() {
     };
   }, [lookupIdentifier]);
 
-  // Live status update on customer screen via Supabase Realtime (no manual refresh)
+  // Live status update on customer screen via backend token endpoint polling (every 6s)
   useEffect(() => {
-    const bookingId = resolvedBooking?.id;
-    if (!bookingId || !isSupabaseConfigured()) return;
+    if (!lookupIdentifier || lookupIdentifier === 'lookup') return;
 
-    const channel = supabase
-      .channel(`realtime-booking-${bookingId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'bookings',
-          filter: `id=eq.${bookingId}`,
-        },
-        (payload) => {
-          const newRow = payload.new;
-          if (!newRow) return;
+    // Only poll while status is pending or active (stop polling once confirmed/cancelled/rejected/completed)
+    const currentStatus = resolvedBooking?.status;
+    const currentPaymentStatus = resolvedBooking?.paymentStatus;
+    const isTerminal = (currentStatus === 'confirmed' && (currentPaymentStatus === 'confirmed' || currentPaymentStatus === 'not_required')) ||
+      currentStatus === 'cancelled' ||
+      currentStatus === 'late-cancellation' ||
+      currentStatus === 'completed' ||
+      currentStatus === 'rejected';
 
-          console.log(`[CustomerBooking] Realtime update received for booking ${bookingId}:`, {
-            status: newRow.status,
-            payment_status: newRow.payment_status,
-          });
+    if (isTerminal) return;
 
-          // Instantly update local state without polling or page refresh
-          setSupabaseBookingData((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              booking: {
-                ...prev.booking,
-                status: newRow.status,
-                paymentStatus: newRow.payment_status,
-                paymentConfirmedAt: newRow.payment_confirmed_at,
-                paymentRejectedAt: newRow.payment_rejected_at,
-                paymentRejectedReason: newRow.payment_rejected_reason,
-                paymentScreenshotUrl: newRow.payment_screenshot_url || prev.booking?.paymentScreenshotUrl,
-                meetLink: newRow.meet_link || prev.booking?.meetLink,
-              },
-            };
-          });
+    let isMounted = true;
+    const intervalId = setInterval(async () => {
+      try {
+        const freshData = await customerBookingService.getBooking(lookupIdentifier);
+        if (!isMounted || !freshData?.booking) return;
 
-          if (newRow.status === 'confirmed' && (newRow.payment_status === 'confirmed' || newRow.payment_status === 'not_required')) {
+        const prevStatus = resolvedBooking?.status;
+        const prevPaymentStatus = resolvedBooking?.paymentStatus;
+        const newStatus = freshData.booking.status;
+        const newPaymentStatus = freshData.booking.paymentStatus;
+
+        // Detect status transitions and trigger user toasts
+        if (newStatus !== prevStatus || newPaymentStatus !== prevPaymentStatus) {
+          setSupabaseBookingData(freshData);
+
+          if (newStatus === 'confirmed' && (newPaymentStatus === 'confirmed' || newPaymentStatus === 'not_required')) {
             addToast('Payment confirmed! Your session is set ✓');
-          } else if (newRow.status === 'rejected' || newRow.payment_status === 'rejected') {
+          } else if (newStatus === 'rejected' || newPaymentStatus === 'rejected') {
             addToast('Payment could not be verified. Please contact your coach.', 'error');
           }
         }
-      )
-      .subscribe((status) => {
-        console.log(`[CustomerBooking] Supabase realtime channel status: ${status}`);
-      });
+      } catch (_err) {
+        // Non-blocking poll error
+      }
+    }, 6000);
 
     return () => {
-      supabase.removeChannel(channel);
+      isMounted = false;
+      clearInterval(intervalId);
     };
-  }, [resolvedBooking?.id, addToast]);
+  }, [lookupIdentifier, resolvedBooking?.status, resolvedBooking?.paymentStatus, addToast]);
 
   const isStateBooking = Boolean(
     bookingInState &&

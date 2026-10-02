@@ -141,8 +141,15 @@ async function run() {
   const expectedUniversalMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(testPhysicalAddress)}`;
 
   const baseOffset = 300 + Math.floor(Math.random() * 500);
-  const inPersonDate = new Date(Date.now() + baseOffset * 86400000).toISOString().split('T')[0];
-  const onlineDate = new Date(Date.now() + (baseOffset + 1) * 86400000).toISOString().split('T')[0];
+  const getWeekdayDate = (offset) => {
+    let d = new Date(Date.now() + offset * 86400000);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d = new Date(d.getTime() + 86400000);
+    }
+    return d.toISOString().split('T')[0];
+  };
+  const inPersonDate = getWeekdayDate(baseOffset);
+  const onlineDate = getWeekdayDate(baseOffset + 3);
   const cleanupIds = [];
 
   try {
