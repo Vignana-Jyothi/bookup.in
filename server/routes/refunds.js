@@ -562,41 +562,7 @@ router.post('/:token/dispute-no-show', async (req, res) => {
   }
 });
 
-// =============================================================================
-// ADMIN ENDPOINTS
-// =============================================================================
-
-/**
- * GET /api/admin/disputed-bookings
- * Admin overview of all disputed bookings and coach risk metrics.
- */
-router.get('/admin/disputed-bookings', async (req, res) => {
-  const supabase = getSupabaseClient();
-  if (!supabase) return res.status(503).json({ success: false, error: 'Database unavailable' });
-
-  try {
-    const { data: disputedBookings, error: bErr } = await supabase
-      .from('bookings')
-      .select('*, providers(id, name, email, phone), services(name)')
-      .eq('status', 'disputed')
-      .order('disputed_at', { ascending: false });
-
-    if (bErr) throw bErr;
-
-    const { data: riskMetrics, error: rErr } = await supabase
-      .from('coach_risk_metrics')
-      .select('*')
-      .or('coach_cancellations_count.gt.0,coach_no_shows_count.gt.0,overdue_refunds_count.gt.0,active_disputes_count.gt.0');
-
-    return res.json({
-      success: true,
-      disputedBookings: disputedBookings || [],
-      riskMetrics: riskMetrics || [],
-    });
-  } catch (err) {
-    console.error('[Refunds] admin disputes error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to fetch admin metrics' });
-  }
-});
+// NOTE: GET /api/admin/disputed-bookings was removed — no frontend caller
+// existed and it exposed sensitive data without authentication.
 
 export default router;

@@ -20,6 +20,8 @@ scratch
 supabase/backups/
 supabase/backup_policies_*.sql
 supabase/part1_*.sql
+supabase/harden_*.sql
+supabase/rollback_*.sql
 tests-output.txt
 
 # Server local token storage (encrypted tokens tracked)

@@ -28,8 +28,10 @@ router.get('/url', requireProviderAuth, (req, res) => {
 
 /**
  * GET /api/auth/google/debug
- * Safe diagnostic endpoint to verify auth token and provider resolution
+ * Safe diagnostic endpoint to verify auth token and provider resolution.
+ * Gated behind DEBUG_ROUTES=true (disabled by default in production).
  */
+if (process.env.DEBUG_ROUTES === 'true') {
 router.get('/debug', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -68,6 +70,7 @@ router.get('/debug', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+} // end DEBUG_ROUTES gate
 
 /**
  * GET /api/auth/google/callback

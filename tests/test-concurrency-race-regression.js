@@ -61,7 +61,7 @@ async function run() {
 
       const reqA = fetch(`${API_BASE}/public/bookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-test-bypass-rate-limit': 'true' },
         body: JSON.stringify({
           providerId: testProviderId,
           serviceId: testServiceId,
@@ -76,7 +76,7 @@ async function run() {
 
       const reqB = fetch(`${API_BASE}/public/bookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-test-bypass-rate-limit': 'true' },
         body: JSON.stringify({
           providerId: testProviderId,
           serviceId: testServiceId,
@@ -127,7 +127,9 @@ async function run() {
   }
 }
 
-run().catch(err => {
+run().then(() => {
+  process.exit(0);
+}).catch(err => {
   console.error('\n❌ Regression test threw exception:', err.message);
   process.exit(1);
 });

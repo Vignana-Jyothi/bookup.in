@@ -22,11 +22,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration in .env');
   process.exit(1);
 }
+
+const serviceClient = supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  : null;
 
 async function runRLSTest() {
   console.log('=== STARTING RLS CROSS-ACCOUNT ISOLATION TEST ===\n');
@@ -102,7 +109,9 @@ async function runRLSTest() {
 
   let bookingBId = null;
   if (svcB) {
-    const { data: bkgB, error: bkgErr } = await clientB
+    // Seed Coach B booking using service-role client (as frontend never directly inserts bookings)
+    const bookingInserter = serviceClient || clientB;
+    const { data: bkgB, error: bkgErr } = await bookingInserter
       .from('bookings')
       .insert({
         provider_id: provB.id,
@@ -123,6 +132,8 @@ async function runRLSTest() {
     if (!bkgErr && bkgB) {
       bookingBId = bkgB.id;
       console.log(`   Created booking for Coach B: ${bookingBId}`);
+    } else if (bkgErr) {
+      console.error(`   Failed to seed Coach B booking: ${bkgErr.message}`);
     }
   }
 
@@ -195,6 +206,11 @@ async function runRLSTest() {
   console.log(`UPI ID Isolation:      ${results.upi_id}`);
   console.log(`Availability Schedule: ${results.availability}`);
   console.log('=====================================\n');
+
+  // Cleanup Coach B test booking
+  if (serviceClient && bookingBId) {
+    await serviceClient.from('bookings').delete().eq('id', bookingBId);
+  }
 
   const allPassed = Object.values(results).every(r => r === 'PASS');
   return { allPassed, results };

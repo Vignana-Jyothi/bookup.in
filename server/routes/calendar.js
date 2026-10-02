@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { googleCalendarService } from '../services/googleCalendar.js';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config.js';
+import { requireProviderAuth } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -43,12 +44,10 @@ router.get('/busy', async (req, res) => {
  * Create an event on the provider's Google Calendar for a confirmed booking.
  * Idempotent with persistent database deduplication.
  */
-router.post('/events', async (req, res) => {
-  const { providerId, booking, timeZone = 'Asia/Kolkata' } = req.body;
-
-  if (!providerId) {
-    return res.status(400).json({ success: false, error: 'providerId is required' });
-  }
+router.post('/events', requireProviderAuth, async (req, res) => {
+  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
+  // Use authenticated provider's ID instead of client-supplied value
+  const providerId = req.providerId;
 
   if (!booking || !booking.id || !booking.date || !booking.startTime || !booking.endTime) {
     return res.status(400).json({ success: false, error: 'Complete booking object with id, date, startTime, and endTime is required' });
@@ -82,9 +81,9 @@ router.post('/events', async (req, res) => {
         .maybeSingle();
 
       if (existingBooking) {
-        // Multi-tenant check: providerId must match booking's provider_id
+        // Ownership check: booking must belong to authenticated provider
         if (existingBooking.provider_id && existingBooking.provider_id !== providerId) {
-          return res.status(403).json({ success: false, error: 'Provider ID mismatch for this booking' });
+          return res.status(403).json({ success: false, error: 'You do not own this booking' });
         }
 
         if (existingBooking.google_event_id) {
@@ -138,9 +137,10 @@ router.post('/events', async (req, res) => {
  * PATCH /api/calendar/events/:eventId
  * Update event on Google Calendar (e.g. Reschedule)
  */
-router.patch('/events/:eventId', async (req, res) => {
+router.patch('/events/:eventId', requireProviderAuth, async (req, res) => {
   const { eventId } = req.params;
-  const { providerId = 'provider-1', booking, timeZone = 'Asia/Kolkata' } = req.body;
+  const providerId = req.providerId;
+  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
 
   if (!eventId || !booking) {
     return res.status(400).json({ success: false, error: 'eventId and booking details required' });
@@ -159,9 +159,9 @@ router.patch('/events/:eventId', async (req, res) => {
  * DELETE /api/calendar/events/:eventId
  * Delete event from Google Calendar (e.g. Cancellation)
  */
-router.delete('/events/:eventId', async (req, res) => {
+router.delete('/events/:eventId', requireProviderAuth, async (req, res) => {
   const { eventId } = req.params;
-  const { providerId = 'provider-1' } = req.query;
+  const providerId = req.providerId;
 
   if (!eventId) {
     return res.status(400).json({ success: false, error: 'eventId parameter is required' });

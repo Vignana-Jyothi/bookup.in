@@ -6,6 +6,7 @@
 import dns from 'dns';
 import express from 'express';
 import cors from 'cors';
+import { resetAllLimiters, setLimiterOverride } from './middleware/rateLimiter.js';
 
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -24,6 +25,9 @@ import refundsRoutes from './routes/refunds.js';
 validateConfig();
 
 const app = express();
+
+// Trust reverse proxy (Render, Vercel, etc.) so rate limiting works per real client IP
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 
 // CORS configuration: safely allow configured frontend origins without wildcard
 const allowedOrigins = [
@@ -123,6 +127,20 @@ app.get('/api/health', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Test-only endpoints for rate limiter control (never available in production)
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/__test__/reset-rate-limits', (_req, res) => {
+    resetAllLimiters();
+    res.json({ success: true, message: 'All rate limiters reset' });
+  });
+
+  app.post('/__test__/rate-limit-override', (req, res) => {
+    const { disabled } = req.body || {};
+    setLimiterOverride({ disabled: Boolean(disabled) });
+    res.json({ success: true, message: `Rate limit override set: disabled=${Boolean(disabled)}` });
+  });
+}
 
 const server = app.listen(config.port, '0.0.0.0', () => {
   console.log(`\n==================================================`);

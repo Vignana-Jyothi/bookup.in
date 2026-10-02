@@ -126,9 +126,10 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
     if (!providerId || !booking) return { success: false, reason: 'missing_params' };
 
     try {
+      const authHeaders = await getAuthHeader();
       const res = await fetch(`${this.apiBase}/calendar/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ providerId, booking, timeZone }),
       });
 
@@ -155,9 +156,10 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
     if (!eventId) return { success: false };
 
     try {
+      const authHeaders = await getAuthHeader();
       const res = await fetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ providerId, booking }),
       });
 
@@ -178,8 +180,10 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
     if (!eventId) return { success: false };
 
     try {
+      const authHeaders = await getAuthHeader();
       const res = await fetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}?providerId=${encodeURIComponent(providerId)}`, {
         method: 'DELETE',
+        headers: { ...authHeaders },
       });
 
       const data = await res.json();

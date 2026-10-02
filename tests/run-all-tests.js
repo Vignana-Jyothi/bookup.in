@@ -1,6 +1,8 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
 
+process.env.DISABLE_RATE_LIMIT = 'true';
+
 const testFiles = [
   'tests/test-customer-booking-management.js',
   'tests/test-phase1-verification.js',
@@ -19,6 +21,7 @@ const testFiles = [
   'tests/test-returning-customer-redirect.js',
   'tests/test-concurrency-race-regression.js',
   'tests/test-customer-booking-hooks-order.js',
+  'tests/test-security-hardening.js',
 ];
 
 console.log('Running test suite (' + testFiles.length + ' test files)...');

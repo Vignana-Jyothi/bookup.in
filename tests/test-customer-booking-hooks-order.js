@@ -45,6 +45,14 @@ async function runHooksOrderSuite() {
   console.log('TEST SUITE: CUSTOMER BOOKING HOOKS ORDER & STATE RENDERING');
   console.log('================================================================\n');
 
+  // Ensure backend is running
+  const healthCheck = await fetch(`${API_BASE}/health`).catch(() => null);
+  if (!healthCheck || !healthCheck.ok) {
+    console.log('Starting backend server instance for testing...');
+    await import('../server/index.js');
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }
+
   // 1. Initialize Vite SSR Environment to load React JSX components
   const vite = await createServer({
     server: { middlewareMode: true },
@@ -316,7 +324,9 @@ async function runHooksOrderSuite() {
   }
 }
 
-runHooksOrderSuite().catch(err => {
+runHooksOrderSuite().then(() => {
+  process.exit(0);
+}).catch(err => {
   console.error('❌ Test failed with exception:', err);
   process.exit(1);
 });

@@ -28,6 +28,7 @@ import { richAutomateService } from '../services/richAutomate.js';
 import { emailService } from '../services/email.js';
 import { DEFAULT_POLICY, calculateCancellationRefund } from '../services/policyEngine.js';
 import { refundService } from '../services/refundService.js';
+import { tokenRouteLimiter, bookingCreateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -107,21 +108,6 @@ async function findBookingByToken(supabase, token, options = {}) {
       if (!noteErr && noteMatch) data = noteMatch;
     } catch (_e) {
       // Notes query fallback
-    }
-  }
-
-  // 3. Fallback: Lookup by booking ID if token matches standard UUID (allowed on status check routes)
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!data && options.allowUuid && uuidRegex.test(trimmed)) {
-    try {
-      const { data: idMatch, error: idErr } = await supabase
-        .from('bookings')
-        .select('*, services (*), providers (*)')
-        .eq('id', trimmed)
-        .maybeSingle();
-      if (!idErr && idMatch) data = idMatch;
-    } catch (_e) {
-      // Direct ID fallback query
     }
   }
 
@@ -698,9 +684,9 @@ async function handleCreateBooking(req, res) {
   }
 }
 
-// Register creation routes
-router.post('/', handleCreateBooking);
-router.post('/create', handleCreateBooking);
+// Register creation routes (rate-limited)
+router.post('/', bookingCreateLimiter, handleCreateBooking);
+router.post('/create', bookingCreateLimiter, handleCreateBooking);
 
 /**
  * GET /api/public/busy-slots?providerId=&date=
@@ -776,7 +762,7 @@ router.get('/busy-slots', async (req, res) => {
  * GET /api/public/bookings/manage/:token
  * Validates token and returns sanitized appointment projection.
  */
-router.get('/:token', async (req, res) => {
+router.get('/:token', tokenRouteLimiter, async (req, res) => {
   const { token } = req.params;
 
   if (!token || typeof token !== 'string' || token.trim().length === 0) {
@@ -789,8 +775,7 @@ router.get('/:token', async (req, res) => {
   }
 
   try {
-    const isStatusRoute = req.baseUrl?.includes('booking-status');
-    const bookingRow = await findBookingByToken(supabase, token, { allowUuid: isStatusRoute });
+    const bookingRow = await findBookingByToken(supabase, token);
     if (!bookingRow) {
       return res.status(404).json({ success: false, error: 'Appointment not found or invalid management link' });
     }

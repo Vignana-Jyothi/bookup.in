@@ -27,6 +27,7 @@ import { richAutomateService } from '../services/richAutomate.js';
 import { emailService } from '../services/email.js';
 import { googleCalendarService } from '../services/googleCalendar.js';
 import { decryptToken } from '../utils/crypto.js';
+import { markPaidLimiter, tokenRouteLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -98,19 +99,6 @@ async function findBookingByToken(supabase, token, options = {}) {
     } catch (_e) {}
   }
 
-  // 3. Fallback: Lookup by booking ID if token matches standard UUID (allowed on status route)
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!data && options.allowUuid && uuidRegex.test(trimmed)) {
-    try {
-      const { data: idMatch, error: idErr } = await supabase
-        .from('bookings')
-        .select('*, services (*), providers (*)')
-        .eq('id', trimmed)
-        .maybeSingle();
-      if (!idErr && idMatch) data = idMatch;
-    } catch (_e) {}
-  }
-
   return data;
 }
 
@@ -119,7 +107,7 @@ async function findBookingByToken(supabase, token, options = {}) {
 // POST /api/public/bookings/manage/:token/mark-paid
 // =============================================================================
 
-router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) => {
+router.post('/:token/mark-paid', markPaidLimiter, upload.single('screenshot'), async (req, res) => {
   const { token } = req.params;
 
   if (!token || typeof token !== 'string' || token.trim().length === 0) {
@@ -132,8 +120,7 @@ router.post('/:token/mark-paid', upload.single('screenshot'), async (req, res) =
   }
 
   try {
-    const isStatusRoute = req.baseUrl?.includes('booking-status');
-    const booking = await findBookingByToken(supabase, token, { allowUuid: isStatusRoute });
+    const booking = await findBookingByToken(supabase, token);
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Appointment not found or invalid management link' });
     }
