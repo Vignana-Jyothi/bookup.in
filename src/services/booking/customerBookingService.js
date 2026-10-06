@@ -19,7 +19,7 @@ export function getApiBase() {
     }
   }
   if (typeof window === 'undefined' && typeof process !== 'undefined') {
-    return `http://localhost:${process.env.PORT || 3001}/api`;
+    return import.meta.env.VITE_API_URL || '/api';
   }
   return '/api';
 }

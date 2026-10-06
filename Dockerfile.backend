@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Ensure non-root user execution
+USER node
+
+# Expose backend port
+EXPOSE 6566
+
+# Run backend
+CMD ["node", "server/index.js"]

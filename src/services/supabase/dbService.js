@@ -1383,6 +1383,6 @@ function getApiBase() {
   if (typeof window !== 'undefined') {
     return '/api';
   }
-  return 'http://localhost:3001/api';
+  return import.meta.env.VITE_API_URL || '/api';
 }
 

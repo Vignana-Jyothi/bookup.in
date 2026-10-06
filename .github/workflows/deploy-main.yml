@@ -1,0 +1,17 @@
+name: Deploy Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: gamma
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build and deploy containers
+        run: |
+          docker compose -f docker-compose.yml up -d --build

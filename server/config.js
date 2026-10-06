@@ -33,8 +33,7 @@ export const config = {
     process.env.RESEND_API_TOKEN ||
     ''
   ).trim(),
-  // TODO(hardcoded): Using verified domain bookup.work.gd until calup.in DNS verification is complete
-  resendFromEmail: process.env.RESEND_FROM_EMAIL || process.env.resend_from_email || 'Calup <bookings@bookup.work.gd>',
+  resendFromEmail: process.env.RESEND_FROM_EMAIL || process.env.resend_from_email || 'Calup <bookings@calup.in>',
   isGoogleConfigured() {
     return Boolean(this.googleClientId && this.googleClientSecret && this.googleRedirectUri);
   },
