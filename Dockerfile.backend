@@ -16,7 +16,7 @@ COPY . .
 USER node
 
 # Expose backend port
-EXPOSE 6566
+EXPOSE 5252
 
 # Run backend
 CMD ["node", "server/index.js"]
