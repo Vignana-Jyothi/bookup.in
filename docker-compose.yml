@@ -17,6 +17,8 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "5252:5252"
+    env_file:
+      - .env
     environment:
       - PORT=5252
       - NODE_ENV=production
