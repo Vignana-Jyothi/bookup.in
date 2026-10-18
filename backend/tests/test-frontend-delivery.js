@@ -4,14 +4,22 @@ import { createServer as createHttpServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 
 const hosting=JSON.parse(await readFile(new URL('../../frontend/vercel.json',import.meta.url),'utf8'));
-const spaRoute=new RegExp(`^${hosting.rewrites.find(rule=>rule.destination==='/index.html').source}$`);
+const filesystemIndex=hosting.routes.findIndex(rule=>rule.handle==='filesystem');
+assert(filesystemIndex>=0,'Existing compiled assets must be served before fallback rules');
+function routeMissing(path){
+  return hosting.routes.slice(filesystemIndex+1).find(rule=>new RegExp(`^${rule.src}$`).test(path));
+}
 for(const route of ['/','/login','/signup','/book/test-merchant/memberships','/dashboard/appointments']) {
-  assert(spaRoute.test(route),`Application route must receive the SPA: ${route}`);
+  assert.equal(routeMissing(route)?.dest,'/index.html',`Application route must receive the SPA: ${route}`);
 }
-for(const resource of ['/assets/index-old.js','/assets/passwordStrength-missing.js','/src/main.jsx','/api/health','/calup-version.json']) {
-  assert(!spaRoute.test(resource),`Missing resource must not become HTML: ${resource}`);
+for(const resource of ['/assets/index-old.js','/assets/passwordStrength-missing.js','/src/main.jsx','/api/health','/calup-version.json','/missing-module.js']) {
+  assert.equal(routeMissing(resource)?.status,404,`Missing resource must not become HTML: ${resource}`);
 }
-assert(hosting.headers.find(rule=>rule.source==='/(.*)').headers.some(header=>header.key==='Cache-Control'&&header.value.includes('no-store')));
+assert(hosting.routes[0].headers['Cache-Control'].includes('no-store'));
+assert(hosting.routes[1].headers['Cache-Control'].includes('immutable'));
+assert(hosting.routes.slice(0,filesystemIndex).every(rule=>rule.continue),'Header rules must continue to filesystem resolution');
+const workflow=await readFile(new URL('../../.github/workflows/vercel.yml',import.meta.url),'utf8');
+assert.equal((workflow.match(/--local-config=frontend\/vercel\.json/g)||[]).length,6,'Both environments must use the frontend config in pull, build and deploy');
 
 const options = {
   root: 'frontend', configLoader: 'native', logLevel: 'silent',

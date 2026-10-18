@@ -1,28 +1,29 @@
 {
-  "headers": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, max-age=0"
-        }
-      ]
+      "src": "/(.*)",
+      "headers": { "Cache-Control": "no-store, max-age=0" },
+      "continue": true
     },
     {
-      "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ],
-  "rewrites": [
+      "src": "/assets/(.*)",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
+      "continue": true
+    },
+    { "handle": "filesystem" },
     {
-      "source": "/((?!assets(?:/|$)|src(?:/|$)|api(?:/|$)|calup-version\\.json$).*)",
-      "destination": "/index.html"
+      "src": "/(?:assets|src|api)(?:/.*)?$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "/.*\\.(?:js|mjs|css|json|svg|png|jpg|jpeg|webp|ico|woff|woff2)$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "buildCommand": "npm --prefix .. run build",
