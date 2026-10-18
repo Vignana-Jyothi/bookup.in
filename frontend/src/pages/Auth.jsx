@@ -1,5 +1,5 @@
 /** Calup sign-in and account creation, styled from trial-ui-components/login_page_1. */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, MailCheck, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore, generateId } from '../data/store';
@@ -12,7 +12,7 @@ import { supabase, isSupabaseConfigured } from '../services/supabase/supabaseCli
 import { dbService } from '../services/supabase/dbService';
 import { onboardingService } from '../services/merchant/onboardingService';
 import { validateNewPassword } from '../services/supabase/passwordService.js';
-import { isCalupAdmin, startAdminPhoneChallenge, verifyAdminPhoneChallenge, verifyAdminAccess, endAdminVerification } from '../services/supabase/adminMfa.js';
+import { isCalupAdmin, startAdminPhoneChallenge, completeAdminPhoneChallenge, endAdminVerification } from '../services/supabase/adminMfa.js';
 import { generateSlug } from '../utils/helpers';
 import './Auth.css';
 /* Disabled navigation enhancement (user request):
@@ -119,6 +119,7 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [, setErrorMsg] = usePopupFeedback();
   const [adminStep, setAdminStep] = useState(false);
+  const adminOperation = useRef(false);
   const [challenge, setChallenge] = useState(null);
   const [otp, setOtp] = useState('');
   const [resendAt, setResendAt] = useState(0);
@@ -130,7 +131,8 @@ export function Login() {
   }, [adminStep]);
 
   const sendAdminCode = async () => {
-    if (Date.now() < resendAt) return;
+    if (Date.now() < resendAt || adminOperation.current) return;
+    adminOperation.current = true;
     setLoading(true);
     setAdminStep(true);
     setChallenge(null);
@@ -141,20 +143,23 @@ export function Login() {
       setNow(Date.now());
     } catch (error) {
       setErrorMsg(error.message || 'Could not send your verification code.');
-    } finally { setLoading(false); }
+    } finally { adminOperation.current = false; setLoading(false); }
   };
 
   const verifyAdminCode = async event => {
     event.preventDefault();
+    if (adminOperation.current) return;
     if (!challenge || !/^\d{4,8}$/.test(otp)) { setErrorMsg('Enter the SMS verification code.'); return; }
     setLoading(true);
+    adminOperation.current = true;
     try {
-      await verifyAdminPhoneChallenge(supabase, challenge.challengeId, otp);
-      await verifyAdminAccess(supabase);
-      setOtp('');
+      await completeAdminPhoneChallenge(supabase, challenge.challengeId, otp, () => {
+        setChallenge(null);
+        setOtp('');
+      });
       navigate('/admin', { replace: true });
     } catch (error) { setErrorMsg(error.message || 'Verification failed. Request another code and try again.'); }
-    finally { setLoading(false); }
+    finally { adminOperation.current = false; setLoading(false); }
   };
 
   const signOutCurrentAccount = async () => {

@@ -27,3 +27,9 @@ export function getApiBase() {
   const port = (typeof process !== 'undefined' && process.env?.PORT) || 3001;
   return `http://localhost:${port}/api`;
 }
+
+// Admin proof is an HttpOnly cookie: keep it first-party even when public API
+// calls use an external backend. Vite proxies locally; Vercel hosts the bridge.
+export function getAdminApiBase() {
+  return typeof window !== 'undefined' ? '/api' : getApiBase();
+}
