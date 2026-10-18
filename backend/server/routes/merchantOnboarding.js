@@ -6,6 +6,7 @@ import { emailService } from '../services/email.js';
 import { REQUIRED_GOOGLE_SCOPES } from '../services/googleCalendar.js';
 import { tokenStore } from '../services/tokenStore.js';
 import { twoFactorOtpService } from '../services/twoFactorOtp.js';
+import { createMerchantPhoneVerification } from '../services/merchantPhoneVerification.js';
 
 const router = Router();
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -294,51 +295,23 @@ router.post('/email-verification/verify', async (req, res) => {
   return errorResponse(res, 422, 'EMAIL_CODE_INCORRECT', 'That code is incorrect.', { remainingAttempts: result.remainingAttempts });
 });
 
+const merchantPhone = createMerchantPhoneVerification({ client: serviceRoleClient, otp: twoFactorOtpService });
+
 router.post('/phone-verification/send', async (req, res) => {
   const phone = merchantContactPhone(req);
-  if (!/^[6-9]\d{9}$/.test(phone)) {
-    return errorResponse(res, 422, 'PHONE_INVALID', 'Save a valid 10-digit Indian mobile number first.');
-  }
-  if (!config.isTwoFactorConfigured()) {
-    return errorResponse(res, 503, 'SMS_DELIVERY_UNAVAILABLE', 'SMS verification is temporarily unavailable.');
-  }
-
-  const requestId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const { data, error } = await serviceRoleClient.rpc('start_merchant_phone_verification_v1', {
-    p_provider_id: req.providerId,
-    p_phone: phone,
-    p_request_id: requestId,
-    p_expires_at: expiresAt,
-  });
-  if (error) {
-    console.error('[MerchantOnboarding] Phone verification could not start:', error.message);
-    return errorResponse(res, 503, 'PHONE_VERIFICATION_UNAVAILABLE', 'Could not start mobile verification.');
-  }
-  const started = rpcValue(data) || {};
-  if (started.alreadyVerified) return res.json({ data: { sent: false, verified: true, phone: maskPhone(phone) } });
-  if (started.rateLimited) {
-    res.set('Retry-After', String(started.retryAfterSeconds || 60));
-    return errorResponse(res, 429, 'PHONE_VERIFICATION_RATE_LIMITED', `Wait ${started.retryAfterSeconds || 60} seconds before requesting another code.`, {
-      retryAfterSeconds: started.retryAfterSeconds || 60,
-    });
-  }
-
+  if (!/^[6-9]\d{9}$/.test(phone)) return errorResponse(res, 422, 'PHONE_INVALID', 'Save a valid 10-digit Indian mobile number first.');
+  if (!config.isTwoFactorConfigured()) return errorResponse(res, 503, 'SMS_DELIVERY_UNAVAILABLE', 'SMS verification is temporarily unavailable.');
   try {
-    const delivery = await twoFactorOtpService.sendOtp(phone);
-    const { data: completed, error: completionError } = await serviceRoleClient.rpc('complete_merchant_phone_verification_send_v1', {
-      p_provider_id: req.providerId,
-      p_request_id: requestId,
-      p_session_id: delivery.sessionId,
-    });
-    if (completionError || !completed) throw new Error('Phone challenge changed before delivery completed.');
+    const result = await merchantPhone.send(req.providerId, phone);
+    if (result.alreadyVerified) return res.json({ data: { sent: false, verified: true, phone: maskPhone(phone) } });
+    if (result.rateLimited) {
+      const retryAfterSeconds = result.retryAfterSeconds || 60;
+      res.set('Retry-After', String(retryAfterSeconds));
+      return errorResponse(res, 429, 'PHONE_VERIFICATION_RATE_LIMITED', 'Wait before requesting another SMS code.', { retryAfterSeconds });
+    }
+    if (!result.sent) throw new Error('PHONE_VERIFICATION_STORAGE');
     return res.json({ data: { sent: true, verified: false, phone: maskPhone(phone), expiresInSeconds: 600, resendAfterSeconds: 60 } });
-  } catch (deliveryError) {
-    await serviceRoleClient.rpc('cancel_merchant_phone_verification_v1', {
-      p_provider_id: req.providerId,
-      p_request_id: requestId,
-    });
-    console.warn('[MerchantOnboarding] 2Factor send failed:', deliveryError.code || 'OTP_SEND_FAILED');
+  } catch {
     return errorResponse(res, 503, 'SMS_DELIVERY_FAILED', 'The SMS code could not be sent. Please try again.');
   }
 });
@@ -349,47 +322,16 @@ router.post('/phone-verification/verify', async (req, res) => {
   if (!/^\d{4,8}$/.test(code)) return errorResponse(res, 422, 'PHONE_CODE_INVALID', 'Enter the numeric SMS verification code.');
   if (!/^[6-9]\d{9}$/.test(phone)) return errorResponse(res, 422, 'PHONE_INVALID', 'Save a valid mobile number first.');
   if (!config.isTwoFactorConfigured()) return errorResponse(res, 503, 'SMS_DELIVERY_UNAVAILABLE', 'SMS verification is temporarily unavailable.');
-
-  const { data, error } = await serviceRoleClient.rpc('get_merchant_phone_verification_challenge_v1', {
-    p_provider_id: req.providerId,
-    p_phone: phone,
-  });
-  if (error) {
-    console.error('[MerchantOnboarding] Phone challenge could not be loaded:', error.message);
-    return errorResponse(res, 503, 'PHONE_VERIFICATION_UNAVAILABLE', 'Could not verify the SMS code.');
-  }
-  const challenge = rpcValue(data) || {};
-  if (challenge.verified) return res.json({ data: { verified: true, phone: maskPhone(phone) } });
-  if (!challenge.requestId || !challenge.sessionId) return errorResponse(res, 409, 'PHONE_CODE_NOT_REQUESTED', 'Request an SMS verification code first.');
-  if (challenge.attempts >= 5) return errorResponse(res, 429, 'PHONE_CODE_ATTEMPTS_EXCEEDED', 'Too many incorrect attempts. Request a new code.');
-  if (!challenge.expiresAt || new Date(challenge.expiresAt).getTime() <= Date.now()) {
-    return errorResponse(res, 410, 'PHONE_CODE_EXPIRED', 'This code has expired. Request a new code.');
-  }
-
   try {
-    const providerResult = await twoFactorOtpService.verifyOtp(challenge.sessionId, code);
-    if (providerResult.reason === 'expired') {
-      await serviceRoleClient.rpc('cancel_merchant_phone_verification_v1', {
-        p_provider_id: req.providerId,
-        p_request_id: challenge.requestId,
-      });
-      return errorResponse(res, 410, 'PHONE_CODE_EXPIRED', 'This code has expired. Request a new code.');
-    }
-    const { data: recorded, error: recordError } = await serviceRoleClient.rpc('record_merchant_phone_verification_v1', {
-      p_provider_id: req.providerId,
-      p_phone: phone,
-      p_request_id: challenge.requestId,
-      p_verified: Boolean(providerResult.verified),
-    });
-    if (recordError) throw recordError;
-    const result = rpcValue(recorded) || {};
-    if (result.verified) return res.json({ data: { verified: true, phone: maskPhone(phone) } });
-    if (result.reason === 'attempts_exceeded') return errorResponse(res, 429, 'PHONE_CODE_ATTEMPTS_EXCEEDED', 'Too many incorrect attempts. Request a new code.');
+    const result = await merchantPhone.verify(req.providerId, phone, code);
+    if (result.verified === true) return res.json({ data: { verified: true, phone: maskPhone(phone) } });
+    if (result.reason === 'attempts_exceeded') return errorResponse(res, 429, 'PHONE_CODE_ATTEMPTS_EXCEEDED', 'Too many verification attempts. Request a new code.');
     if (result.reason === 'expired') return errorResponse(res, 410, 'PHONE_CODE_EXPIRED', 'This code has expired. Request a new code.');
     if (result.reason === 'not_requested') return errorResponse(res, 409, 'PHONE_CODE_NOT_REQUESTED', 'Request an SMS verification code first.');
+    if (result.reason === 'busy') return errorResponse(res, 409, 'PHONE_CODE_BUSY', 'A code verification is already in progress. Please wait.');
+    if (result.reason === 'stale') return errorResponse(res, 409, 'PHONE_CODE_STALE', 'This verification request changed or timed out. Try again with the current code.');
     return errorResponse(res, 422, 'PHONE_CODE_INCORRECT', 'That code is incorrect.', { remainingAttempts: result.remainingAttempts });
-  } catch (verificationError) {
-    console.warn('[MerchantOnboarding] 2Factor verification failed:', verificationError.code || 'OTP_VERIFY_FAILED');
+  } catch {
     return errorResponse(res, 503, 'PHONE_VERIFICATION_UNAVAILABLE', 'The SMS code could not be verified. Please try again.');
   }
 });

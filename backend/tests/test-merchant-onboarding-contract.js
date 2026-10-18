@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const route = fs.readFileSync('backend/server/routes/merchantOnboarding.js', 'utf8');
+const phoneService = fs.readFileSync('backend/server/services/merchantPhoneVerification.js', 'utf8');
 const migration = fs.readFileSync('backend/supabase/20261015_merchant_onboarding.sql', 'utf8');
 const emailVerificationMigration = fs.readFileSync('backend/supabase/20261015_merchant_email_verification.sql', 'utf8');
 const phoneVerificationMigration = fs.readFileSync('backend/supabase/20261016_merchant_phone_verification.sql', 'utf8');
@@ -19,8 +20,8 @@ for (const fragment of [
   "router.post('/email-verification/verify'",
   "router.post('/phone-verification/send'",
   "router.post('/phone-verification/verify'",
-  'twoFactorOtpService.sendOtp',
-  'twoFactorOtpService.verifyOtp',
+  'merchantPhone.send',
+  'merchantPhone.verify',
   'phoneVerified',
   'publishReady',
   "serviceRoleClient.rpc('complete_merchant_onboarding_v1'",
@@ -85,4 +86,5 @@ assert(app.includes('onboarding?.identity?.emailVerified') && app.includes('onbo
 assert(page.includes('SMS verification is required before continuing.'), 'Integration step must enforce verified mobile ownership');
 assert(integrationSheet.includes('integration.required') && integrationSheet.includes('onVerifyPhoneOtp'), 'Integration sheet must show and perform required identity verification');
 
+assert(phoneService.includes('reserve_verify') && phoneService.includes('finish_verify') && phoneService.includes('encryptToken(sent.sessionId)'));
 console.log('Merchant onboarding contract tests passed.');

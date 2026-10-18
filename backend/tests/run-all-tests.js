@@ -7,6 +7,7 @@ process.env.NODE_ENV = 'test';
 process.env.TOKEN_STORE_MEMORY_ONLY = 'true';
 
 const testFiles = [
+  'backend/tests/test-merchant-phone-verification.js',
   'backend/tests/test-commerce-payments.js',
   'backend/tests/test-merchant-commerce.js',
   'backend/tests/test-commerce-customer-access.js',
