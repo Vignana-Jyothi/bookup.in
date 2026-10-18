@@ -1,0 +1,85 @@
+.setup-page, .setup-page * { box-sizing: border-box; }
+.setup-page {
+  --setup-ink: #141611; --setup-muted: #696f63; --setup-border: #e1e5da; --setup-lime: #c6f135;
+  min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 28px; color: var(--setup-ink); background: #f5f7f1;
+}
+.setup-shell {
+  width: min(1360px, 100%); height: min(880px, calc(100vh - 56px)); height: min(880px, calc(100dvh - 56px)); min-height: 0;
+  display: grid; grid-template-columns: minmax(300px, 35fr) minmax(0, 65fr); grid-template-rows: minmax(0, 1fr); overflow: hidden;
+  border: 1px solid #fff; border-radius: 20px; background: #fff; box-shadow: 0 18px 70px rgb(28 39 13 / 8%);
+}
+.setup-sidebar { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 34px 36px 24px; background: #f2f4ed; }
+.setup-tool-art { margin: auto -36px; padding: 28px 0; overflow: hidden; }
+.setup-art-label { display: block; margin-bottom: 20px; color: #7a826f; font-size: 9px; font-weight: 700; letter-spacing: .16em; text-align: center; text-transform: uppercase; }
+.setup-tool-grid { width: 112%; margin-left: -6%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; transform: rotate(-7deg); }
+.setup-tool-grid > span {
+  height: 66px; display: grid; place-items: center; border: 1px solid #e4e8dd; border-radius: 16px;
+  color: #667751; background: rgb(255 255 255 / 78%); box-shadow: 0 4px 0 rgb(226 231 212 / 32%);
+}
+.setup-tool-grid > span:nth-child(3n) { background: #e9f0dc; }
+.setup-sidebar-copy { padding: 0 7px; }
+.setup-step-number { font-size: 13px; font-weight: 700; }
+.setup-step-number span { margin-left: 4px; color: #92978b; font-weight: 450; }
+.setup-sidebar-copy h2 { margin: 16px 0 12px; font-family: var(--font-heading); font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -.04em; line-height: 1.18; }
+.setup-sidebar-copy p { max-width: 330px; margin: 0; color: #646b5e; font-size: 14px; line-height: 1.7; }
+.setup-progress { display: flex; gap: 7px; margin: 28px 0 0; padding: 0; list-style: none; }
+.setup-progress li { height: 5px; flex: 1; border-radius: 5px; background: #dfe3d7; }
+.setup-progress .is-complete { background: var(--setup-ink); }
+.setup-progress [aria-current='step'] { background: #98bd32; }
+.setup-sidebar-footer { margin: 26px 7px 0; color: #7b8173; font-size: 10px; }
+.setup-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.setup-main-header {
+  flex-shrink: 0;
+  min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 36px; border-bottom: 1px solid #eef0e9; color: #818678; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+}
+.setup-main-header a { display: inline-flex; align-items: center; gap: 5px; color: #28301f; font-size: 12px; font-weight: 700; letter-spacing: 0; text-decoration: none; text-transform: none; }
+.setup-content { min-height: 0; flex: 1; overflow-y: auto; display: grid; align-content: start; padding: 42px 38px; scrollbar-width: thin; scrollbar-color: #d5dacb transparent; }
+.setup-content > .spinner { align-self: center; justify-self: center; }
+.setup-main-footer { flex-shrink: 0; padding: 18px 30px; border-top: 1px solid var(--setup-border); background: #fff; }
+.setup-footer-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.setup-footer-actions > div { display: flex; gap: 12px; margin-left: auto; }
+.setup-footer-note { display: inline-flex; align-items: center; gap: 7px; color: #7d8575; font-size: 11px; }
+.setup-previous-button, .setup-next-button {
+  min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 14px; border: 1px solid #daddd3; border-radius: 7px; font: inherit;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.setup-previous-button { color: #30352c; background: #fff; }
+.setup-previous-button:hover:not(:disabled) { border-color: #a3ac92; background: #f5f7ef; }
+.setup-next-button { border-color: #141611; color: #fff; background: #141611; }
+.setup-next-button:hover:not(:disabled) { border-color: var(--setup-lime); color: #141611; background: var(--setup-lime); }
+.setup-previous-button:disabled, .setup-next-button:disabled { cursor: default; opacity: .55; }
+.setup-error { margin: 0 0 12px; color: #a32929; font-size: 12px; line-height: 1.5; }
+.setup-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 1023px) {
+  .setup-page { display: block; padding: 14px; }
+  .setup-shell { height: calc(100vh - 28px); height: calc(100dvh - 28px); min-height: 0; grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .setup-sidebar { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 26px; padding: 26px 30px; }
+  .setup-tool-art, .setup-sidebar-footer { display: none; }
+  .setup-sidebar-copy { padding: 0; }
+  .setup-sidebar-copy h2 { margin: 8px 0; font-size: 26px; }
+  .setup-sidebar-copy p { max-width: none; }
+  .setup-progress { margin-top: 16px; }
+  .setup-content { overflow-y: auto; padding: 36px 30px; }
+}
+@media (max-width: 600px) {
+  .setup-page { padding: 7px; }
+  .setup-shell { height: calc(100vh - 14px); height: calc(100dvh - 14px); border-radius: 13px; }
+  .setup-sidebar { display: flex; gap: 20px; padding: 22px 20px; }
+  .setup-sidebar-copy { width: 100%; }
+  .setup-sidebar-copy h2 { font-size: 24px; }
+  .setup-main-header { min-height: 56px; padding: 14px 20px; }
+  .setup-main-header > span:first-child { display: none; }
+  .setup-content { padding: 30px 20px; }
+  .setup-main-footer { padding: 16px 20px max(16px, env(safe-area-inset-bottom)); }
+  .setup-footer-actions { align-items: stretch; flex-direction: column; }
+  .setup-footer-actions > div { width: 100%; margin: 0; }
+  .setup-footer-actions button { min-height: 46px; flex: 1; }
+}
+/* At high zoom / short landscape heights, allow document scrolling instead of clipping controls. */
+@media (max-height: 540px) {
+  .setup-shell { height: auto; overflow: visible; }
+  .setup-content { overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { .setup-page * { transition: none !important; scroll-behavior: auto !important; } }

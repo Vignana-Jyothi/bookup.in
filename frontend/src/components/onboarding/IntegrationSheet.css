@@ -1,0 +1,73 @@
+.integration-sheet { width: min(760px, 100%); margin: 0 auto; color: #171a14; }
+.integration-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
+.integration-heading > div > span { color: #78816e; font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.integration-heading h2 { margin: 12px 0 8px; font-family: var(--font-heading); font-size: clamp(27px, 3vw, 35px); letter-spacing: -.04em; }
+.integration-heading p { max-width: 560px; margin: 0; color: #687061; font-size: 13px; line-height: 1.7; }
+.integration-heading > strong { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; margin-top: 30px; padding: 6px 10px; border: 1px solid #dfe4d7; border-radius: 20px; font-size: 10px; font-weight: 600; }
+.integration-heading > strong > span { width: 6px; height: 6px; border-radius: 50%; background: #86a92e; }
+.integration-toolbar { display: flex; align-items: center; gap: 12px; margin: 28px 0 10px; }
+.integration-tabs { min-width: 0; display: flex; gap: 2px; overflow-x: auto; padding: 3px; border: 1px solid #e8ebe3; border-radius: 8px; background: #f7f8f4; }
+.integration-tabs button { min-height: 34px; padding: 7px 10px; border: 0; border-radius: 5px; color: #686f61; background: transparent; font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; }
+.integration-tabs button.is-active { color: #1e2518; background: #fff; box-shadow: 0 1px 4px rgb(23 33 14 / 10%); }
+.integration-search { min-width: 130px; flex: 1; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #dfe3d8; border-radius: 8px; color: #717a68; }
+.integration-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 12px; }
+.integration-list { margin-top: 14px; }
+.integration-row { min-height: 78px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #e4e7df; }
+.integration-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: #26301f; }
+.integration-icon--calendar, .integration-icon--meet { color: #356bbc; background: #eef4ff; }
+.integration-icon--cashfree { color: #6332c6; background: #f1ecff; }
+.integration-icon--whatsapp { background: #25a65f; }
+.integration-icon--sms, .integration-icon--email { color: #687a3b; background: #eef3e3; }
+.integration-icon--zoom, .integration-icon--webex { color: #778071; background: #f0f2ed; }
+.integration-copy { min-width: 0; }
+.integration-copy h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; font-size: 13px; }
+.integration-copy h3 small { padding: 2px 6px; border: 1px solid #dce7c8; border-radius: 4px; color: #536d22; background: #eef5df; font-size: 8px; font-weight: 600; }
+.integration-copy h3 small.is-required { border-color: #efc5ba; color: #923a2a; background: #fff1ed; }
+.integration-copy p { margin: 0; color: #6e7669; font-size: 11px; line-height: 1.55; }
+.integration-action { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 11px; border: 1px solid #d4d9cd; border-radius: 7px; color: #20251c; background: #fff; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
+.integration-action:hover:not(:disabled) { border-color: #9ca88d; background: #f5f7f1; }
+.integration-action.is-connected { border-color: #171a14; color: #fff; background: #171a14; }
+.integration-action:disabled { cursor: default; opacity: .55; }
+.integration-managed { display: inline-flex; align-items: center; gap: 5px; color: #5b6f35; font-size: 10px; font-weight: 700; }
+.integration-required-status { padding: 4px 8px; border: 1px solid #efc5ba; border-radius: 5px; color: #923a2a; background: #fff1ed; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.integration-verification-stack { display: grid; gap: 8px; margin-top: 11px; }
+.integration-verification-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+.integration-verification-stack .integration-verification-controls { margin-top: 0; }
+.integration-verification-controls > button {
+  min-height: 34px; padding: 7px 10px; border: 1px solid #d4d9cd; border-radius: 6px;
+  color: #293022; background: #fff; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer;
+}
+.integration-verification-controls > button:hover:not(:disabled) { border-color: #9ca88d; background: #f5f7f1; }
+.integration-verification-controls > button:disabled { cursor: default; opacity: .55; }
+.integration-locked-value { min-height: 34px; display: inline-flex; align-items: center; flex: 1 1 190px; padding: 7px 10px; border: 1px solid #e0e4da; border-radius: 6px; color: #656d5f; background: #f7f8f4; font-size: 10px; overflow-wrap: anywhere; }
+.integration-phone-input { min-height: 36px; display: flex; align-items: stretch; flex: 1 1 190px; overflow: hidden; border: 1px solid #d9ded3; border-radius: 6px; background: #fff; }
+.integration-phone-input > span { display: grid; place-items: center; padding: 0 9px; border-right: 1px solid #e3e6de; color: #6e7668; background: #f5f7f2; font-size: 10px; }
+.integration-phone-input input, .integration-otp-input { min-width: 0; min-height: 34px; border: 1px solid #d9ded3; border-radius: 6px; outline: 0; font: inherit; font-size: 11px; }
+.integration-phone-input input { width: 100%; padding: 7px 9px; border: 0; border-radius: 0; }
+.integration-otp-input { width: 140px; padding: 7px 9px; }
+.integration-phone-input:focus-within, .integration-otp-input:focus { border-color: #7f9b42; box-shadow: 0 0 0 3px rgb(126 155 65 / 13%); }
+.integration-note { display: flex; align-items: flex-start; gap: 8px; margin: 22px 0 0; color: #727a68; font-size: 11px; line-height: 1.6; }
+.integration-empty { display: grid; justify-items: center; gap: 10px; padding: 45px 15px; color: #77806f; }
+.integration-empty button { border: 0; color: #526638; background: none; text-decoration: underline; cursor: pointer; }
+.integration-modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 18px; background: rgb(24 31 20 / 64%); backdrop-filter: blur(4px); }
+.integration-modal { position: relative; width: min(480px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; padding: 30px; border-radius: 16px; background: #fff; box-shadow: 0 28px 90px rgb(0 0 0 / 24%); }
+.integration-modal-close { position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #f2f4ee; cursor: pointer; }
+.integration-modal-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 14px; color: #6332c6; background: #f1ecff; }
+.integration-modal h2 { margin: 20px 0 9px; font-family: var(--font-heading); font-size: 23px; }
+.integration-modal > p { margin: 0; color: #687061; font-size: 13px; line-height: 1.7; }
+.integration-modal-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 11px 18px; margin: 22px 0; padding: 16px; border-radius: 10px; background: #f5f7f1; font-size: 12px; }
+.integration-modal-summary span { color: #757d6d; }
+.integration-modal-summary strong { overflow-wrap: anywhere; text-align: right; }
+@media (max-width: 700px) {
+  .integration-heading { display: block; }
+  .integration-heading > strong { margin-top: 14px; }
+  .integration-toolbar { align-items: stretch; flex-direction: column; }
+  .integration-search { flex: auto; min-height: 44px; }
+  .integration-search input { font-size: 16px; }
+  .integration-row { grid-template-columns: 42px minmax(0, 1fr); }
+  .integration-action, .integration-managed { grid-column: 2; justify-self: start; min-height: 40px; }
+  .integration-required-status { grid-column: 2; justify-self: start; }
+  .integration-verification-controls { align-items: stretch; flex-direction: column; }
+  .integration-locked-value, .integration-phone-input, .integration-otp-input,
+  .integration-verification-controls > button { width: 100%; flex-basis: auto; }
+}

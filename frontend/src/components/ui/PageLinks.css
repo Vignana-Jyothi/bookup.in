@@ -1,0 +1,7 @@
+/* Disabled navigation enhancement (user request):
+.calup-page-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.calup-page-links a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 13px; border: 1px solid var(--theme-border, #dfe3d7); border-radius: 999px; background: var(--theme-bg-card, #fff); color: var(--color-text, #141611); font-size: 12px; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.calup-page-links a:hover { background: var(--theme-badge-bg, #eef3df); }
+.calup-page-links a:focus-visible { outline: 2px solid #758f2d; outline-offset: 3px; }
+
+*/

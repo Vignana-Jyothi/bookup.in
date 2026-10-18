@@ -1,0 +1,62 @@
+.pn-card, .pn-toast, .pn-dialog, .pn-toast-stack, .pn-card *, .pn-toast *, .pn-dialog * { box-sizing: border-box; }
+.pn-card, .pn-toast, .pn-dialog { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #162322; font-size: 14px; line-height: 1.5; --pn-accent: #12658a; --pn-tint: #eef7fb; --pn-on-accent: white; }
+.pn-info { --pn-accent: #12658a; --pn-tint: #eef7fb; --pn-on-accent: white; }
+.pn-warning { --pn-accent: #f8d875; --pn-tint: #fffbeb; --pn-on-accent: #403309; }
+.pn-success { --pn-accent: #00845f; --pn-tint: #edfaf5; --pn-on-accent: white; }
+.pn-alert { --pn-accent: #ed645c; --pn-tint: #fff3f1; --pn-on-accent: #23120f; }
+.pn-card :where(h2,p), .pn-toast :where(h3,p) { margin: 0; }
+.pn-card button, .pn-toast button { font: inherit; cursor: pointer; }
+.pn-card button:disabled { opacity: .6; cursor: wait; }
+.pn-card :focus-visible, .pn-toast :focus-visible { outline: 3px solid #536b34; outline-offset: 4px; }
+.pn-card { position: relative; width: 100%; max-width: 360px; border: 1px solid #e4eae8; border-radius: 8px; background: white; overflow: hidden; box-shadow: 0 3px 6px #14231a03; }
+.pn-card-band { height: 30px; background: var(--pn-accent); }
+.pn-close { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; padding: 9px; border: 0; border-radius: 5px; color: #37433f; background: transparent; }
+.pn-close svg { width: 18px; height: 18px; }
+.pn-close:hover { background: #172b2210; }
+.pn-card-band .pn-close { position: absolute; right: 4px; top: 0; width: 30px; height: 30px; color: var(--pn-on-accent); padding: 7px; }
+.pn-card-band .pn-close:focus-visible { outline-offset: -4px; }
+.pn-card-icon { display: grid; place-items: center; position: relative; width: 42px; height: 42px; margin: -20px auto 0; background: var(--pn-accent); color: var(--pn-on-accent); border: 5px solid white; border-radius: 50%; }
+.pn-card-icon svg { width: 28px; height: 28px; }
+.pn-card-content { padding: 17px 28px 22px; text-align: center; }
+.pn-card-content h2 { font-size: 17px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 9px; }
+.pn-card-content p { font-size: 12px; color: #677672; min-height: 38px; line-height: 1.65; overflow-wrap: anywhere; }
+.pn-card-actions { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 0 24px 23px; }
+.pn-card-actions:has(.pn-button-quiet) { justify-content: space-between; }
+.pn-button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 9px 18px; border: 1px solid transparent; border-radius: 4px; font-size: 11px !important; font-weight: 500; transition: filter .15s, background .15s; }
+.pn-button-accent { background: var(--pn-accent); color: var(--pn-on-accent); min-width: 100px; }
+.pn-button-accent:hover { filter: brightness(.95); }
+.pn-button-quiet { background: #f3f6f4; color: #4e6058; }
+.pn-button-quiet:hover { background: #e9efeb; }
+.pn-card-content .pn-inline-error { min-height: 0; color: #ac302a; background: #fff2ef; border-radius: 4px; padding: 8px; margin-top: 14px; }
+.pn-dialog { border: 0; padding: 0; margin: auto; background: transparent; max-width: min(360px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border-radius: 8px; box-shadow: 0 24px 100px #11221d30; }
+.pn-dialog::backdrop { background: #1b2a2a65; backdrop-filter: blur(4px); }
+.pn-dialog .pn-card { border: 0; }
+.pn-toast { position: relative; display: flex; align-items: center; gap: 0; min-height: 86px; width: 100%; max-width: 450px; background: white; border: 1px solid #e4eae8; border-radius: 6px; overflow: hidden; box-shadow: 0 3px 7px #14231a03; }
+.pn-toast-band { position: absolute; inset: 0 auto 0 0; width: 30px; background: var(--pn-accent); }
+.pn-toast-band > span { position: absolute; top: 50%; right: -16px; transform: translateY(-50%); width: 34px; height: 34px; display: grid; place-items: center; border: 4px solid white; border-radius: 50%; background: var(--pn-accent); color: var(--pn-on-accent); }
+.pn-toast-band svg { width: 24px; height: 24px; }
+.pn-toast-content { min-width: 0; padding: 19px 12px 19px 64px; flex: 1; }
+.pn-toast-content h3 { font-size: 13px; font-weight: 600; letter-spacing: -.1px; margin-bottom: 4px; }
+.pn-toast-content p { font-size: 11px; color: #667671; line-height: 1.55; overflow-wrap: anywhere; }
+.pn-toast > .pn-close { margin-right: 10px; }
+.pn-toast-timer { position: absolute; left: 64px; right: 54px; bottom: 10px; height: 3px; background: #edf1ed; border-radius: 4px; overflow: hidden; }
+.pn-toast-timer > span { display: block; background: var(--pn-accent); width: 100%; height: 100%; transform-origin: left; }
+.pn-toast:has(.pn-toast-timer) .pn-toast-content { padding-bottom: 25px; }
+.pn-toast-stack { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); right: max(24px, env(safe-area-inset-right)); display: flex; flex-direction: column; gap: 12px; width: min(410px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; z-index: 1000; padding: 4px; }
+.pn-toast-stack:empty { display: none; }
+.pn-toast-stack .pn-toast { flex-shrink: 0; box-shadow: 0 6px 25px #1d342315; animation: pn-toast-arrive .22s ease-out; }
+.pn-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+@keyframes pn-toast-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) {
+  .pn-card-actions { flex-wrap: wrap; padding-inline: 20px; }
+  .pn-button { min-height: 44px; font-size: 12px !important; }
+  .pn-close { width: 44px; height: 44px; }
+  .pn-card-band { height: 40px; }
+  .pn-card-band .pn-close { width: 40px; height: 40px; padding: 11px; }
+  .pn-card-icon { margin-top: -20px; }
+  .pn-toast > .pn-close { margin-right: 4px; }
+  .pn-toast-content { padding-left: 56px; }
+  .pn-toast-timer { left: 56px; }
+  .pn-toast-stack { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) { .pn-toast-stack .pn-toast { animation: none; } .pn-button { transition: none; } }

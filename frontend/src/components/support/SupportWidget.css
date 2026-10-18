@@ -1,0 +1,14 @@
+.calup-support-launcher { position: fixed; right: max(24px,env(safe-area-inset-right)); bottom: max(24px,env(safe-area-inset-bottom)); z-index: 100; display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 12px 20px; border: 1px solid #263218; border-radius: 28px; background: #182110; color: #fff; box-shadow: 0 8px 28px #0003; font: 600 14px var(--font-body,sans-serif); cursor: pointer; }
+.calup-support-launcher:focus-visible, .calup-support-header button:focus-visible { outline: 3px solid #a3cc28; outline-offset: 4px; }
+.calup-support-dialog { position: fixed; inset: auto 24px 88px auto; margin: 0; padding: 0; width: min(480px,calc(100vw - 32px)); max-width: none; max-height: min(720px,calc(100dvh - 112px)); border: 1px solid var(--color-border,#dedfd6); border-radius: 20px; background: var(--color-surface,#fff); color: var(--color-text,#182110); box-shadow: 0 16px 64px #0003; overflow: hidden; font: 14px/1.5 var(--font-body,sans-serif); }
+.calup-support-dialog[open] { display: flex; flex-direction: column; }
+.calup-support-dialog::backdrop { background: #0002; }
+.calup-support-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--color-border,#dedfd6); flex-shrink: 0; }
+.calup-support-header p { margin: 3px 0 0; font-size: 12px; opacity: .7; }
+.calup-support-header button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.calup-support-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.calup-support-body .support-panel { margin: 0; border: 0; border-radius: 0; }
+@media (max-width: 768px) {
+  .calup-support-launcher { right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .calup-support-dialog { right: 16px; bottom: calc(144px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 168px - env(safe-area-inset-bottom)); }
+}

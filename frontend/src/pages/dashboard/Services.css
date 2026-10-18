@@ -1,0 +1,20 @@
+.services-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+.services-workspace-main { min-width: 0; }
+.instructor-panel { padding: 24px; min-width: 0; }
+.instructor-panel h3 { margin: 0 0 8px; font-family: var(--font-heading); font-size: 18px; }
+.instructor-hint { font-size: 12px; color: var(--theme-text-muted); line-height: 1.6; }
+.instructor-list { display: flex; flex-direction: column; margin-top: 18px; }
+.instructor-item { padding: 16px 0; border-top: 1px solid var(--theme-border); }
+.instructor-heading { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.instructor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.instructor-actions .btn { font-size: 12px; padding: 6px 12px; }
+.instructor-actions a { font-size: 12px; color: var(--color-text); text-underline-offset: 3px; }
+.instructor-add { display: flex; flex-direction: column; align-items: start; gap: 10px; padding-top: 18px; border-top: 1px solid var(--theme-border); }
+@media (max-width: 1100px) {
+  .services-workspace { grid-template-columns: minmax(0, 1fr); }
+}

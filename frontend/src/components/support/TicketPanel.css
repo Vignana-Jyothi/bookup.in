@@ -1,0 +1,27 @@
+.support-panel { padding: 24px; border: 1px solid var(--color-border, #e1e4db); border-radius: 18px; background: var(--theme-card-bg, #fff); color: var(--color-text, #20251c); margin: 20px 0; text-align: left; }
+.support-panel h2 { font-size: 20px; margin: 0; }
+.support-panel h3 { font-size: 17px; margin: 0 0 12px; }
+.support-heading, .support-toolbar, .support-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.support-actions { justify-content: flex-start; }
+.support-muted { color: var(--color-text-secondary, #62695c); font-size: 13px; line-height: 1.6; margin: 12px 0; }
+.support-button { border: 1px solid #192014; border-radius: 9px; background: #192014; color: #fff; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 13px; }
+.support-secondary { background: transparent; color: inherit; border-color: var(--color-border, #d9ddcf); }
+.support-button:disabled { opacity: .5; cursor: not-allowed; }
+.support-panel button:focus-visible, .support-panel input:focus-visible, .support-panel select:focus-visible, .support-panel textarea:focus-visible { outline: 2px solid #7a9d2d; outline-offset: 3px; }
+.support-form { display: grid; gap: 14px; padding: 20px 0; }
+.support-form label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; }
+.support-panel input, .support-panel select, .support-panel textarea { border: 1px solid var(--color-border, #d9ddcf); background: var(--theme-card-bg, #fff); color: inherit; padding: 10px; border-radius: 8px; font: inherit; max-width: 100%; }
+.support-panel textarea { width: 100%; resize: vertical; box-sizing: border-box; }
+.support-ticket-list { display: grid; gap: 8px; margin-top: 16px; max-height: 360px; overflow: auto; }
+.support-ticket { display: grid; gap: 5px; text-align: left; border: 1px solid var(--color-border, #e1e4db); border-radius: 10px; padding: 12px; background: transparent; color: inherit; cursor: pointer; font: inherit; overflow-wrap: anywhere; }
+.support-ticket span { font-size: 12px; }
+.support-selected { border-color: #7a9d2d; }
+.support-detail { border-top: 1px solid var(--color-border, #e1e4db); margin-top: 20px; padding-top: 20px; }
+.support-reference { font: 12px monospace; overflow-wrap: anywhere; }
+.support-conversation { max-height: 420px; overflow-y: auto; display: grid; gap: 10px; margin: 16px 0; }
+.support-message { padding: 12px; background: var(--color-bg-subtle, #f5f6f0); border-radius: 10px; font-size: 13px; }
+.support-message time { display: block; font-size: 11px; opacity: .7; margin-top: 4px; }
+.support-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; line-height: 1.6; }
+.support-detail details { font-size: 12px; margin-top: 18px; }
+.support-detail li { padding: 5px 0; }
+@media (max-width: 600px) { .support-panel { padding: 16px; } .support-heading { align-items: flex-start; } }

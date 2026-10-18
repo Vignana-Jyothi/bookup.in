@@ -1,0 +1,15 @@
+.calup-notification-viewport {
+  z-index: 2147483000;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+  pointer-events: none;
+}
+.calup-notification-viewport .pn-toast { pointer-events: auto; }
+@media (max-width: 600px) {
+  .calup-notification-viewport {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)));
+  }
+}

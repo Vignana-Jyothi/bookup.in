@@ -1,0 +1,400 @@
+.rp,
+.rp *,
+.rp *::before,
+.rp *::after {
+  box-sizing: border-box;
+}
+
+.rp :where(p, dl, dd, dt, h1, h2, h3, h4, h5, h6, ul, ol, figure, pre) {
+  margin: 0;
+}
+
+.rp {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: 100%;
+  max-width: 24rem;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rp-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  height: 2.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.rp-machine {
+  --rp-radius: 1.5rem;
+  --rp-inset: 0.75rem;
+  --rp-inner-radius: calc(var(--rp-radius) - var(--rp-inset));
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  overflow: hidden;
+  padding: var(--rp-inset);
+  padding-bottom: 2rem;
+  border: 1px solid #18181b;
+  border-radius: var(--rp-radius);
+  background: #27272a;
+  box-shadow:
+    0 20px 36px -20px rgba(24, 24, 27, 0.55),
+    0 6px 14px -8px rgba(24, 24, 27, 0.24),
+    inset 0 1px 0 rgba(250, 250, 250, 0.14),
+    inset 0 -1px 0 rgba(24, 24, 27, 0.55);
+}
+
+.rp-machine::before {
+  content: '';
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+  background-image: url(data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22180%22%20height%3D%22180%22%20viewBox%3D%220%200%20180%20180%22%3E%3Cfilter%20id%3D%22noise%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.92%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%20%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%20%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url%28%23noise%29%22%20%2F%3E%3C%2Fsvg%3E);
+  background-repeat: repeat;
+  background-size: 180px 180px;
+  position: absolute;
+  inset: 0;
+}
+
+.rp-machine__slot {
+  position: absolute;
+  left: 1.5rem;
+  right: 1.5rem;
+  bottom: var(--rp-inset);
+  z-index: 40;
+  height: 0.5rem;
+  border: 1px solid #18181b;
+  border-radius: 0.125rem;
+  background: #18181b;
+  box-shadow: inset 0 2px 4px 0 #18181b;
+}
+
+.rp-screen {
+  position: relative;
+  z-index: 10;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 1rem;
+  border: 1px solid #18181b;
+  border-radius: var(--rp-inner-radius);
+  background: #18181b;
+  color: #fafafa;
+  box-shadow: inset 0 2px 4px 0 rgba(24, 24, 27, 0.8);
+}
+
+.rp-screen::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: inherit;
+  box-shadow: inset 0 0 24px 4px rgba(24, 24, 27, 0.52);
+}
+
+.rp-screen__inner {
+  position: relative;
+  z-index: 10;
+}
+
+.rp-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rp-status__icon {
+  position: relative;
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  place-items: center;
+}
+
+.rp-status__glyph {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  animation-duration: 160ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  animation-fill-mode: both;
+}
+
+.rp-status__glyph svg {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.rp-status__glyph--ok {
+  color: #16a34a;
+}
+
+.rp-status__glyph--spin {
+  color: #71717a;
+}
+
+.is-spinning svg {
+  animation: rp-spin 1s linear infinite;
+}
+
+.rp-status__labelbox {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+
+.rp-status__label {
+  grid-column: 1;
+  grid-row: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  line-height: 1;
+  font-weight: 500;
+  color: #71717a;
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  animation-fill-mode: both;
+}
+
+.rp-status__label[data-motion='full'] {
+  animation-name: rp-label-in;
+}
+
+.rp-status__label[data-motion='fade'] {
+  animation-name: rp-fade-in;
+}
+
+.rp-status__label[data-motion='off'] {
+  animation: none;
+}
+
+.rp-status__label[data-exit][data-motion='full'] {
+  animation-name: rp-label-out;
+}
+
+.rp-status__label[data-exit][data-motion='fade'] {
+  animation-name: rp-fade-out;
+}
+
+.rp-status__glyph[data-motion='full'] {
+  animation-name: rp-glyph-in;
+}
+
+.rp-status__glyph[data-motion='fade'] {
+  animation-name: rp-fade-in;
+}
+
+.rp-status__glyph[data-motion='off'] {
+  animation: none;
+}
+
+.rp-status__glyph[data-exit][data-motion='full'] {
+  animation-name: rp-glyph-out;
+}
+
+.rp-status__glyph[data-exit][data-motion='fade'] {
+  animation-name: rp-fade-out;
+}
+
+@keyframes rp-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rp-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rp-label-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rp-label-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes rp-glyph-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rp-glyph-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes rp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rp-output {
+  position: relative;
+  z-index: 50;
+  margin-top: -1rem;
+  width: calc(80% + 3rem);
+  max-width: 100%;
+  height: 32rem;
+  overflow: hidden;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.rp-output__slot-shadow {
+  pointer-events: none;
+  position: absolute;
+  left: 1.5rem;
+  right: 1.5rem;
+  top: -0.25rem;
+  z-index: 20;
+  height: 0.5rem;
+  background: rgba(24, 24, 27, 0.75);
+  filter: blur(4px);
+}
+
+.rp-sheet {
+  position: relative;
+  isolation: isolate;
+}
+
+.rp-sheet::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 0.75rem;
+  bottom: 1rem;
+  z-index: 0;
+  border-radius: 0.125rem;
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.24);
+}
+
+.rp-sheet::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 0;
+  z-index: 0;
+  height: 0.75rem;
+  transform: translateY(0.375rem);
+  border-radius: 9999px;
+  background: rgba(24, 24, 27, 0.1);
+  filter: blur(16px);
+}
+
+.rp-paper {
+  position: relative;
+  z-index: 10;
+  min-height: 20rem;
+  padding: 1.75rem 1.5rem 2rem;
+  background-color: #fafafa;
+  background-blend-mode: soft-light;
+  background-image: url(data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22360%22%20height%3D%22520%22%20viewBox%3D%220%200%20360%20520%22%3E%3Cdefs%3E%3Cfilter%20id%3D%22paper%22%20x%3D%22-10%25%22%20y%3D%22-10%25%22%20width%3D%22120%25%22%20height%3D%22120%25%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.008%200.016%22%20numOctaves%3D%224%22%20seed%3D%2217%22%20stitchTiles%3D%22stitch%22%20result%3D%22coarse%22%20%2F%3E%3CfeDiffuseLighting%20in%3D%22coarse%22%20surfaceScale%3D%223.2%22%20diffuseConstant%3D%220.72%22%20lighting-color%3D%22%23ffffff%22%20result%3D%22coarse-light%22%3E%3CfeDistantLight%20azimuth%3D%22225%22%20elevation%3D%2255%22%20%2F%3E%3C%2FfeDiffuseLighting%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.09%200.12%22%20numOctaves%3D%222%22%20seed%3D%2231%22%20stitchTiles%3D%22stitch%22%20result%3D%22fine%22%20%2F%3E%3CfeDiffuseLighting%20in%3D%22fine%22%20surfaceScale%3D%220.55%22%20diffuseConstant%3D%220.55%22%20lighting-color%3D%22%23ffffff%22%20result%3D%22fine-light%22%3E%3CfeDistantLight%20azimuth%3D%22205%22%20elevation%3D%2265%22%20%2F%3E%3C%2FfeDiffuseLighting%3E%3CfeBlend%20in%3D%22coarse-light%22%20in2%3D%22fine-light%22%20mode%3D%22multiply%22%20result%3D%22combined%22%20%2F%3E%3CfeComponentTransfer%20in%3D%22combined%22%3E%3CfeFuncR%20type%3D%22linear%22%20slope%3D%220.42%22%20intercept%3D%220.29%22%20%2F%3E%3CfeFuncG%20type%3D%22linear%22%20slope%3D%220.42%22%20intercept%3D%220.29%22%20%2F%3E%3CfeFuncB%20type%3D%22linear%22%20slope%3D%220.42%22%20intercept%3D%220.29%22%20%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22360%22%20height%3D%22520%22%20fill%3D%22%23808080%22%20filter%3D%22url%28%23paper%29%22%20%2F%3E%3C%2Fsvg%3E);
+  background-size: cover;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  color: #18181b;
+}
+
+:where(.dark, .dark *) .rp-machine {
+  border-color: #d4d4d8;
+  background: #e4e4e7;
+}
+
+:where(.dark, .dark *) .rp-machine__slot {
+  border-color: #fafafa;
+  background: #fafafa;
+  box-shadow: inset 0 2px 4px 0 #fafafa;
+}
+
+:where(.dark, .dark *) .rp-screen {
+  border-color: #e4e4e7;
+  background: #e4e4e7;
+  color: #18181b;
+  box-shadow: inset 0 2px 4px 0 rgba(228, 228, 231, 0.8);
+}
+
+:where(.dark, .dark *) .rp-screen::after {
+  box-shadow: inset 0 0 24px 4px rgba(250, 250, 250, 0.52);
+}
+
+:where(.dark, .dark *) .rp-status__label {
+  color: #a1a1aa;
+}
+
+:where(.dark, .dark *) .rp-status__glyph--spin {
+  color: #a1a1aa;
+}
+
+:where(.dark, .dark *) .rp-status__glyph--ok {
+  color: #4ade80;
+}
+
+:where(.dark, .dark *) .rp-output__slot-shadow {
+  background: rgba(250, 250, 250, 0.75);
+}
+
+:where(.dark, .dark *) .rp-sheet::before {
+  box-shadow: 0 8px 24px rgba(250, 250, 250, 0.2);
+}
+
+:where(.dark, .dark *) .rp-sheet::after {
+  background: rgba(250, 250, 250, 0.1);
+}
+
+:where(.dark, .dark *) .rp-paper {
+  background-color: #18181b;
+  color: #fafafa;
+}

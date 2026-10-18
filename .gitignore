@@ -17,14 +17,16 @@ scratch
 .env
 .env.*
 !.env.example
-supabase/backups/
-supabase/backup_policies_*.sql
-supabase/part1_*.sql
-supabase/harden_*.sql
-supabase/rollback_*.sql
+backend/supabase/backups/
+backend/supabase/backup_policies_*.sql
+backend/supabase/part1_*.sql
+backend/supabase/harden_*.sql
+backend/supabase/rollback_*.sql
 tests-output.txt
 
-# Server local token storage (encrypted tokens tracked)
+# Server OAuth token cache must never be committed. Supabase stores the
+# encrypted durable copy; the backend keeps only an in-memory cache.
+backend/server/data/tokens.json
 
 # Editor directories and files
 .vscode/*
@@ -36,3 +38,13 @@ tests-output.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Local Python tooling environment
+.venv/
+
+#additional files for reference 
+guides
+tasks
+.npm-cache-fresh
+AGENTS.md
+# trial-ui-components

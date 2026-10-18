@@ -1,0 +1,91 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import express from 'express';
+import { createMerchantCommerceRouter, validCommerceItem, validVault } from '../server/routes/merchantCommerce.js';
+import { createCommercePayments, commerceGatewaySettings } from '../server/services/commerceCashfree.js';
+import { createProductVault, unlockProductVault, encryptProduct, decryptProduct } from '../../frontend/src/services/payments/productVault.js';
+
+process.env.DISABLE_RATE_LIMIT='true';
+const owner=crypto.randomUUID();
+const id=crypto.randomUUID();
+const vault=await createProductVault(owner,'private vault test passphrase');
+assert(validVault(vault.envelope));
+assert(!validVault({...vault.envelope,iterations:1}));
+const unlocked=await unlockProductVault(owner,vault.envelope,'private vault test passphrase');
+const recovered=await unlockProductVault(owner,vault.envelope,vault.recoveryKey,true);
+await assert.rejects(unlockProductVault(owner,vault.envelope,'wrong password'));
+await assert.rejects(unlockProductVault(crypto.randomUUID(),vault.envelope,vault.recoveryKey,true));
+const privateLink='https://example.com/secret-product';
+const encrypted=await encryptProduct(owner,id,unlocked,{link:privateLink});
+const decoded=await decryptProduct(owner,id,recovered,encrypted.envelope,await encrypted.ciphertext.arrayBuffer());
+assert.equal(new TextDecoder().decode(decoded.bytes),privateLink);
+assert(!JSON.stringify(encrypted.envelope).includes('example.com'));
+await assert.rejects(decryptProduct(owner,crypto.randomUUID(),unlocked,encrypted.envelope,await encrypted.ciphertext.arrayBuffer()));
+const corrupted=new Uint8Array(await encrypted.ciphertext.arrayBuffer());corrupted[0]^=1;
+await assert.rejects(decryptProduct(owner,id,unlocked,encrypted.envelope,corrupted));
+const file=new Blob(['private product file']);file.name='private-filename.txt';
+const encryptedFile=await encryptProduct(owner,id,unlocked,{file});
+assert(!JSON.stringify(encryptedFile.envelope).includes(file.name));
+const decryptedFile=await decryptProduct(owner,id,unlocked,encryptedFile.envelope,await encryptedFile.ciphertext.arrayBuffer());
+assert.equal(decryptedFile.metadata.name,file.name);
+assert.equal(new TextDecoder().decode(decryptedFile.bytes),'private product file');
+await assert.rejects(encryptProduct(owner,id,unlocked,{link:'javascript:alert(1)'}));
+await assert.rejects(encryptProduct(owner,id,unlocked,{file:{size:11*1024*1024}}));
+
+const item={id,kind:'product',version:0,title:'Test guide',description:'',pricePaise:0,purchaseLimit:1,durationDays:null,contentType:'file',status:'draft'};
+assert(validCommerceItem(item));assert(validCommerceItem({...item,pricePaise:49900}));
+assert(!validCommerceItem({...item,pricePaise:50}));
+assert(!validCommerceItem({...item,purchaseLimit:0}));assert(!validCommerceItem({...item,providerId:'spoofed'}));
+assert(!validCommerceItem({...item,status:'published'}));
+assert(validCommerceItem({...item,kind:'membership',pricePaise:100,purchaseLimit:null,durationDays:7,contentType:null}));
+assert(!validCommerceItem({...item,kind:'membership',purchaseLimit:null,durationDays:7,contentType:null}));
+const calls=[];
+const reads=[];
+const client={rpc:async(name,args)=>{calls.push({name,args});return {data:{id},error:null};},from:table=>{
+  const read={table,filters:[]};reads.push(read);
+  return {select(){return this;},eq(key,value){read.filters.push([key,value]);return this;},async maybeSingle(){return {data:null,error:null};}};
+}};
+const app=express();app.use(express.json());
+app.use('/guarded',createMerchantCommerceRouter({client}));
+app.use('/commerce',createMerchantCommerceRouter({client,authorize:(req,_res,next)=>{req.providerId=owner;next();}}));
+const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+try {
+  const base=`http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(`${base}/guarded`)).status,401);
+  const post=body=>fetch(`${base}/commerce/items`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  assert.equal((await post({...item,providerId:crypto.randomUUID()})).status,422);
+  assert.equal(calls.length,0);
+  const response=await post(item);assert.equal(response.status,200);
+  assert.equal(calls[0].args.p_provider,owner);assert.equal(calls[0].args.p_price,0);
+  assert.match(response.headers.get('cache-control'),/no-store/);
+  assert.equal((await fetch(`${base}/commerce/products/${id}/asset`)).status,404);
+  assert.deepEqual(reads.at(-1).filters,[['id',id],['provider_id',owner]],'Asset ownership must derive from the verified merchant');
+  assert.equal((await fetch(`${base}/commerce/vault`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'never send plaintext'})})).status,422);
+  assert.equal((await fetch(`${base}/commerce/products/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://plaintext.example'})})).status,422);
+} finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+
+const settings={enabled:true,environment:'sandbox'};
+let requested;
+let orderResult;
+let paymentResult;
+const gateway={environment:'sandbox',isConfigured:()=>true,createOrder:async(input,key)=>{requested={input,key};return {order_id:input.order_id,order_currency:input.order_currency,order_amount:input.order_amount,payment_session_id:'test-only'};},getOrder:async()=>orderResult,getOrderPayments:async()=>paymentResult};
+for (const purpose of ['marketplace','customer_membership']) {
+  const payments=createCommercePayments(purpose,{settings,gateway});
+  const order={id:crypto.randomUUID(),purpose,amountPaise:19900,currency:'INR',phoneVerified:true,phone:'9000000001',customerId:crypto.randomUUID(),expiresAt:new Date(Date.now()+31*60000).toISOString()};
+  order.providerOrderId=`${purpose==='marketplace' ? 'CP' : 'CM'}${order.id.replaceAll('-','')}`;
+  await payments.create(order);assert.equal(requested.key,order.id);assert.equal(requested.input.order_amount,199);
+  orderResult={order_id:order.providerOrderId,order_currency:'INR',order_amount:199,order_status:'PAID',customer_details:{customer_id:order.customerId}};
+  paymentResult=[{cf_payment_id:123,payment_status:'SUCCESS',payment_currency:'INR',payment_amount:199}];
+  assert.equal((await payments.verify(order)).paid,true);
+  paymentResult[0].payment_amount=1;assert.equal((await payments.verify(order)).paid,false);
+  orderResult.order_amount=1;await assert.rejects(payments.verify(order),/MISMATCH/);
+  await assert.rejects(payments.create({...order,phoneVerified:false}));
+  await assert.rejects(payments.create({...order,amountPaise:0}),'Free products must never create a Cashfree charge');
+  await assert.rejects(payments.create({...order,purpose:'subscription'}));
+  await assert.rejects(createCommercePayments(purpose,{settings:{enabled:false,environment:'sandbox'},gateway}).create(order),/DISABLED/);
+  await assert.rejects(createCommercePayments(purpose,{settings,gateway:{...gateway,environment:'production'}}).create(order),/DISABLED/);
+}
+assert.equal(commerceGatewaySettings('marketplace',{}).enabled,false);
+assert.equal(commerceGatewaySettings('marketplace',{CASHFREE_CLIENT_ID:'booking-key'}).clientId,'');
+assert.equal(commerceGatewaySettings('customer_membership',{CASHFREE_MARKETPLACE_CLIENT_ID:'product-key'}).clientId,'');
+console.log('PASS: private vault roundtrip/recovery/tamper/owner binding, free/paid catalog validation, merchant auth/ownership and isolated sandbox gateway purpose/amount/identity checks. No real gateway/SMS calls.');
