@@ -1,56 +1,39 @@
-# CalUp (calup.in) 🇮🇳
+# BookUp
 
-> **India's Simplest Scheduling & Online Booking Platform for Solo Service Professionals.**  
-> Inspired by Calendly's simplicity, but designed around how Indian providers and customers actually communicate and pay — **WhatsApp-first, UPI-first, and mobile-first**.
+Appointment booking with a React frontend, Express API, Supabase persistence, Google Calendar, and manual UPI payment verification.
 
----
+## Repository Layout
 
-## 🌟 Key Features
+```text
+frontend/              React app and frontend configuration
+  src/                 Pages, components, state, services, utilities, styles
+  public/              Static assets
+  index.html           Browser entry
+  vite.config.js       Vite configuration
+  vercel.json          Frontend deployment configuration
+backend/
+  server/              Express routes, middleware, integrations, utilities
+  supabase/            Schema, migrations, database fixtures
+  tests/               Node unit/integration/regression suites
+  render.yaml          Backend deployment blueprint
+guides/                Reference documents and central HTML reader
+package.json           Shared dependencies and repository commands
+.env.example           Shared local environment template
+```
 
-- **⚡ Dynamic 15-Minute Slot Engine**: Recomputed live per service duration and dynamic buffer times. Prevents overlapping bookings, respects provider operating hours, and handles minimum-notice windows.
-- **🔄 Early Completion Auto-Release**: Providers can wrap up appointments early to auto-release remaining time for new client bookings.
-- **📱 Mobile-First Public Booking (`/book/:slug`)**: Clean, frictionless one-handed booking for clients without requiring logins.
-- **💳 UPI Deposit Collection**: Collect booking deposits via simulated UPI QR code / VPA to protect against no-shows and late cancellations.
-- **💬 WhatsApp-First Communication**: Integrated WhatsApp confirmation bubbles, appointment reminders, and one-click `wa.me` share links.
-- **📅 Google Calendar Integration (Optional Add-on)**: Pluggable `CalendarProvider` with simulated OAuth, two-way sync badge, and external busy conflict blocking.
-- **🛡️ Provider Dashboard**: Complete overview with revenue KPIs, appointment management (confirm, complete, reschedule, no-show deposit forfeiture), service CRUD, weekly availability editor, and analytics trends.
-- **✨ Content Safeguards**: Profile completeness meter, bio length validation, and anti-gibberish checks.
+Run commands from the repository root. Dependencies and the lockfile are shared; there is one installation for both applications. Local `node_modules/` and `.venv/` are ignored tooling environments, not source folders.
 
----
+## Local Development
 
-## 🛠️ Tech Stack
+1. Install dependencies with `npm install` using Node.js 22.12+ (required by the current Vite toolchain).
+2. Copy `.env.example` to `.env` and supply your configuration. Vite and Express both read this root file; only `VITE_` variables are exposed to the browser.
+3. Run `npm run dev` for Vite at `http://localhost:5173` and Express at `http://localhost:3001`. Use `npm run client` or `npm run server` to start either independently.
 
-- **Frontend**: React (Vite)
-- **Routing**: React Router v7
-- **Styling**: Vanilla CSS with custom properties & design tokens
-- **Data & State**: React Context + `useReducer` with `localStorage` persistence
-- **Charts**: Chart.js & `react-chartjs-2`
-- **Architecture**: Decoupled `CalendarProvider` & `NotificationProvider` abstractions
+- `npm run build`: writes the production frontend to `frontend/dist/`.
+- `npm run preview`: previews that build with the configured API proxy.
+- `npm run lint`: checks frontend/backend and repository tooling.
+- `npm test`: runs registered suites; integration suites require an isolated configured database/API.
+- `npm run guides`: opens reference documentation at `http://127.0.0.1:4174`.
+- `npm run guides:check`: verifies the reference reader and its documents.
 
----
-
-## 🚀 Getting Started Locally
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/prateekthota18-boop/bookup.in.git
-   cd bookup.in
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Start the local dev server**:
-   ```bash
-   npm run dev
-   ```
-
-4. **Open in browser**:
-   Navigate to `http://localhost:5173` and click **"View Demo"** to explore with pre-seeded demo data.
-
----
-
-## 📄 License
-MIT
+See [deployment](guides/project/DEPLOY.md), [repository organization](guides/project/structure.md), and [file takeaways](guides/repository-takeaways.md). Payment submission requires provider verification; refund records track manual settlement.
