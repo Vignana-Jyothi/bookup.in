@@ -16,6 +16,7 @@ scratch
 # Environment variables & secrets
 .env
 .env.*
+.env-*
 !.env.example
 backend/supabase/backups/
 backend/supabase/backup_policies_*.sql
@@ -23,6 +24,8 @@ backend/supabase/part1_*.sql
 backend/supabase/harden_*.sql
 backend/supabase/rollback_*.sql
 tests-output.txt
+.env-vercel
+.env-render
 
 # Server OAuth token cache must never be committed. Supabase stores the
 # encrypted durable copy; the backend keeps only an in-memory cache.
