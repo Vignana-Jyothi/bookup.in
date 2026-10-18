@@ -176,11 +176,14 @@ export default function Subscription() {
         await load();
         return;
       }
-      await cashfreeCheckoutService.openHostedPopup({
+      const popupResult = await cashfreeCheckoutService.openHostedPopup({
         paymentSessionId: order.paymentSessionId,
         cashfreeMode: order.cashfreeMode,
+        recoveryPath: '/dashboard/subscription',
       });
-      const result = await subscriptionService.finishCheckout(order.orderId);
+      const result = popupResult?.redirect
+        ? await subscriptionService.refreshOrder(order.orderId)
+        : await subscriptionService.finishCheckout(order.orderId);
       applyProjection(result.data);
       const applied = result.data?.entitlement?.source === 'paid' && !result.data?.openOrder;
       setNotice({

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { createServer, resolveConfig } from 'vite';
+import { createServer, preview, resolveConfig } from 'vite';
 import { createServer as createHttpServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const hosting=JSON.parse(await readFile(new URL('../../frontend/vercel.json',import.meta.url),'utf8'));
 const filesystemIndex=hosting.routes.findIndex(rule=>rule.handle==='filesystem');
@@ -97,4 +99,65 @@ try {
   await competing?.close();
   await server.close();
   await new Promise(resolve => backend.close(resolve));
+}
+
+// Optional real-build verification; normal isolated tests do not require generated output.
+if (process.argv.includes('--built')) {
+  const output=fileURLToPath(new URL('../../frontend/dist/',import.meta.url));
+  const manifest=JSON.parse(await readFile(path.join(output,'.vite/manifest.json'),'utf8'));
+  const assets=new Set();
+  const addAsset=value=>{
+    const url=new URL(value,'http://build.invalid/');
+    if(url.origin!=='http://build.invalid')return;
+    const relative=decodeURIComponent(url.pathname).replace(/^\//,'');
+    const filename=path.resolve(output,relative);
+    assert(filename.startsWith(path.resolve(output)+path.sep),'Asset must stay in the build directory');
+    assets.add(relative);
+  };
+  for(const [name,entry] of Object.entries(manifest)) {
+    for(const dependency of [...(entry.imports||[]),...(entry.dynamicImports||[])]) assert(manifest[dependency],`Missing manifest dependency ${dependency} in ${name}`);
+    for(const file of [entry.file,...(entry.css||[]),...(entry.assets||[])])addAsset(file);
+  }
+  const html=await readFile(path.join(output,'index.html'),'utf8');
+  assert(!html.includes('/src/main.jsx'),'Production HTML must reference compiled modules');
+  for(const match of html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)=["']([^"']+)["']/g))addAsset(match[1]);
+  for(const file of assets) {
+    if(file.endsWith('.css')) {
+      const css=await readFile(path.join(output,file),'utf8');
+      for(const match of css.matchAll(/url\(\s*["']?([^\s"')]+)["']?\s*\)/g)) {
+        if(!match[1].startsWith('#'))addAsset(new URL(match[1],`http://build.invalid/${file}`).href);
+      }
+    }
+    if(!file.endsWith('.js'))continue;
+    const code=await readFile(path.join(output,file),'utf8');
+    // Check generated static and literal dynamic imports relative to their actual importer.
+    for(const match of code.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?)["'`]([^"'`]+)["'`]/g)) {
+      if(!/^(?:\.\.?\/|\/)/.test(match[1])||!/\.(?:m?js|css)$/.test(match[1])||match[1].includes('${'))continue;
+      addAsset(new URL(match[1],`http://build.invalid/${file}`).href);
+    }
+    for(const match of code.matchAll(/["'`](assets\/[^"'`]+\.(?:js|css))["'`]/g))addAsset(match[1]);
+  }
+  for(const file of assets)assert((await stat(path.join(output,file))).isFile(),`Referenced build asset is missing: ${file}`);
+  const production=await preview({...options,build:{outDir:'dist'},preview:{host:'127.0.0.1',port:0,strictPort:false,open:false}});
+  try {
+    const origin=`http://127.0.0.1:${production.httpServer.address().port}`;
+    for(const file of assets) {
+      const response=await fetch(`${origin}/${file}`);
+      assert.equal(response.status,200,file);
+      const mime=response.headers.get('content-type')||'';
+      assert(!mime.includes('text/html'),`${file} returned HTML`);
+      if(/\.m?js$/.test(file))assert(/(?:javascript|ecmascript)/.test(mime),`${file} has invalid JS MIME ${mime}`);
+      if(file.endsWith('.css'))assert(mime.includes('text/css'),`${file} has invalid CSS MIME ${mime}`);
+      await response.arrayBuffer();
+    }
+    for(const route of ['/','/login','/dashboard/appointments','/book/test-merchant/memberships']) {
+      const response=await fetch(origin+route);
+      assert.equal(response.status,200,route);
+      assert.equal(await response.text(),html,`${route} must serve the compiled SPA`);
+    }
+    console.log(`PASS: ${assets.size} real production assets exist and serve correct non-HTML MIME; static/dynamic imports, preload dependencies and four nested SPA routes verified. No browser auth or DB calls.`);
+  } finally {
+    production.httpServer.closeAllConnections();
+    await new Promise(resolve=>production.httpServer.close(resolve));
+  }
 }

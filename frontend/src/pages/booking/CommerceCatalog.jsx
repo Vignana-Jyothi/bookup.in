@@ -54,7 +54,7 @@ function MerchantCommerceCatalog({slug,kind}) {
   const openPayment=async order=>{
     let popupError;
     if(order.paymentSessionId){
-      try {await cashfreeCheckoutService.openHostedPopup(order);}catch(failure){popupError=failure;}
+      try {await cashfreeCheckoutService.openHostedPopup({...order,recoveryPath:`/book/${encodeURIComponent(slug)}/${kind==='product'?'marketplace':'memberships'}`});}catch(failure){popupError=failure;}
     }
     const result=order.amountPaise===0?order:await api.refreshOrder(order.id);
     setPurchases(await api.orders());

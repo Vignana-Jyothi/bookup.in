@@ -580,13 +580,23 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
           return;
         }
 
+        let popupResult;
         try {
-          await cashfreeCheckoutService.openHostedPopup(attempt);
+          popupResult = await cashfreeCheckoutService.openHostedPopup(attempt);
         } catch (popupError) {
+          if (popupError.code === 'CASHFREE_CHECKOUT_ACTIVE') {
+            addToast(popupError.message, 'info');
+            return;
+          }
           // Popup output is presentation state. The server still verifies the
           // Cashfree order before it releases the held slot.
           console.warn('Cashfree popup ended without a completed checkout:', popupError);
           addToast(popupError.message || 'Cashfree checkout failed. We are checking the payment status.', 'error');
+        }
+        if (popupResult?.redirect) {
+          // Redirect started; it does not establish that checkout ended.
+          navigate('/payment-status');
+          return;
         }
         let checkoutReturnRecorded = false;
         try {

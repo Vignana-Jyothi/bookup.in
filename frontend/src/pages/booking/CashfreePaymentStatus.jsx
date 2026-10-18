@@ -100,12 +100,18 @@ export default function CashfreePaymentStatus() {
         setError('Cashfree is still preparing this payment. Please check again shortly.');
         return;
       }
+      let popupResult;
       try {
-        await cashfreeCheckoutService.openHostedPopup(session);
+        popupResult = await cashfreeCheckoutService.openHostedPopup(session);
       } catch (popupError) {
+        if (popupError.code === 'CASHFREE_CHECKOUT_ACTIVE') {
+          setError(popupError.message);
+          return;
+        }
         console.warn('Cashfree popup ended without a completed checkout:', popupError);
       }
-      await cashfreeCheckoutService.finishCheckoutReturn();
+      if (popupResult?.redirect) await cashfreeCheckoutService.refreshPayment();
+      else await cashfreeCheckoutService.finishCheckoutReturn();
       await readAttempt();
     } catch (checkoutError) {
       setError(checkoutError.message || 'Checkout could not be finalized.');

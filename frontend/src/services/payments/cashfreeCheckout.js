@@ -1,9 +1,11 @@
 import { getApiBase } from '../../utils/api.js';
+import { installCheckoutRecovery } from './checkoutRecovery.js';
 
 const SDK_URL = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 const RESTART_KEY_PREFIX = 'calup_cashfree_restart:';
 const CURRENT_RESTART_KEY = 'calup_cashfree_restart:current';
 let sdkPromise;
+let checkoutActive = false;
 
 export const isCashfreeV1Enabled = () => import.meta.env.VITE_CASHFREE_V1_ENABLED === 'true';
 
@@ -77,18 +79,30 @@ export const cashfreeCheckoutService = {
     return result.data;
   },
 
-  async openHostedPopup({ paymentSessionId, cashfreeMode = 'sandbox' }) {
+  async openHostedPopup({ paymentSessionId, cashfreeMode = 'sandbox', recoveryPath = '/payment-status' }) {
     if (!paymentSessionId) throw new Error('Payment session is still being prepared.');
-    const Cashfree = await loadSdk();
-    const cashfree = Cashfree({ mode: cashfreeMode === 'production' ? 'production' : 'sandbox' });
+    if (!['sandbox', 'production'].includes(cashfreeMode)) throw new Error('Payment environment is invalid. Please contact support.');
+    if (checkoutActive) {
+      const error = new Error('A payment window is already open. Finish or close it before continuing.');
+      error.code = 'CASHFREE_CHECKOUT_ACTIVE';
+      throw error;
+    }
+    checkoutActive = true;
+    let disposeRecovery;
     // Popup output is presentation-only. The server performs the authoritative lookup.
     let result;
     try {
+      const Cashfree = await loadSdk();
+      const cashfree = Cashfree({ mode: cashfreeMode });
+      disposeRecovery = installCheckoutRecovery(recoveryPath);
       result = await cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' });
     } catch {
       const error = new Error('Cashfree checkout could not be completed. Check payment status before retrying.');
       error.code = 'CASHFREE_CHECKOUT_FAILED';
       throw error;
+    } finally {
+      disposeRecovery?.();
+      checkoutActive = false;
     }
     if (result?.error) {
       // Do not expose provider messages which can contain the checkout session token.
