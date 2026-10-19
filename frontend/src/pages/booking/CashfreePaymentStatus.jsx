@@ -23,6 +23,7 @@ export default function CashfreePaymentStatus() {
   const [statusError, setStatusError] = useState(null);
   const [openingCheckout, setOpeningCheckout] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const refreshInFlight = useRef(false);
 
   const handleStatusError = useCallback(error => {
     setAttempt(null);
@@ -44,6 +45,8 @@ export default function CashfreePaymentStatus() {
   }, [handleStatusError]);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setLoading(true);
     setError('');
     try {
@@ -60,6 +63,7 @@ export default function CashfreePaymentStatus() {
         handleStatusError(readError);
       }
     } finally {
+      refreshInFlight.current = false;
       setLoading(false);
     }
   }, [readAttempt, setError, handleStatusError]);
@@ -89,18 +93,18 @@ export default function CashfreePaymentStatus() {
   }, [location.state?.checkoutReturned, readAttempt, refresh, handleStatusError]);
 
   const fulfilled = attempt?.paymentStatus === 'succeeded' && attempt?.fulfilmentStatus === 'fulfilled';
-  const unfulfilled = attempt?.paymentStatus === 'succeeded' && attempt?.fulfilmentStatus === 'unfulfilled';
-  const failed = !fulfilled && !unfulfilled && (
-    ['creation_failed', 'closed_unpaid'].includes(attempt?.paymentStatus) ||
-    ['released', 'expired'].includes(attempt?.attemptStatus)
-  );
-  const pending = Boolean(attempt) && !statusError && !fulfilled && !unfulfilled && !failed;
+  const unfulfilled = attempt?.paymentStatus === 'succeeded' && !fulfilled;
+  const reviewRequired = !fulfilled && (unfulfilled || attempt?.attemptStatus === 'manual_review');
+  const failed = !fulfilled && !reviewRequired && ['creation_failed', 'closed_unpaid'].includes(attempt?.paymentStatus);
+  const pending = Boolean(attempt) && !statusError && !fulfilled && !reviewRequired && !failed
+    && attempt.paymentStatus === 'pending';
+  const unknown = Boolean(attempt) && !statusError && !fulfilled && !reviewRequired && !failed && !pending;
   const unavailable = Boolean(statusError) || (!loading && !attempt);
   const noticeShown = useRef(null);
   useEffect(() => {
     if (pending && location.state?.notice && noticeShown.current !== location.key) {
       noticeShown.current = location.key;
-      addToast(location.state.notice, 'info');
+      addToast('Checkout has returned. Check the payment status below before paying again.', 'info');
     }
   }, [pending, location.state?.notice, location.key, addToast]);
   const remainingSeconds = attempt?.holdExpiresAt
@@ -110,6 +114,7 @@ export default function CashfreePaymentStatus() {
     ? null
     : `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
   const holdProtected = pending && attempt.attemptStatus === 'hold_active' && remainingSeconds > 0;
+  const holdExpired = pending && (['released', 'expired'].includes(attempt.attemptStatus) || remainingSeconds === 0);
   const restartPath = /^[A-Za-z0-9._~-]+$/.test(attempt?.providerSlug || '')
     ? `/book/${attempt.providerSlug}`
     : cashfreeCheckoutService.getRestartPath();
@@ -167,17 +172,28 @@ export default function CashfreePaymentStatus() {
     return () => window.clearInterval(timer);
   }, [pending]);
 
+  // Reconcile with the server as well as advancing the local display clock.
+  // A one-shot timer waits for each request to settle; terminal/access states stop it.
+  useEffect(() => {
+    if ((!pending && !unknown && !unfulfilled) || loading || openingCheckout) return undefined;
+    const deadline = new Date(attempt.holdExpiresAt).getTime() - Date.now();
+    const delay = deadline > 0 ? Math.max(1000, Math.min(10000, deadline)) : 10000;
+    const timer = window.setTimeout(() => { void refresh(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [pending, unknown, unfulfilled, loading, openingCheckout, attempt, refresh]);
+
   const title = unavailable
     ? statusError === 'access' ? 'We couldn’t access your payment session' : 'Payment status is unavailable'
     : !attempt
       ? 'Loading your payment session'
       : fulfilled
     ? 'Your appointment is confirmed'
-    : unfulfilled
-      ? 'Payment received — review started'
+    : reviewRequired
+      ? unfulfilled ? 'Payment received — confirmation needs review' : 'Your payment needs review'
       : failed
         ? 'Payment failed'
-        : 'Confirming your payment';
+        : unknown ? 'Payment outcome is unknown'
+          : holdExpired ? 'Your slot hold has expired' : 'Confirming your payment';
 
   return (
     <main className={`payment-status-page ${fulfilled ? 'payment-status-page--receipt' : ''}`}>
@@ -190,13 +206,15 @@ export default function CashfreePaymentStatus() {
           <h1 id="payment-status-title">{title}</h1>
           <p className="payment-status-copy">
             {fulfilled && 'Your payment is verified and the appointment is reserved. Keep the booking ID below for support.'}
-            {unfulfilled && 'The slot was no longer available when payment was confirmed. Calup has opened a resolution case for review and refund.'}
-            {failed && 'The payment was not completed. Your temporary slot hold has been released. Restart the booking process to try again.'}
+            {reviewRequired && 'Your appointment is not confirmed. Contact your merchant with your payment reference before paying again.'}
+            {reviewRequired && attempt?.resolutionCaseId && ' A resolution case is recorded; keep the case reference below.'}
+            {failed && 'The latest payment status reports that payment was not completed. You can restart booking. If you see a charge, contact your merchant before paying again.'}
+            {unknown && 'We could not determine the payment outcome from the available details. Check again or contact your merchant with your payment reference before paying again.'}
             {unavailable && 'We cannot confirm your payment or appointment reservation from this browser. Return to the browser where you started checkout and try again. If you were charged, contact your merchant with your payment reference before paying again.'}
             {!attempt && !unavailable && 'Loading the latest available payment details. Your payment and appointment reservation are not confirmed yet.'}
             {pending && (holdProtected
-              ? 'We are checking Cashfree directly. Your slot is temporarily protected until the hold deadline shown below.'
-              : 'We are checking Cashfree directly. Your appointment reservation is not confirmed. No active slot hold is confirmed.')}
+              ? 'Payment is not confirmed. Your slot is temporarily protected until the hold deadline shown below. This page checks for updates automatically.'
+              : 'Your appointment reservation is not confirmed. No active slot hold is confirmed. We will check for payment updates automatically. If you were charged, contact your merchant before paying again.')}
           </p>
 
           {fulfilled && attempt?.receipt?.bookingId && (
@@ -219,13 +237,14 @@ export default function CashfreePaymentStatus() {
           <div className="payment-status-actions">
             {unavailable && <button className="payment-status-button payment-status-button--primary" type="button" onClick={refresh} disabled={loading}>{loading ? 'Checking…' : 'Try again'}</button>}
             {unavailable && <Link className="payment-status-button" to="/booking-status">Find your booking</Link>}
-            {pending && attempt?.paymentSessionId && (
-              <button className="payment-status-button payment-status-button--primary" type="button" onClick={continuePayment} disabled={openingCheckout}>
+            {pending && holdProtected && attempt?.paymentSessionId && (
+              <button className="payment-status-button payment-status-button--primary" type="button" onClick={continuePayment} disabled={openingCheckout || loading}>
                 {openingCheckout ? 'Opening…' : 'Continue payment'}
               </button>
             )}
-            {pending && <button className="payment-status-button" type="button" onClick={cancelAndRestart} disabled={loading}>{loading ? 'Checking…' : 'Cancel payment and restart'}</button>}
-            {pending && <button className="payment-status-button" type="button" onClick={refresh} disabled={loading}>{loading ? 'Checking…' : 'Check again'}</button>}
+            {pending && <button className="payment-status-button" type="button" onClick={cancelAndRestart} disabled={loading || openingCheckout}>{loading ? 'Checking…' : 'Close checkout and check status'}</button>}
+            {(pending || unknown || reviewRequired) && <button className="payment-status-button" type="button" onClick={refresh} disabled={loading || openingCheckout}>{loading ? 'Checking…' : 'Check again'}</button>}
+            {(unknown || reviewRequired || holdExpired) && <Link className="payment-status-button" to="/booking-status">Find your booking</Link>}
             {failed && <Link className="payment-status-button payment-status-button--primary" to={restartPath}>Restart booking</Link>}
             {fulfilled && attempt?.receipt && (
               <button className="payment-status-button payment-status-button--primary" type="button" onClick={() => window.print()}>

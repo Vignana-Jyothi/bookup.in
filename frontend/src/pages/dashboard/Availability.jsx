@@ -3,7 +3,7 @@
  * Weekly schedule, dynamic buffers, and external calendar busy times
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
@@ -27,6 +27,9 @@ export default function Availability() {
   const gcal = state.googleCalendar || { isConnected: false, email: null };
   const [instructors, setInstructors] = useState([]);
   const [selectedInstructorId, setSelectedInstructorId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const saveInFlight = useRef(false);
   const selectedInstructor = instructors.find(item => item.id === selectedInstructorId) || null;
 
   useEffect(() => {
@@ -87,22 +90,35 @@ export default function Availability() {
   };
 
   const handleSave = async () => {
-    const normalizedBuffer = Math.min(240, Math.max(0, Math.round(Number(availability.bufferTime) || 0)));
-    if (normalizedBuffer !== availability.bufferTime) {
-      dispatch({ type: ACTIONS.UPDATE_AVAILABILITY, payload: { bufferTime: normalizedBuffer } });
-    }
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && state.provider?.id) {
-      try {
-        await dbService.saveAvailability(state.provider.id, availability.schedule, {
-          bufferTime: normalizedBuffer,
-          minNotice: availability.minNotice,
-          maxAdvanceBooking: availability.maxAdvanceBooking,
-        });
-      } catch (err) {
-        console.error('Failed to save availability in Supabase:', err);
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const normalizedBuffer = Math.min(240, Math.max(0, Math.round(Number(availability.bufferTime) || 0)));
+      if (normalizedBuffer !== availability.bufferTime) {
+        dispatch({ type: ACTIONS.UPDATE_AVAILABILITY, payload: { bufferTime: normalizedBuffer } });
       }
+      if (state.auth?.isDemoMode) {
+        addToast('Demo availability updated on this device. Live booking hours were not changed.', 'info');
+        return;
+      }
+      if (!isSupabaseConfigured() || !state.provider?.id) {
+        throw new Error('Saving unavailable');
+      }
+      const saved = await dbService.saveAvailability(state.provider.id, availability.schedule, {
+        bufferTime: normalizedBuffer,
+        minNotice: availability.minNotice,
+        maxAdvanceBooking: availability.maxAdvanceBooking,
+      });
+      if (saved !== true) throw new Error('Availability was not saved.');
+      addToast('Availability saved.');
+    } catch {
+      setSaveError('We could not save all your availability changes. Your edits remain here. Try Save Changes again.');
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
     }
-    addToast('Availability updated ✓ Dynamic slot engine updated.');
   };
 
   return (
@@ -120,10 +136,12 @@ export default function Availability() {
             Set when clients can book appointments with you.
           </p>
         </div>
-        <PillButton variant="primary" size="md" onClick={handleSave}>
-          Save Changes
+        <PillButton variant="primary" size="md" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Changes'}
         </PillButton>
       </div>
+
+      {saveError && <p role="alert">{saveError}</p>}
 
       {/* Weekly Schedule Card */}
       <div

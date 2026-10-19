@@ -23,10 +23,13 @@ function pageHarness() {
   const notifications = [];
   const accessError = Object.assign(new Error('Secure browser access required'), { status: 401 });
   let result = accessError;
+  const timers = new Map();
+  let refreshes = 0;
   const respond = async () => { if (result instanceof Error) throw result; return result; };
   const env = {
     ...runtime,
     jsxRuntime: runtime,
+    window: { setTimeout(callback) { timers.set('poll', callback); return 'poll'; }, clearTimeout(key) { timers.delete(key); } },
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
@@ -39,7 +42,7 @@ function pageHarness() {
     useStore: () => ({ addToast: message => notifications.push(message) }),
     usePopupFeedback: () => ['', message => { if (message) notifications.push(message); }],
     cashfreeCheckoutService: {
-      refreshPayment: respond, getAttempt: respond, finishCheckoutReturn: respond,
+      refreshPayment: async () => { refreshes++; return respond(); }, getAttempt: respond, finishCheckoutReturn: respond,
       getCheckoutSession: respond, getRestartPath: () => '/',
     },
     BrandLogo: () => null, TicketPanel: () => null, BookingReceipt: () => null,
@@ -56,6 +59,9 @@ function pageHarness() {
   return {
     text, notifications, accessError,
     setResult(value) { result = value; },
+    get refreshes() { return refreshes; },
+    startPoll() { render(); return effects.at(-1)(); },
+    async poll() { assert(timers.has('poll'), 'Unresolved state schedules reconciliation'); timers.get('poll')(); await new Promise(resolve => setImmediate(resolve)); },
     async load() {
       render();
       effects[0]();
@@ -86,7 +92,7 @@ await page.click('Continue payment');
 assert.match(page.text(), /We couldn’t access your payment session/);
 assert.doesNotMatch(page.text(), /Time remaining|Continue payment|slot.*protected/);
 
-for (const action of ['Check again', 'Cancel payment and restart']) {
+for (const action of ['Check again', 'Close checkout and check status']) {
   const lostAccessPage = pageHarness();
   lostAccessPage.setResult(pending);
   await lostAccessPage.load();
@@ -109,12 +115,12 @@ for (const result of [null, new Error('Network unavailable')]) {
 for (const hold of [{ holdExpiresAt: null }, { holdExpiresAt: new Date(0).toISOString() }, { attemptStatus: 'manual_review' }]) {
   page.setResult({ ...pending, ...hold });
   await page.click(page.text().includes('Try again') ? 'Try again' : 'Check again');
-  assert.match(page.text(), /No active slot hold is confirmed/);
+  assert.match(page.text(), hold.attemptStatus === 'manual_review' ? /Your payment needs review/ : /No active slot hold is confirmed/);
   assert.doesNotMatch(page.text(), /temporarily protected|Time remaining/);
 }
 for (const [result, title] of [
   [{ paymentStatus: 'succeeded', fulfilmentStatus: 'fulfilled' }, 'Your appointment is confirmed'],
-  [{ paymentStatus: 'succeeded', fulfilmentStatus: 'unfulfilled' }, 'review started'],
+  [{ paymentStatus: 'succeeded', fulfilmentStatus: 'unfulfilled' }, 'confirmation needs review'],
   [{ paymentStatus: 'closed_unpaid' }, 'Payment failed'],
 ]) {
   const terminalPage = pageHarness();
@@ -122,4 +128,26 @@ for (const [result, title] of [
   await terminalPage.load();
   assert(terminalPage.text().includes(title));
 }
+for (const result of [
+  { ...pending, holdExpiresAt: new Date(0).toISOString() },
+  { ...pending, attemptStatus: 'released' },
+]) {
+  const expiredPage = pageHarness(); expiredPage.setResult(result); await expiredPage.load();
+  assert.match(expiredPage.text(), /slot hold has expired/);
+  assert.doesNotMatch(expiredPage.text(), /Payment failed|Restart booking|Continue payment/);
+}
+for (const result of [{ paymentStatus: 'creation_unknown' }, { paymentStatus: 'unexpected' }]) {
+  const unknownPage = pageHarness(); unknownPage.setResult(result); await unknownPage.load();
+  assert.match(unknownPage.text(), /Payment outcome is unknown/);
+  assert.doesNotMatch(unknownPage.text(), /slot.*protected|Continue payment|Restart booking/);
+}
+const pollingPage = pageHarness(); pollingPage.setResult(pending); await pollingPage.load();
+const stopPoll = pollingPage.startPoll();
+pollingPage.setResult({ paymentStatus: 'succeeded', fulfilmentStatus: 'fulfilled' });
+const before = pollingPage.refreshes;
+await pollingPage.poll();
+assert.equal(pollingPage.refreshes, before + 1, 'Timer reconciles on the server');
+assert.match(pollingPage.text(), /Your appointment is confirmed/);
+stopPoll();
+assert.equal(pollingPage.startPoll(), undefined, 'Final state stops polling');
 console.log('PASS: payment session recovery, retry, lost access, unavailable data, hold deadlines and terminal states.');

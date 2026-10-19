@@ -3,7 +3,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from '../../data/store';
 import { getBookingUrl } from '../../utils/url';
 import PillButton from '../../components/ui/PillButton';
@@ -18,10 +18,28 @@ export default function BookingPageManagement() {
   const [commerce,setCommerce] = useState(null);
   const slug = provider?.slug || 'my-page';
   const bookingUrl = getBookingUrl(slug);
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const copyInFlight = useRef(false);
+  const bookingLinkRef = useRef(null);
 
-  const copyLink = () => {
-    navigator.clipboard?.writeText(bookingUrl).catch(() => {});
-    addToast('Booking link copied! ');
+  const copyLink = async (instagram = false) => {
+    if (copyInFlight.current) return;
+    copyInFlight.current = true;
+    setCopying(true);
+    setCopyError('');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(bookingUrl);
+      addToast(instagram ? 'Booking link copied. Paste it in your Instagram bio.' : 'Booking link copied.');
+    } catch {
+      setCopyError('Could not copy the link. Select the booking link above and copy it manually, or try again.');
+      bookingLinkRef.current?.focus();
+      bookingLinkRef.current?.select();
+    } finally {
+      copyInFlight.current = false;
+      setCopying(false);
+    }
   };
 
   const shareWhatsApp = () => {
@@ -97,19 +115,21 @@ export default function BookingPageManagement() {
               border: '1px solid var(--theme-border)',
               flexWrap: 'wrap',
             }}>
-              <span style={{
+              <input ref={bookingLinkRef} readOnly aria-label="Your booking link" value={bookingUrl} style={{
+                minWidth: 0,
+                flex: '1 1 240px',
+                background: 'transparent',
+                border: 0,
                 fontFamily: 'var(--font-family-mono)',
                 fontSize: '15px',
                 fontWeight: 600,
                 color: 'var(--color-text)',
                 wordBreak: 'break-all',
                 ...(!hasActiveServices ? { opacity: 0.5 } : {}),
-              }}>
-                {bookingUrl}
-              </span>
+              }} />
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <PillButton variant="primary" size="sm" onClick={copyLink} disabled={!hasActiveServices}>
-                  Copy Link
+                <PillButton variant="primary" size="sm" onClick={() => copyLink()} disabled={!hasActiveServices || copying}>
+                  {copying ? 'Copying…' : 'Copy Link'}
                 </PillButton>
                 <PillButton
                   variant="secondary"
@@ -125,6 +145,8 @@ export default function BookingPageManagement() {
               </div>
             </div>
           </div>
+
+          {copyError && <p role="alert">{copyError}</p>}
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '6px' }}>
             <button
@@ -151,11 +173,8 @@ export default function BookingPageManagement() {
             </button>
             <button
               type="button"
-              onClick={hasActiveServices ? () => {
-                copyLink();
-                addToast('Booking link copied! Paste it in your Instagram bio ');
-              } : undefined}
-              disabled={!hasActiveServices}
+              onClick={hasActiveServices ? () => copyLink(true) : undefined}
+              disabled={!hasActiveServices || copying}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

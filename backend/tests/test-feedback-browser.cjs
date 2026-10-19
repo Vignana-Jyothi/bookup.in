@@ -1,0 +1,111 @@
+// Opt-in: local Vite :5173 and a user-opened Chrome CDP :9222 are required.
+const assert = require('node:assert/strict');
+const { chromium } = require('playwright');
+const origin = 'http://127.0.0.1:5173';
+
+async function main() {
+  const fixture = await (await fetch(origin + '/tests/accessibility-fixture.jsx')).text();
+  const dependency = name => fixture.match(new RegExp(`from "([^"]+/${name}\\.js\\?[^"]+)"`))?.[1];
+  const reactModule = dependency('react');
+  const domModule = dependency('react-dom_client');
+  const routerModule = dependency('react-router-dom');
+  assert(reactModule && domModule && routerModule, 'Resolve current Vite dependency URLs');
+  const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const errors = [];
+  try {
+    await context.addInitScript(() => {
+      window.feedback = { mode: 'fail', toasts: [], refreshes: 0, writes: 0 };
+      window.attempt = { attemptId: 'fixture', paymentStatus: 'pending', attemptStatus: 'hold_active', holdExpiresAt: new Date(Date.now() + 60000).toISOString(), paymentSessionId: 'fixture' };
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+        writeText: async () => {
+          window.feedback.writes++;
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (window.feedback.mode === 'fail') throw new Error('Permission denied');
+        },
+      } });
+    });
+    await context.route('**/*', async route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) return route.abort();
+      const pathname = url.pathname.replace(/\.jsx?$/, '');
+      const js = body => route.fulfill({ contentType: 'application/javascript', body });
+      if (pathname === '/tests/feedback-harness') return route.fulfill({ contentType: 'text/html', body: `
+        <html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div>
+        <script type="module">import {injectIntoGlobalHook} from '/@react-refresh'; injectIntoGlobalHook(window); window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>type=>type;</script>
+        <script type="module">
+        import React from '${reactModule}';
+        import ReactDOM from '${domModule}';
+        import {MemoryRouter} from '${routerModule}';
+        import Availability from '/src/pages/dashboard/Availability.jsx';
+        import Sharing from '/src/pages/dashboard/BookingPageMgmt.jsx';
+        import Payment from '/src/pages/booking/CashfreePaymentStatus.jsx';
+        import '/src/styles/global.css'; import '/src/styles/components.css';
+        const Page={availability:Availability,sharing:Sharing,payment:Payment}[new URLSearchParams(location.search).get('surface')];
+        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MemoryRouter,null,React.createElement(Page)));
+        </script></body></html>` });
+      if (pathname.endsWith('/src/data/store')) return js(`
+        import React from '${reactModule}'; const {useState}=React;
+        const days=['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+        const state={auth:{isDemoMode:false},provider:{id:'fixture',slug:'fixture'},services:[{isActive:true}],availability:{schedule:Object.fromEntries(days.map(d=>[d,{available:true,start:'09:00',end:'18:00'}])),bufferTime:15,minNotice:2,maxAdvanceBooking:30}};
+        export function useStore(){const [,update]=useState(0);return {state,addToast:(...args)=>window.feedback.toasts.push(args),dispatch:action=>{Object.assign(state.availability,action.payload);update(n=>n+1)}};}
+      `);
+      if (pathname.endsWith('/services/supabase/supabaseClient')) return js('export const isSupabaseConfigured=()=>true;');
+      if (pathname.endsWith('/services/supabase/dbService')) return js(`export const dbService={saveAvailability:async()=>{await new Promise(r=>setTimeout(r,100));if(window.feedback.mode==='fail')throw new Error('Offline');return true;}};`);
+      if (pathname.endsWith('/services/booking/merchantSchedulingService')) return js('export const merchantSchedulingService={load:async()=>({instructors:[]})};');
+      if (pathname.endsWith('/services/payments/cashfreeCheckout')) return js(`export const cashfreeCheckoutService={refreshPayment:async()=>{window.feedback.refreshes++},getAttempt:async()=>window.attempt,getRestartPath:()=>'/'};`);
+      if (pathname.endsWith('/hooks/usePopupFeedback')) return js(`const clear=()=>{}; export const usePopupFeedback=()=>['',clear];`);
+      if (['/components/dashboard/CommerceManager','/components/support/TicketPanel','/components/ui/receipt-printer/BookingReceipt'].some(s=>pathname.endsWith(s))) return js('export default function Stub(){return null;}');
+      if (pathname.startsWith('/api/')) throw new Error('Unexpected API request in isolated test');
+      return route.continue();
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    page.on('pageerror', error => errors.push(error.message));
+    const open = async surface => {
+      await page.goto(`${origin}/tests/feedback-harness?surface=${surface}`, { waitUntil: 'networkidle' });
+      assert.deepEqual(errors, [], 'Fixture modules load without errors');
+    };
+    await open('availability');
+    await page.locator('#availability-buffer').fill('27');
+    await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+    await page.getByRole('alert').waitFor();
+    assert.match(await page.getByRole('alert').innerText(), /edits remain/);
+    assert.equal(await page.locator('#availability-buffer').inputValue(), '27');
+    assert.equal(await page.evaluate(() => feedback.toasts.length), 0);
+    await page.evaluate(() => { feedback.mode = 'success'; });
+    await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+    await page.waitForFunction(() => feedback.toasts.length === 1);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    console.log('PASS browser: failed availability save preserves draft; retry succeeds.');
+
+    await open('sharing');
+    for (const label of ['Copy Link', 'Instagram Bio Link']) {
+      await page.evaluate(() => { feedback.mode = 'fail'; feedback.toasts = []; });
+      await page.getByRole('button', { name: label, exact: true }).click();
+      await page.getByRole('alert').waitFor();
+      assert.equal(await page.evaluate(() => feedback.toasts.length), 0);
+      assert(await page.getByRole('textbox', { name: 'Your booking link' }).evaluate(e => e === document.activeElement && e.selectionEnd === e.value.length));
+      await page.evaluate(() => { feedback.mode = 'success'; });
+      await page.getByRole('button', { name: label, exact: true }).click();
+      await page.waitForFunction(() => feedback.toasts.length === 1);
+      assert.equal(await page.getByRole('alert').count(), 0);
+    }
+    console.log('PASS browser: both clipboard failures select the link; retries show one success.');
+
+    await page.clock.install();
+    await open('payment');
+    assert.equal(await page.locator('h1').innerText(), 'Confirming your payment');
+    await page.evaluate(() => { window.attempt = {...attempt, paymentStatus:'succeeded', fulfilmentStatus:'fulfilled'}; });
+    await page.clock.runFor(11000);
+    await page.getByRole('heading', { name: 'Your appointment is confirmed' }).waitFor();
+    assert(await page.evaluate(() => feedback.refreshes >= 2));
+    const count = await page.evaluate(() => feedback.refreshes);
+    await page.clock.runFor(30000);
+    assert.equal(await page.evaluate(() => feedback.refreshes), count, 'Terminal result stops polling');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.deepEqual(errors, []);
+    console.log('PASS browser: pending payment reconciles automatically, renders paid, and stops polling. No page errors.');
+  } finally { await context.close(); await browser.close(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
