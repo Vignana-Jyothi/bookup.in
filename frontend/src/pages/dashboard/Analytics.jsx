@@ -9,6 +9,8 @@ import { useStore, formatCurrency } from '../../data/store';
 import { bookingTotals, businessDate, monthlyBookingAnalytics } from '../../utils/dashboardData.js';
 import { Chart, registerables } from 'chart.js';
 import StatCard from '../../components/ui/StatCard';
+import MonthlyDataTable from '../../components/ui/MonthlyDataTable.jsx';
+export { default as MonthlyDataTable } from '../../components/ui/MonthlyDataTable.jsx';
 /* Disabled navigation enhancement (user request):
 import PageLinks from '../../components/ui/PageLinks';
 */
@@ -25,6 +27,11 @@ export default function Analytics() {
   const today = businessDate(now, state.provider?.timezone || 'Asia/Kolkata');
   const metrics = useMemo(() => bookingTotals(state.bookings), [state.bookings]);
   const analyticsData = useMemo(() => monthlyBookingAnalytics(state.bookings, today), [state.bookings, today]);
+  const monthlyData = analyticsData.monthlyData;
+  const period = `${monthlyData[0].month} to ${monthlyData[monthlyData.length - 1].month}`;
+  const monthlyAppointments = monthlyData.reduce((total, month) => total + month.appointments, 0);
+  const monthlyValue = monthlyData.reduce((total, month) => total + month.revenue, 0);
+  const noDataMessage = bookingSync?.error ? 'Chart data is unavailable. Please try again when the connection is restored.' : 'Loading chart data...';
   const chartRef1 = useRef(null);
   const chartRef2 = useRef(null);
   const chart1Instance = useRef(null);
@@ -34,6 +41,7 @@ export default function Analytics() {
     if (!dataReady || !analyticsData?.monthlyData) return;
 
     const labels = analyticsData.monthlyData.map(d => d.month);
+    const chartAccent = chartRef1.current ? getComputedStyle(chartRef1.current).getPropertyValue('--theme-focus-ring').trim() : '#536B1F';
 
     // Appointments chart
     if (chartRef1.current) {
@@ -51,6 +59,7 @@ export default function Analytics() {
           }],
         },
         options: {
+          animation: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? false : undefined,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -81,7 +90,7 @@ export default function Analytics() {
           datasets: [{
             label: 'Revenue (₹)',
             data: analyticsData.monthlyData.map(d => d.revenue),
-            borderColor: '#C6F135',
+            borderColor: chartAccent,
             backgroundColor: 'rgba(198, 241, 53, 0.25)',
             fill: true,
             tension: 0.35,
@@ -91,6 +100,7 @@ export default function Analytics() {
           }],
         },
         options: {
+          animation: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? false : undefined,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -157,7 +167,7 @@ export default function Analytics() {
       </div>
 
       {/* Charts Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
         <div
           className="card"
           style={{
@@ -174,9 +184,19 @@ export default function Analytics() {
             </h4>
             <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>Monthly volume</span>
           </div>
-          <div style={{ height: 260 }} aria-busy={!dataReady}>
-            <canvas ref={chartRef1} />
-          </div>
+          <p id="appointments-chart-description" style={{ fontSize: 13, marginBottom: 12 }}>
+            {dataReady
+              ? `${monthlyAppointments} active appointments from ${period}. Cancelled, rejected, and expired appointments are excluded.${monthlyAppointments === 0 ? ' No active appointments in this period.' : ''}`
+              : noDataMessage}
+          </p>
+          {dataReady && <>
+            <div style={{ height: 260 }}>
+              <canvas ref={chartRef1} role="img" aria-label={`Monthly active appointments, ${period}`} aria-describedby="appointments-chart-description">
+                Monthly appointment counts are available in the data table below.
+              </canvas>
+            </div>
+            <MonthlyDataTable rows={monthlyData} field="appointments" caption="Monthly active appointments" stale={Boolean(bookingSync?.error)} />
+          </>}
         </div>
 
         <div
@@ -195,9 +215,19 @@ export default function Analytics() {
             </h4>
             <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>Verified payments before refunds</span>
           </div>
-          <div style={{ height: 260 }}>
-            <canvas ref={chartRef2} />
-          </div>
+          <p id="paid-value-chart-description" style={{ fontSize: 13, marginBottom: 12 }}>
+            {dataReady
+              ? `${formatCurrency(monthlyValue)} in verified payments from ${period}, grouped by appointment date, before refunds. This is not net profit.${monthlyValue === 0 ? ' No verified paid value in this period.' : ''}`
+              : noDataMessage}
+          </p>
+          {dataReady && <>
+            <div style={{ height: 260 }}>
+              <canvas ref={chartRef2} role="img" aria-label={`Monthly paid booking value, ${period}`} aria-describedby="paid-value-chart-description">
+                Monthly paid booking values are available in the data table below.
+              </canvas>
+            </div>
+            <MonthlyDataTable rows={monthlyData} field="revenue" formatValue={formatCurrency} caption="Monthly paid booking value before refunds" stale={Boolean(bookingSync?.error)} />
+          </>}
         </div>
       </div>
     </div>

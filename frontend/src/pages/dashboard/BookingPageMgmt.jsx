@@ -34,13 +34,6 @@ export default function BookingPageManagement() {
   const activeServices = (state.services || []).filter(s => s.isActive);
   const hasActiveServices = activeServices.length > 0;
 
-  // Shared disabled-button style when no active services
-  const disabledBtnStyle = {
-    opacity: 0.45,
-    cursor: 'not-allowed',
-    pointerEvents: 'none',
-  };
-
   return (
     <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* No-services warning banner */}
@@ -115,29 +108,20 @@ export default function BookingPageManagement() {
                 {bookingUrl}
               </span>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={!hasActiveServices ? disabledBtnStyle : {}}>
-                  <PillButton variant="primary" size="sm" onClick={hasActiveServices ? copyLink : undefined}>
-                     Copy Link
-                  </PillButton>
-                </span>
-                {hasActiveServices ? (
-                  <a
-                    href={bookingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ textDecoration: 'none' }}
-                  >
-                    <PillButton variant="secondary" size="sm">
-                       Open Page
-                    </PillButton>
-                  </a>
-                ) : (
-                  <span style={disabledBtnStyle}>
-                    <PillButton variant="secondary" size="sm">
-                       Open Page
-                    </PillButton>
-                  </span>
-                )}
+                <PillButton variant="primary" size="sm" onClick={copyLink} disabled={!hasActiveServices}>
+                  Copy Link
+                </PillButton>
+                <PillButton
+                  variant="secondary"
+                  size="sm"
+                  href={hasActiveServices ? bookingUrl : undefined}
+                  target={hasActiveServices ? '_blank' : undefined}
+                  rel={hasActiveServices ? 'noopener noreferrer' : undefined}
+                  disabled={!hasActiveServices}
+                  aria-label="Open booking page in a new tab"
+                >
+                  Open Page
+                </PillButton>
               </div>
             </div>
           </div>
@@ -154,7 +138,7 @@ export default function BookingPageManagement() {
                 padding: '8px 16px',
                 borderRadius: 'var(--radius-pill)',
                 background: '#25D366',
-                color: '#FFFFFF',
+                color: '#0E0E0E',
                 border: 'none',
                 fontWeight: 600,
                 fontSize: '13px',

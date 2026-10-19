@@ -162,7 +162,7 @@ export default function Policies() {
                   />
                   <span style={{ fontSize: '14px', color: '#666' }}>hours before session start</span>
                 </div>
-                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                   Clients who cancel at least this many hours prior receive a 100% refund.
                 </span>
               </div>
@@ -197,7 +197,7 @@ export default function Policies() {
                     <span style={{ fontSize: '14px', fontWeight: 600 }}>% refund</span>
                   </div>
                 </div>
-                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                   Cancellations between {policy.partial_refund_hours}h and {policy.full_refund_hours}h receive a {policy.partial_refund_percent}% refund.
                 </span>
               </div>
@@ -234,7 +234,7 @@ export default function Policies() {
                   />
                   <span style={{ fontSize: '14px', color: '#666' }}>reschedules per booking</span>
                 </div>
-                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                   After this limit, clients cannot reschedule and must cancel under policy terms.
                 </span>
               </div>
@@ -267,7 +267,7 @@ export default function Policies() {
                   />
                   <span style={{ fontSize: '14px', color: '#666' }}>minutes after start</span>
                 </div>
-                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                   "Mark No-Show" button stays locked until session start + {policy.no_show_grace_minutes} min.
                 </span>
               </div>
@@ -285,7 +285,7 @@ export default function Policies() {
                   />
                   <span style={{ fontSize: '14px', color: '#666' }}>hours to verify payment</span>
                 </div>
-                <span className="form-hint" style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                   If payment is not confirmed within this window, the slot hold expires.
                 </span>
               </div>

@@ -4,7 +4,7 @@
  * Context-aware row actions, unified multi-criteria filtering, search, sorting, and responsive cards
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 /* Disabled navigation enhancement (user request):
 import { appointmentFilters } from '../../utils/navigation';
@@ -29,6 +29,7 @@ import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import StatCard from '../../components/ui/StatCard';
 import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 import BookingRefundRequest from '../../components/dashboard/BookingRefundRequest';
 import { DEFAULT_POLICY } from '../../utils/policyEngine';
 import { appointmentRefundLabel } from '../../utils/appointmentRefundStatus.js';
@@ -46,6 +47,11 @@ const TABS = [
 export default function Appointments() {
   const { state, dispatch, addToast } = useStore();
   const { now } = useOutletContext() || {};
+  const actionReturnFocus = useRef(null);
+  const rememberActionFocus = () => {
+    const active = document.activeElement;
+    actionReturnFocus.current = active?.closest('.actions-dropdown-anchor')?.querySelector('.btn-table-action') || active;
+  };
 
 /* Disabled navigation enhancement (user request):
   const location = useLocation();
@@ -259,6 +265,7 @@ export default function Appointments() {
 
   // Actions
   const handleOpenReschedule = (booking) => {
+    rememberActionFocus();
     setActionBooking(booking);
     setRescheduleDate(booking.date >= today ? booking.date : today);
     setRescheduleTime('');
@@ -324,6 +331,7 @@ export default function Appointments() {
   };
 
   const handleOpenComplete = (booking) => {
+    rememberActionFocus();
     setActionBooking(booking);
     setCompletionEndTime(booking.endTime);
     setShowCompleteModal(true);
@@ -359,6 +367,7 @@ export default function Appointments() {
   };
 
   const handleOpenNoShow = (booking) => {
+    rememberActionFocus();
     setActionBooking(booking);
     setShowNoShowModal(true);
     setOpenDropdownId(null);
@@ -381,6 +390,7 @@ export default function Appointments() {
   };
 
   const handleOpenCancel = (booking) => {
+    rememberActionFocus();
     setActionBooking(booking);
     setShowCancelModal(true);
     setOpenDropdownId(null);
@@ -430,6 +440,7 @@ export default function Appointments() {
   };
 
   const handleOpenDelete = (booking) => {
+    rememberActionFocus();
     setActionBooking(booking);
     setShowDeleteModal(true);
     setOpenDropdownId(null);
@@ -481,6 +492,7 @@ export default function Appointments() {
   };
 
   const handleOpenRejectPayment = (booking) => {
+    rememberActionFocus();
     setRejectModalBooking(booking);
     setRejectReason('');
   };
@@ -1998,18 +2010,18 @@ export default function Appointments() {
 
       {/* Manual Booking Modal */}
       {showManualModal && (
-        <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
+        <AccessibleModal label="Create appointment" onClose={() => setShowManualModal(false)}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Create New Appointment</h3>
-              <button className="modal-close" onClick={() => setShowManualModal(false)}>✕</button>
+              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowManualModal(false)}>✕</button>
             </div>
             <form onSubmit={handleCreateManualBooking}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Customer Name *</label>
-                    <input
+                    <label htmlFor="appointment-field-1" className="form-label">Customer Name *</label>
+                    <input id="appointment-field-1"
                       className="form-input"
                       placeholder="e.g. Rahul Sharma"
                       value={manualForm.customerName}
@@ -2019,8 +2031,8 @@ export default function Appointments() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Phone Number *</label>
-                    <input
+                    <label htmlFor="appointment-field-2" className="form-label">Phone Number *</label>
+                    <input id="appointment-field-2"
                       className="form-input"
                       type="tel"
                       placeholder="+91 98765 43210"
@@ -2033,8 +2045,8 @@ export default function Appointments() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">WhatsApp Number</label>
-                    <input
+                    <label htmlFor="appointment-field-3" className="form-label">WhatsApp Number</label>
+                    <input id="appointment-field-3"
                       className="form-input"
                       type="tel"
                       placeholder="Same as phone"
@@ -2043,8 +2055,8 @@ export default function Appointments() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email</label>
-                    <input
+                    <label htmlFor="appointment-field-4" className="form-label">Email</label>
+                    <input id="appointment-field-4"
                       className="form-input"
                       type="email"
                       placeholder="customer@email.com"
@@ -2055,8 +2067,8 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Select Service *</label>
-                  <select
+                  <label htmlFor="appointment-field-5" className="form-label">Select Service *</label>
+                  <select id="appointment-field-5"
                     className="form-input"
                     value={manualForm.serviceId}
                     onChange={e => setManualForm({ ...manualForm, serviceId: e.target.value, startTime: '' })}
@@ -2072,8 +2084,8 @@ export default function Appointments() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Date *</label>
-                    <input
+                    <label htmlFor="appointment-field-6" className="form-label">Date *</label>
+                    <input id="appointment-field-6"
                       type="date"
                       className="form-input"
                       min={today}
@@ -2086,9 +2098,9 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Select Time Slot *</label>
+                  <span id="manual-appointment-time-label" className="form-label">Select Time Slot *</span>
                   {manualSlotsDetailed.length > 0 ? (
-                    <div style={{
+                    <div role="group" aria-labelledby="manual-appointment-time-label" style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))',
                       gap: 'var(--space-2)',
@@ -2102,6 +2114,7 @@ export default function Appointments() {
                           type="button"
                           disabled={!slot.available}
                           className={`btn btn-sm ${manualForm.startTime === slot.time ? 'btn-primary' : 'btn-secondary'}`}
+                          aria-pressed={manualForm.startTime === slot.time}
                           style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -2131,8 +2144,8 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Notes (optional)</label>
-                  <textarea
+                  <label htmlFor="appointment-field-7" className="form-label">Notes (optional)</label>
+                  <textarea id="appointment-field-7"
                     className="form-input form-textarea"
                     rows={2}
                     placeholder="Walk-in, booked over phone, special requests..."
@@ -2153,7 +2166,7 @@ export default function Appointments() {
               </div>
             </form>
           </div>
-        </div>
+        </AccessibleModal>
       )}
     </div>
   );
@@ -2170,11 +2183,11 @@ export default function Appointments() {
       <>
         {/* Reschedule Modal */}
         {showRescheduleModal && (
-          <div className="modal-overlay" onClick={() => setShowRescheduleModal(false)}>
+          <AccessibleModal label="Reschedule appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowRescheduleModal(false)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Reschedule Appointment</h3>
-                <button className="modal-close" onClick={() => setShowRescheduleModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowRescheduleModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
@@ -2189,8 +2202,8 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label">Select New Date</label>
-                  <input
+                  <label htmlFor="appointment-field-8" className="form-label">Select New Date</label>
+                  <input id="appointment-field-8"
                     type="date"
                     className="form-input"
                     min={today}
@@ -2204,9 +2217,9 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label">Select Available Time</label>
+                  <span id="appointment-reschedule-time-label" className="form-label">Select Available Time</span>
                   {rescheduleSlotsDetailed.length > 0 ? (
-                    <div style={{
+                    <div role="group" aria-labelledby="appointment-reschedule-time-label" style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
                       gap: 'var(--space-2)',
@@ -2220,6 +2233,7 @@ export default function Appointments() {
                           type="button"
                           disabled={!slot.available}
                           className={`btn btn-sm ${rescheduleTime === slot.time ? 'btn-primary' : 'btn-secondary'}`}
+                          aria-pressed={rescheduleTime === slot.time}
                           style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -2265,16 +2279,16 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Complete Modal */}
         {showCompleteModal && (
-          <div className="modal-overlay" onClick={() => setShowCompleteModal(false)}>
+          <AccessibleModal label="Complete appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowCompleteModal(false)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Complete Appointment</h3>
-                <button className="modal-close" onClick={() => setShowCompleteModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowCompleteModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
@@ -2287,9 +2301,9 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label">Actual Wrap-up Time</label>
+                  <label htmlFor="appointment-field-9" className="form-label">Actual Wrap-up Time</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-                    <input
+                    <input id="appointment-field-9"
                       type="time"
                       className="form-input"
                       style={{ width: 140 }}
@@ -2349,16 +2363,16 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Cancel Modal */}
         {showCancelModal && (
-          <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
+          <AccessibleModal label="Cancel appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowCancelModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Cancel Appointment?</h3>
-                <button className="modal-close" onClick={() => setShowCancelModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowCancelModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ marginBottom: 'var(--space-3)' }}>
@@ -2388,16 +2402,16 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* No-show Modal */}
         {showNoShowModal && (
-          <div className="modal-overlay" onClick={() => setShowNoShowModal(false)}>
+          <AccessibleModal label="Mark appointment as no-show" returnFocusRef={actionReturnFocus} onClose={() => setShowNoShowModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Record No-show</h3>
-                <button className="modal-close" onClick={() => setShowNoShowModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowNoShowModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ marginBottom: 'var(--space-4)' }}>
@@ -2423,16 +2437,16 @@ export default function Appointments() {
                 <button className="btn btn-danger" onClick={() => handleConfirmNoShow(target.id)}>Confirm No-Show (0% Refund)</button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Delete Modal */}
         {showDeleteModal && (
-          <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <AccessibleModal label="Delete appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowDeleteModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Delete Appointment</h3>
-                <button className="modal-close" onClick={() => setShowDeleteModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowDeleteModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ marginBottom: 'var(--space-3)' }}>
@@ -2447,7 +2461,7 @@ export default function Appointments() {
                 <button className="btn btn-danger" onClick={() => handleConfirmDelete(target.id)}>Delete</button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
       </>
     );
@@ -2459,12 +2473,13 @@ export default function Appointments() {
       <>
         {/* Reject Payment Modal */}
         {rejectModalBooking && (
-          <div className="modal-overlay" onClick={() => !processingPaymentId && setRejectModalBooking(null)}>
+          <AccessibleModal label="Reject payment" returnFocusRef={actionReturnFocus} onClose={() => !processingPaymentId && setRejectModalBooking(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3 style={{ color: '#DC2626' }}>Reject Payment</h3>
                 <button
                   type="button"
+                  aria-label="Close dialog"
                   className="modal-close"
                   onClick={() => !processingPaymentId && setRejectModalBooking(null)}
                 >
@@ -2487,8 +2502,8 @@ export default function Appointments() {
                 </p>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 600 }}>Reason for Rejection (Optional)</label>
-                  <textarea
+                  <label htmlFor="appointment-field-10" className="form-label" style={{ fontWeight: 600 }}>Reason for Rejection (Optional)</label>
+                  <textarea id="appointment-field-10"
                     className="form-input"
                     rows={3}
                     placeholder="e.g., Payment not received in UPI account, incorrect reference ID, amount mismatch... (optional)"
@@ -2518,16 +2533,16 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Screenshot Viewer Modal */}
         {viewScreenshotUrl && (
-          <div className="modal-overlay" onClick={() => setViewScreenshotUrl(null)}>
+          <AccessibleModal label="Payment screenshot" onClose={() => setViewScreenshotUrl(null)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', padding: '16px' }}>
               <div className="modal-header" style={{ marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '16px' }}>Payment Proof Screenshot</h3>
-                <button type="button" className="modal-close" onClick={() => setViewScreenshotUrl(null)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setViewScreenshotUrl(null)}>✕</button>
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', borderRadius: '8px', overflow: 'hidden', maxHeight: '70vh' }}>
                 <img
@@ -2542,16 +2557,16 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Mark Refund Sent Modal */}
         {showRefundModal && selectedRefundTarget && (
-          <div className="modal-overlay" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>
+          <AccessibleModal label="Record refund" onClose={() => !isSubmittingRefundSent && setShowRefundModal(false)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '20px', padding: '24px', maxWidth: 480 }}>
               <div className="modal-header">
                 <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Confirm Refund Sent</h3>
-                <button className="modal-close" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>✕</button>
               </div>
               <div className="modal-body" style={{ marginTop: '12px' }}>
                 <div style={{ padding: '14px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
@@ -2570,10 +2585,10 @@ export default function Appointments() {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>
+                  <label htmlFor="appointment-field-11" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>
                     Payment Proof Screenshot (Optional)
                   </label>
-                  <input
+                  <input id="appointment-field-11"
                     type="file"
                     accept="image/*,application/pdf"
                     className="form-input"
@@ -2605,7 +2620,7 @@ export default function Appointments() {
                 </button>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
       </>
     );

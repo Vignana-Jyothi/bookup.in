@@ -48,7 +48,7 @@ export default function CalendarWidget({ selectedDate, onSelectDate }) {
     });
   }
 
-  const selectedStr = selectedDate || new Date().toISOString().split('T')[0];
+  const selectedStr = selectedDate || new Date().toLocaleDateString('en-CA');
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -62,13 +62,14 @@ export default function CalendarWidget({ selectedDate, onSelectDate }) {
     <div className="calendar-widget-card">
       {/* Month & Navigation Header */}
       <div className="cal-widget-header">
-        <span>{monthName} {year}</span>
+        <span aria-live="polite" aria-atomic="true">{monthName} {year}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button
             type="button"
             onClick={handlePrevMonth}
             className="cal-widget-day-btn"
-            style={{ width: 24, height: 24, fontSize: 13, cursor: 'pointer' }}
+            style={{ width: 44, height: 44, fontSize: 13, cursor: 'pointer' }}
+            aria-label="Previous month"
             title="Previous month"
           >
             ‹
@@ -77,7 +78,8 @@ export default function CalendarWidget({ selectedDate, onSelectDate }) {
             type="button"
             onClick={handleNextMonth}
             className="cal-widget-day-btn"
-            style={{ width: 24, height: 24, fontSize: 13, cursor: 'pointer' }}
+            style={{ width: 44, height: 44, fontSize: 13, cursor: 'pointer' }}
+            aria-label="Next month"
             title="Next month"
           >
             ›
@@ -101,6 +103,9 @@ export default function CalendarWidget({ selectedDate, onSelectDate }) {
               key={idx}
               type="button"
               disabled={!item.isCurrentMonth}
+              aria-label={item.dateStr ? new Date(`${item.dateStr}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+              aria-pressed={Boolean(isSelected)}
+              aria-current={item.dateStr === new Date().toLocaleDateString('en-CA') ? 'date' : undefined}
               onClick={() => item.dateStr && onSelectDate && onSelectDate(item.dateStr)}
               className={`cal-widget-day-btn ${!item.isCurrentMonth ? 'other-month' : ''} ${
                 isSelected ? 'selected' : ''

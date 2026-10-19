@@ -224,13 +224,14 @@
 
 .cal-strip-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   text-align: center;
 }
 
 .cal-strip-day-btn {
-  width: 32px;
+  width: min(32px, 100%);
+  min-width: 24px;
   height: 32px;
   margin: 0 auto;
   border-radius: 50%;
@@ -243,6 +244,13 @@
   background: transparent;
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+@media (max-width: 480px) {
+  .customer-reschedule-modal { padding: 12px !important; }
+  .customer-reschedule-modal .modal-header,
+  .customer-reschedule-modal .modal-body { padding: 12px 0 !important; }
+  .customer-reschedule-modal .cal-strip-days { gap: 2px; }
 }
 
 .cal-strip-day-btn:hover:not(.selected) {

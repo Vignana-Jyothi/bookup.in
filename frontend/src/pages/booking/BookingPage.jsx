@@ -872,6 +872,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                     key={svc.id}
                     type="button"
                     className={`service-select-row ${isSelected ? 'selected' : ''}`}
+                    aria-pressed={isSelected}
                     onClick={() => {
                       setSelectedService(svc);
                       setSelectedDate(null);
@@ -915,6 +916,8 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                 <button
                   type="button"
                   className="cal-nav-arrow"
+                  aria-label="Previous month"
+                  style={{ minWidth: 44, minHeight: 44 }}
                   onClick={() => {
                     if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
                     else setCalMonth(calMonth - 1);
@@ -922,12 +925,14 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                 >
                   ‹
                 </button>
-                <span className="cal-strip-title">
+                <span className="cal-strip-title" aria-live="polite" aria-atomic="true">
                   {MONTH_NAMES[calMonth]} {calYear}
                 </span>
                 <button
                   type="button"
                   className="cal-nav-arrow"
+                  aria-label="Next month"
+                  style={{ minWidth: 44, minHeight: 44 }}
                   onClick={() => {
                     if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
                     else setCalMonth(calMonth + 1);
@@ -955,6 +960,8 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                       key={i}
                       type="button"
                       disabled={!isAvailable}
+                      aria-label={d.date ? new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+                      aria-pressed={isSelected}
                       className={`cal-strip-day-btn ${!d.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''}`}
                       onClick={() => {
                         if (isAvailable) {
@@ -985,6 +992,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                         key={slot.time}
                         type="button"
                         disabled={!slot.available}
+                        aria-pressed={isSelected}
                         className={`timeslot-row ${isSelected ? 'selected' : ''} ${!slot.available ? 'disabled' : ''}`}
                         onClick={() => slot.available && setSelectedTime(slot.time)}
                       >
@@ -1040,12 +1048,13 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
 
             {/* Meeting Mode Selection or Display */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label" style={{ fontWeight: 600 }}>Meeting Mode</label>
+              <div id="booking-meeting-mode-label" className="form-label" style={{ fontWeight: 600 }}>Meeting Mode</div>
               {selectedService?.meetingType === 'both' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div role="group" aria-labelledby="booking-meeting-mode-label" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <button
                     type="button"
                     onClick={() => setCustomerMeetingType('online')}
+                    aria-pressed={customerMeetingType === 'online'}
                     style={{
                       padding: '10px 12px',
                       borderRadius: '12px',
@@ -1061,6 +1070,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                   <button
                     type="button"
                     onClick={() => setCustomerMeetingType('in-person')}
+                    aria-pressed={customerMeetingType === 'in-person'}
                     style={{
                       padding: '10px 12px',
                       borderRadius: '12px',
@@ -1105,9 +1115,12 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
             {/* Input fields with 16px radius */}
             <div className="booking-form-fields">
               <div className="form-group">
-                <label className="form-label">Full Name *</label>
+                <label className="form-label" htmlFor="booking-field-name">Full Name *</label>
                 <input
                   id="booking-field-name"
+                  autoComplete="name"
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  aria-describedby={fieldErrors.name ? 'booking-error-name' : undefined}
                   className={`form-input${fieldErrors.name ? ' form-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. Maya Lin"
@@ -1116,13 +1129,16 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                   onChange={e => { setCustomerInfo({ ...customerInfo, name: e.target.value }); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: '' })); }}
                   onBlur={() => handleFieldBlur('name')}
                 />
-                {fieldErrors.name && <div className="form-field-error">{fieldErrors.name}</div>}
+                {fieldErrors.name && <div id="booking-error-name" className="form-field-error">{fieldErrors.name}</div>}
               </div>
 
               <div className="form-group">
-                <label className="form-label">WhatsApp / Phone *</label>
+                <label className="form-label" htmlFor="booking-field-phone">WhatsApp / Phone *</label>
                 <input
                   id="booking-field-phone"
+                  autoComplete="tel"
+                  aria-invalid={Boolean(fieldErrors.phone)}
+                  aria-describedby={fieldErrors.phone ? 'booking-error-phone' : undefined}
                   className={`form-input${fieldErrors.phone ? ' form-input-error' : ''}`}
                   type="tel"
                   placeholder="+91 98765 43210"
@@ -1131,13 +1147,16 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                   onChange={e => { setCustomerInfo({ ...customerInfo, phone: e.target.value }); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: '' })); }}
                   onBlur={() => handleFieldBlur('phone')}
                 />
-                {fieldErrors.phone && <div className="form-field-error">{fieldErrors.phone}</div>}
+                {fieldErrors.phone && <div id="booking-error-phone" className="form-field-error">{fieldErrors.phone}</div>}
               </div>
 
               <div className="form-group">
-                <label className="form-label">Email address (for calendar invite)</label>
+                <label className="form-label" htmlFor="booking-field-email">Email address (for calendar invite)</label>
                 <input
                   id="booking-field-email"
+                  autoComplete="email"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby={fieldErrors.email ? 'booking-error-email' : undefined}
                   className={`form-input${fieldErrors.email ? ' form-input-error' : ''}`}
                   type="email"
                   placeholder="your@email.com"
@@ -1145,12 +1164,13 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                   onChange={e => { setCustomerInfo({ ...customerInfo, email: e.target.value }); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: '' })); }}
                   onBlur={() => handleFieldBlur('email')}
                 />
-                {fieldErrors.email && <div className="form-field-error">{fieldErrors.email}</div>}
+                {fieldErrors.email && <div id="booking-error-email" className="form-field-error">{fieldErrors.email}</div>}
               </div>
 
               <div className="form-group">
-                <label className="form-label">Notes (optional)</label>
+                <label className="form-label" htmlFor="booking-field-notes">Notes (optional)</label>
                 <textarea
+                  id="booking-field-notes"
                   className="form-input"
                   rows={2}
                   placeholder="Any questions or preferences for your session..."

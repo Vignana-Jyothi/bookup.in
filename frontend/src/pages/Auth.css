@@ -16,13 +16,13 @@
 }
 .calup-auth-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 28px 30px 0; }
 .calup-auth-brand-row > span {
-  color: #8b9481; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
+  color: #59634e; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
 }
 .calup-auth-form-area { width: min(390px, calc(100% - 64px)); margin: auto; padding: 44px 0; }
 .calup-auth-heading { margin-bottom: 30px; text-align: center; }
 .calup-auth-heading--left { text-align: left; }
 .calup-auth-heading > span, .calup-auth-kicker {
-  display: inline-flex; align-items: center; gap: 8px; color: #71805f; font-size: 10px;
+  display: inline-flex; align-items: center; gap: 8px; color: #59634e; font-size: 10px;
   font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
 }
 .calup-auth-heading h1 {
@@ -60,15 +60,15 @@
 .calup-auth-role-field label.is-selected { border-color: #9dbb5d; color: #354817; background: #f0f7e2; }
 .calup-auth-role-field input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }
 .calup-auth-role-field label:has(input:focus-visible) { outline: 3px solid #6b8720; outline-offset: 3px; }
-.calup-auth-form label small { margin-left: 6px; color: #7e8775; font-size: 11px; font-weight: 400; }
-.calup-auth-field-hint { color: #767d6b; font-size: 10px; font-weight: 400; line-height: 1.6; }
+.calup-auth-form label small { margin-left: 6px; color: #59634e; font-size: 11px; font-weight: 400; }
+.calup-auth-field-hint { color: #59634e; font-size: 10px; font-weight: 400; line-height: 1.6; }
 .calup-auth-phone-field { display: flex; align-items: center; overflow: hidden; border: 1px solid #d6dacd; border-radius: 8px; background: #fff; }
 .calup-auth-phone-field:focus-within { border-color: #7f9b42; box-shadow: 0 0 0 4px rgb(126 155 65 / 13%); }
 .calup-auth-phone-field > span { align-self: stretch; display: grid; place-items: center; padding: 0 12px; border-right: 1px solid #e1e4dc; color: #697160; background: #f6f7f3; font-size: 13px; }
 .calup-auth-phone-field input { min-height: 46px; border: 0; border-radius: 0; box-shadow: none !important; }
 .calup-auth-verification { width: min(540px, 100%); display: grid; justify-items: start; gap: 14px; margin: auto; padding: 28px 0; }
 .calup-auth-verification-icon { width: 68px; height: 68px; display: grid; place-items: center; border-radius: 18px; color: #587224; background: #edf6d8; }
-.calup-auth-verification > span:not(.calup-auth-verification-icon) { color: #78816e; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.calup-auth-verification > span:not(.calup-auth-verification-icon) { color: #59634e; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
 .calup-auth-verification h1 { margin: 0; font-family: var(--font-heading); font-size: clamp(30px, 4vw, 42px); letter-spacing: -.04em; }
 .calup-auth-verification > p { margin: 0 0 6px; color: #687061; font-size: 14px; line-height: 1.8; }
 .calup-auth-form input {
@@ -76,8 +76,9 @@
   outline: none; color: var(--auth-ink); background: #fff; font: inherit; font-weight: 450;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-.calup-auth-form input::placeholder { color: #979e90; }
-.calup-auth-form input:focus { border-color: #7f9b42; box-shadow: 0 0 0 4px rgb(126 155 65 / 13%); }
+.calup-auth-form input::placeholder { color: #59634e; opacity: 1; }
+.calup-auth-form input:focus { border-color: var(--theme-focus-ring, #536B1F); box-shadow: 0 0 0 4px rgb(126 155 65 / 13%); }
+.calup-auth-form input:focus-visible { outline: 2px solid var(--theme-focus-ring, #536B1F); outline-offset: 2px; }
 .calup-auth-password { position: relative; }
 .calup-auth-password input { padding-right: 50px; }
 .calup-auth-password button {
@@ -101,7 +102,7 @@
 }
 .calup-auth-switch {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin: 24px 0 0;
-  color: #7a8273; font-size: 13px;
+  color: #59634e; font-size: 13px;
 }
 .calup-auth-switch a {
   display: inline-flex; align-items: center; gap: 5px; color: #344126; font-weight: 700; text-decoration: none;
@@ -109,7 +110,7 @@
 .calup-auth-switch a:hover { text-decoration: underline; text-underline-offset: 4px; }
 .calup-auth-footer {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 22px 30px; color: #848d7d; font-size: 10px;
+  gap: 12px; padding: 22px 30px; color: #59634e; font-size: 10px;
 }
 .calup-auth-footer span:last-child { display: inline-flex; align-items: center; gap: 6px; }
 .calup-auth-story {
@@ -129,12 +130,12 @@
 .calup-auth-story blockquote p {
   margin: 0; font-family: var(--font-heading); font-size: clamp(21px, 2vw, 28px); letter-spacing: -.03em; line-height: 1.5;
 }
-.calup-auth-story blockquote cite { display: block; margin-top: 13px; color: #838f79; font-size: 12px; font-style: normal; }
+.calup-auth-story blockquote cite { display: block; margin-top: 13px; color: #59634e; font-size: 12px; font-style: normal; }
 .calup-auth-benefits { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; color: #61734f; font-size: 11px; }
 .calup-auth-benefits span { display: inline-flex; align-items: center; gap: 5px; }
 .calup-auth-story-rule { height: 1px; margin: 22px 0; background: #dae2ce; }
 .calup-auth-story-footer > p {
-  text-align: center; color: #8b957f !important; font-size: 10px !important;
+  text-align: center; color: #59634e !important; font-size: 10px !important;
   font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
 }
 @media (max-width: 1023px) {

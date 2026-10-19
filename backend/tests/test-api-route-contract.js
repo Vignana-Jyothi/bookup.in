@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { openApiDocument, swaggerPage } from '../server/openapi.js';
+import fs from 'node:fs';
+import { openApiDocument } from '../server/openapi.js';
 
 const requiredOperations = {
   '/api/v1/public/commerce/{slug}/orders': ['get'],
@@ -67,9 +68,9 @@ for (const path of Object.keys(openApiDocument.paths)) {
   assert.equal(/bookup/i.test(path), false, `Internal codename exposed in API path: ${path}`);
 }
 
-const html = swaggerPage();
-assert.match(html, /SwaggerUIBundle/);
-assert.match(html, /\/api\/openapi\.json/);
-assert.match(html, /credentials='include'/);
+const serverSource = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+const contractSource = fs.readFileSync(new URL('../server/openapi.js', import.meta.url), 'utf8');
+assert.doesNotMatch(serverSource, /swagger|\/developers\/api-docs|\/api\/openapi\.json|API_DOCS_ENABLED|from ['"]\.\/openapi\.js/);
+assert.doesNotMatch(contractSource, /swaggerPage|SwaggerUIBundle|swagger-ui-dist/);
 
 console.log(`PASS: OpenAPI contract covers ${Object.keys(openApiDocument.paths).length} documented paths.`);

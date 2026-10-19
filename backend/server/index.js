@@ -31,7 +31,6 @@ import merchantAppointmentsRoutes from './routes/merchantAppointments.js';
 import merchantSchedulingRoutes from './routes/merchantScheduling.js';
 import merchantSubscriptionRoutes from './routes/merchantSubscription.js';
 import merchantOnboardingRoutes from './routes/merchantOnboarding.js';
-import { openApiDocument, swaggerPage } from './openapi.js';
 import { startSubscriptionLifecycleWorker } from './services/subscriptionLifecycle.js';
 import { createSupportTicketsRouter } from './routes/supportTickets.js';
 import { startSupportLifecycleWorker } from './services/supportLifecycle.js';
@@ -95,17 +94,6 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-if (process.env.NODE_ENV !== 'production' || process.env.API_DOCS_ENABLED === 'true') {
-  app.get('/api/openapi.json', (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.json(openApiDocument);
-  });
-  app.get(['/developers/api-docs', '/swagger'], (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.type('html').send(swaggerPage());
-  });
-}
 
 // API Routes
 app.use('/api/auth/google', authRoutes);

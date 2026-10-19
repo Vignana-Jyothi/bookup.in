@@ -222,16 +222,3 @@ export const openApiDocument = {
     '/api/internal/notifications/cleanup-duplicate-services': { post: { tags: ['Internal'], summary: 'Clean duplicate service rows', security: internalSecret, responses: { 200: ok('Cleanup result.') } } },
   },
 };
-
-export function swaggerPage() {
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="referrer" content="no-referrer"><title>Calup API - Swagger</title>
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-<style>body{margin:0;background:#fafafa}.notice{padding:10px 18px;background:#fff7ed;color:#9a3412;font:14px system-ui;border-bottom:1px solid #fed7aa}</style>
-</head><body><div class="notice">Developer environment only. Use sandbox data. Never paste service-role, Cashfree secret, webhook secret, or Google client secret here.</div><div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>window.onload=()=>{if(!window.SwaggerUIBundle){document.getElementById('swagger-ui').textContent='Swagger UI could not load. Open /api/openapi.json directly.';return;}SwaggerUIBundle({url:'/api/openapi.json',dom_id:'#swagger-ui',deepLinking:true,persistAuthorization:false,displayRequestDuration:true,requestInterceptor:r=>{r.credentials='include';return r;}})}</script>
-</body></html>`;
-}
-

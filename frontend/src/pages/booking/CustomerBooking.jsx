@@ -35,6 +35,7 @@ import { customerBookingService } from '../../services/booking/customerBookingSe
 import { clearLastBooking } from '../../utils/lastBooking';
 import { calculateCancellationRefund, DEFAULT_POLICY } from '../../utils/policyEngine';
 import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 import BrandLogo from '../../components/ui/BrandLogo';
 import './BookingPage.css';
 /* Disabled navigation enhancement (user request):
@@ -471,8 +472,8 @@ export default function CustomerBooking() {
               }}
             >
               <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Booking ID</label>
-                <input
+                <label htmlFor="customer-field-1" className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Booking ID</label>
+                <input id="customer-field-1"
                   type="text"
                   className="form-input"
                   placeholder="M123456789"
@@ -548,8 +549,8 @@ export default function CustomerBooking() {
             </p>
             <form onSubmit={verifyTracking}>
               <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Booking ID</label>
-                <input className="form-input" value={normalizedLookupIdentifier} readOnly style={{ width: '100%' }} />
+                <label htmlFor="customer-field-2" className="form-label">Booking ID</label>
+                <input id="customer-field-2" className="form-input" value={normalizedLookupIdentifier} readOnly style={{ width: '100%' }} />
               </div>
               <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label className="form-label" htmlFor="tracking-phone">Mobile number</label>
@@ -1602,10 +1603,10 @@ export default function CustomerBooking() {
 
                   {/* Screenshot Upload */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
+                    <label htmlFor="customer-payment-screenshot" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
                       Payment Screenshot <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                     </label>
-                    <input
+                    <input id="customer-payment-screenshot"
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       onChange={e => setPaymentScreenshot(e.target.files?.[0] || null)}
@@ -1966,11 +1967,11 @@ export default function CustomerBooking() {
 
         {/* Reschedule Modal */}
         {showRescheduleModal && (
-          <div className="modal-overlay" onClick={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>
-            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px', maxWidth: 440 }}>
+          <AccessibleModal label="Reschedule your session" onClose={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>
+            <div className="modal modal-md customer-reschedule-modal" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px', maxWidth: 440 }}>
               <div className="modal-header">
                 <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Reschedule Your Session</h3>
-                <button className="modal-close" onClick={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => !isSubmittingReschedule && setShowRescheduleModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--theme-text-muted)', marginBottom: 'var(--space-4)' }}>
@@ -1979,12 +1980,14 @@ export default function CustomerBooking() {
 
                 {/* Calendar Month Strip Date Picker */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Choose a New Date</label>
-                  <div className="calendar-month-strip" style={{ marginTop: '6px' }}>
+                  <span id="customer-reschedule-date-label" className="form-label" style={{ fontWeight: 600 }}>Choose a New Date</span>
+                  <div role="group" aria-labelledby="customer-reschedule-date-label" className="calendar-month-strip" style={{ marginTop: '6px' }}>
                     <div className="cal-strip-header">
                       <button
                         type="button"
                         className="cal-nav-arrow"
+                        aria-label="Previous month"
+                        style={{ minWidth: 44, minHeight: 44 }}
                         onClick={() => {
                           if (rescheduleCalMonth === 0) {
                             setRescheduleCalMonth(11);
@@ -1996,12 +1999,14 @@ export default function CustomerBooking() {
                       >
                         ‹
                       </button>
-                      <span className="cal-strip-title">
+                      <span className="cal-strip-title" aria-live="polite" aria-atomic="true">
                         {MONTH_NAMES[rescheduleCalMonth]} {rescheduleCalYear}
                       </span>
                       <button
                         type="button"
                         className="cal-nav-arrow"
+                        aria-label="Next month"
+                        style={{ minWidth: 44, minHeight: 44 }}
                         onClick={() => {
                           if (rescheduleCalMonth === 11) {
                             setRescheduleCalMonth(0);
@@ -2031,6 +2036,8 @@ export default function CustomerBooking() {
                             key={i}
                             type="button"
                             disabled={!isAvailable}
+                            aria-label={d.date ? new Date(`${d.date}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : `${d.day}, outside displayed month`}
+                            aria-pressed={Boolean(isSelected && d.isCurrentMonth)}
                             className={`cal-strip-day-btn ${!d.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''}`}
                             onClick={() => {
                               if (isAvailable) {
@@ -2050,7 +2057,7 @@ export default function CustomerBooking() {
                 {/* Available Time Slots Section */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label className="form-label" style={{ fontWeight: 600, margin: 0 }}>Select Available Time Slot</label>
+                    <span id="customer-reschedule-time-label" className="form-label" style={{ fontWeight: 600, margin: 0 }}>Select Available Time Slot</span>
                     {newDate && (
                       <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>
                         {formatDate(newDate)}
@@ -2085,7 +2092,7 @@ export default function CustomerBooking() {
                       </button>
                     </div>
                   ) : availableRescheduleSlots.length > 0 ? (
-                    <div style={{
+                    <div role="group" aria-labelledby="customer-reschedule-time-label" style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
                       gap: '8px',
@@ -2099,6 +2106,7 @@ export default function CustomerBooking() {
                           <button
                             key={slot.time}
                             type="button"
+                            aria-pressed={isSelected}
                             className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
                             style={{
                               padding: '10px 6px',
@@ -2160,16 +2168,16 @@ export default function CustomerBooking() {
                 </PillButton>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
 
         {/* Cancel Confirmation Modal with Policy Evaluation */}
         {showCancelModal && (
-          <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
+          <AccessibleModal label="Cancel your booking" onClose={() => setShowCancelModal(false)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px' }}>
               <div className="modal-header">
                 <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Cancel Appointment</h3>
-                <button className="modal-close" onClick={() => setShowCancelModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowCancelModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <div style={{
@@ -2222,17 +2230,17 @@ export default function CustomerBooking() {
                 </PillButton>
               </div>
             </div>
-          </div>
+          </AccessibleModal>
         )}
         {/* Dispute Modal (Refund or Customer No-Show) */}
         {showDisputeModal && (
-          <div className="modal-overlay" onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}>
+          <AccessibleModal label="Report a booking issue" onClose={() => !isSubmittingDispute && setShowDisputeModal(false)}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px', padding: '24px', maxWidth: 460 }}>
               <div className="modal-header">
                 <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
                   {disputeType === 'refund' ? 'Dispute Refund' : 'Dispute No-Show Record'}
                 </h3>
-                <button className="modal-close" onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}>✕</button>
               </div>
               <form onSubmit={handleSubmitDispute}>
                 <div className="modal-body" style={{ marginTop: '12px' }}>
@@ -2242,10 +2250,10 @@ export default function CustomerBooking() {
                       : 'Please explain why you dispute being marked as a no-show (e.g. attended Google Meet on time, technical issue).'}
                   </p>
                   <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label className="form-label" style={{ fontWeight: 600, fontSize: '12.5px' }}>
+                    <label htmlFor="customer-field-3" className="form-label" style={{ fontWeight: 600, fontSize: '12.5px' }}>
                       Explanation / Note for CalUp & Coach <span style={{ color: '#EF4444' }}>*</span>
                     </label>
-                    <textarea
+                    <textarea id="customer-field-3"
                       className="form-input"
                       rows={4}
                       required
@@ -2271,7 +2279,7 @@ export default function CustomerBooking() {
                 </div>
               </form>
             </div>
-          </div>
+          </AccessibleModal>
         )}
       </div>
     </div>

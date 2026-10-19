@@ -185,6 +185,7 @@ export default function Availability() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <input
                       type="time"
+                      aria-label={`${DAY_FULL_LABELS[day]} opening time`}
                       value={availability.schedule[day]?.start || '09:00'}
                       onChange={e => updateDay(day, 'start', e.target.value)}
                       style={{
@@ -200,6 +201,7 @@ export default function Availability() {
                     <span style={{ color: 'var(--theme-text-muted)', fontSize: '13px' }}>to</span>
                     <input
                       type="time"
+                      aria-label={`${DAY_FULL_LABELS[day]} closing time`}
                       value={availability.schedule[day]?.end || '18:00'}
                       onChange={e => updateDay(day, 'end', e.target.value)}
                       style={{
@@ -253,11 +255,11 @@ export default function Availability() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
+            <label htmlFor="availability-buffer" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
               Buffer between bookings
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
+              <input id="availability-buffer"
                 type="number"
                 min="0"
                 max="240"
@@ -283,11 +285,11 @@ export default function Availability() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
+            <label htmlFor="availability-notice" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
               Minimum advance notice
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
+              <input id="availability-notice"
                 type="number"
                 min="0"
                 value={availability.minNotice ?? 0}
@@ -311,11 +313,11 @@ export default function Availability() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
+            <label htmlFor="availability-horizon" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
               Max advance booking window
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
+              <input id="availability-horizon"
                 type="number"
                 min="1"
                 value={availability.maxAdvanceBooking || 30}
@@ -347,7 +349,7 @@ export default function Availability() {
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, margin: '0 0 4px' }}>Instructor hours and rules</h3>
               <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: 0 }}>These hours intersect with the business hours above.</p>
             </div>
-            <select className="form-input" style={{ width: '220px' }} value={selectedInstructorId} onChange={e => setSelectedInstructorId(e.target.value)}>
+            <select aria-label="Instructor schedule" className="form-input" style={{ width: '220px' }} value={selectedInstructorId} onChange={e => setSelectedInstructorId(e.target.value)}>
               {instructors.map(item => <option key={item.id} value={item.id}>{item.name}{item.isOwner ? ' (merchant default)' : ''}</option>)}
             </select>
           </div>
@@ -364,9 +366,9 @@ export default function Availability() {
                         <span style={{ fontSize: '13px', fontWeight: 600 }}>{DAY_FULL_LABELS[day]}</span>
                       </label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input type="time" className="form-input" style={{ width: '125px' }} value={hours.start} disabled={!hours.available} onChange={e => updateInstructorDay(day, 'start', e.target.value)} />
+                        <input type="time" className="form-input" style={{ width: '125px' }} aria-label={`${DAY_FULL_LABELS[day]} instructor opening time`} value={hours.start} disabled={!hours.available} onChange={e => updateInstructorDay(day, 'start', e.target.value)} />
                         <span style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>to</span>
-                        <input type="time" className="form-input" style={{ width: '125px' }} value={hours.end} disabled={!hours.available} onChange={e => updateInstructorDay(day, 'end', e.target.value)} />
+                        <input type="time" className="form-input" style={{ width: '125px' }} aria-label={`${DAY_FULL_LABELS[day]} instructor closing time`} value={hours.end} disabled={!hours.available} onChange={e => updateInstructorDay(day, 'end', e.target.value)} />
                       </div>
                     </div>
                   );

@@ -110,8 +110,13 @@ p {
 
 /* --- Focus Styles --- */
 :focus-visible {
-  outline: 2px solid var(--color-lime);
+  outline: 2px solid var(--theme-focus-ring);
   outline-offset: 2px;
+}
+
+/* The merchant sidebar stays dark in either page theme. */
+.janjiyuk-sidebar {
+  --theme-focus-ring: var(--color-lime);
 }
 
 /* --- Selection --- */

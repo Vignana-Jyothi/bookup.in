@@ -10,6 +10,7 @@ import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import { merchantSchedulingService } from '../../services/booking/merchantSchedulingService';
 import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 /* Disabled navigation enhancement (user request):
 import PageLinks from '../../components/ui/PageLinks';
 */
@@ -166,6 +167,12 @@ export default function Services() {
     if (!form.availableWeekdays?.length) errs.availableWeekdays = 'Select at least one day.';
 
     setErrors(errs);
+    if (Object.keys(errs).length) {
+      requestAnimationFrame(() => {
+        const invalidField = modalBodyRef.current?.querySelector('[aria-invalid="true"]');
+        invalidField?.focus();
+      });
+    }
     return Object.keys(errs).length === 0;
   };
 
@@ -519,7 +526,7 @@ export default function Services() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <AccessibleModal label="Service details" onClose={() => setShowForm(false)}>
           <div
             className="modal modal-lg"
             onClick={e => e.stopPropagation()}
@@ -540,7 +547,7 @@ export default function Services() {
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0 }}>
                 {editingService ? 'Edit Service' : 'Create Service'}
               </h3>
-              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowForm(false)}>✕</button>
             </div>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <div 
@@ -560,12 +567,14 @@ export default function Services() {
               >
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service name</label>
+                    <label htmlFor="service-field-1" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service name</label>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: form.name.length >= 3 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                       min 3 chars
                     </span>
                   </div>
-                  <input
+                  <input id="service-field-1"
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={errors.name ? 'service-name-error' : 'service-name-hint'}
                     className={`form-input ${errors.name ? 'form-input-error' : ''}`}
                     placeholder="e.g. 1-on-1 Fitness Assessment"
                     value={form.name}
@@ -577,17 +586,20 @@ export default function Services() {
                     autoFocus
                     style={{ borderRadius: '12px' }}
                   />
-                  {errors.name && <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.name}</span>}
+                  <span id="service-name-hint" className="sr-only">Enter at least 3 characters.</span>
+                  {errors.name && <span id="service-name-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.name}</span>}
                 </div>
 
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Description</label>
+                    <label htmlFor="service-field-2" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Description</label>
                     <span style={{ fontSize: 'var(--font-size-xs)', color: form.description.length >= 15 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                       {form.description.length}/15 min chars
                     </span>
                   </div>
-                  <textarea
+                  <textarea id="service-field-2"
+                    aria-invalid={Boolean(errors.description)}
+                    aria-describedby={errors.description ? 'service-description-error' : 'service-description-hint'}
                     className={`form-input form-textarea ${errors.description ? 'form-input-error' : ''}`}
                     placeholder="e.g. Comprehensive 1-on-1 fitness checkup including posture analysis, body metrics, and customized workout recommendations."
                     value={form.description}
@@ -599,16 +611,18 @@ export default function Services() {
                     style={{ borderRadius: '12px' }}
                   />
                   {errors.description ? (
-                    <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.description}</span>
+                    <span id="service-description-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.description}</span>
                   ) : (
-                    <span className="form-hint">Briefly explain what this session includes so clients book with confidence.</span>
+                    <span id="service-description-hint" className="form-hint">Use at least 15 characters to explain what this session includes.</span>
                   )}
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Price (₹)</label>
-                    <input
+                    <label htmlFor="service-field-3" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Price (₹)</label>
+                    <input id="service-field-3"
+                      aria-invalid={Boolean(errors.price)}
+                      aria-describedby={errors.price ? 'service-price-error' : undefined}
                       className="form-input"
                       type="number"
                       min="0"
@@ -618,10 +632,11 @@ export default function Services() {
                       required
                       style={{ borderRadius: '12px' }}
                     />
+                    {errors.price && <span id="service-price-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.price}</span>}
                   </div>
                   <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Duration (minutes)</label>
-                    <input
+                    <label htmlFor="service-field-4" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Duration (minutes)</label>
+                    <input id="service-field-4"
                       className="form-input"
                       type="number"
                       min="15"
@@ -635,8 +650,10 @@ export default function Services() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service provider</label>
-                  <select
+                  <label htmlFor="service-field-5" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service provider</label>
+                  <select id="service-field-5"
+                    aria-invalid={Boolean(errors.instructorId)}
+                    aria-describedby={errors.instructorId ? 'service-instructor-error' : undefined}
                     className={`form-input ${errors.instructorId ? 'form-input-error' : ''}`}
                     value={form.instructorId || ''}
                     onChange={e => setForm({
@@ -650,12 +667,12 @@ export default function Services() {
                       <option key={item.id} value={item.id}>{item.name}{item.isOwner ? ' (merchant default)' : ''}</option>
                     ))}
                   </select>
-                  {errors.instructorId && <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.instructorId}</span>}
+                  {errors.instructorId && <span id="service-instructor-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.instructorId}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service days</label>
-                  <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+                  <span id="service-days-label" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service days</span>
+                  <div role="group" aria-labelledby="service-days-label" aria-describedby={errors.availableWeekdays ? 'service-days-error' : undefined} style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
                     {WEEKDAYS.map(day => {
                       const checked = form.availableWeekdays?.includes(day);
                       const instructorAvailable = instructorDays(form.instructorId).includes(day);
@@ -667,6 +684,8 @@ export default function Services() {
                         >
                           <input
                             type="checkbox"
+                            aria-invalid={Boolean(errors.availableWeekdays)}
+                            aria-describedby={errors.availableWeekdays ? 'service-days-error' : undefined}
                             checked={Boolean(checked && instructorAvailable)}
                             disabled={!instructorAvailable}
                             onChange={() => setForm({
@@ -681,12 +700,12 @@ export default function Services() {
                       );
                     })}
                   </div>
-                  {errors.availableWeekdays && <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.availableWeekdays}</span>}
+                  {errors.availableWeekdays && <span id="service-days-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.availableWeekdays}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Meeting Mode</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  <span id="service-mode-label" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Meeting Mode</span>
+                  <div role="group" aria-labelledby="service-mode-label" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                     {[
                       { value: 'online', label: ' Online', desc: 'Google Meet' },
                       { value: 'in-person', label: ' In-person', desc: 'Physical location' },
@@ -697,6 +716,7 @@ export default function Services() {
                         <button
                           key={opt.value}
                           type="button"
+                          aria-pressed={isSel}
                           onClick={() => {
                             setForm({ ...form, meetingType: opt.value });
                             if (opt.value === 'in-person' || opt.value === 'both') {
@@ -734,7 +754,7 @@ export default function Services() {
                 {(form.meetingType === 'in-person' || form.meetingType === 'both') && (
                   <div className="form-group animate-fade-in-up">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <label className="form-label" style={{ fontWeight: 600, fontSize: '13px', margin: 0 }}>Location Address</label>
+                      <label htmlFor="service-location" className="form-label" style={{ fontWeight: 600, fontSize: '13px', margin: 0 }}>Location Address</label>
                       {state.provider?.defaultLocationAddress && (
                         <button
                           type="button"
@@ -754,7 +774,9 @@ export default function Services() {
                         </button>
                       )}
                     </div>
-                    <input
+                    <input id="service-location"
+                      aria-invalid={Boolean(errors.locationAddress)}
+                      aria-describedby={errors.locationAddress ? 'service-location-error service-location-hint' : 'service-location-hint'}
                       className={`form-input ${errors.locationAddress ? 'form-input-error' : ''}`}
                       placeholder="e.g. 42 MG Road, Koramangala, Bengaluru"
                       value={form.locationAddress || ''}
@@ -765,9 +787,9 @@ export default function Services() {
                       style={{ borderRadius: '12px' }}
                     />
                     {errors.locationAddress && (
-                      <span className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.locationAddress}</span>
+                      <span id="service-location-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.locationAddress}</span>
                     )}
-                    <span className="form-hint">Physical location where in-person sessions take place. Clients will get a Google Maps directions link.</span>
+                    <span id="service-location-hint" className="form-hint">Physical location where in-person sessions take place. Clients will get a Google Maps directions link.</span>
                   </div>
                 )}
               </div>
@@ -795,7 +817,7 @@ export default function Services() {
               </div>
             </form>
           </div>
-        </div>
+        </AccessibleModal>
       )}
     </div>
   );

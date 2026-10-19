@@ -605,6 +605,7 @@ export default function Onboarding() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 8 }}>
                 <input
                   type="file"
+                  aria-label="Profile photo"
                   ref={fileInputRef}
                   accept="image/png,image/jpeg,image/webp"
                   style={{ display: 'none' }}
@@ -623,12 +624,14 @@ export default function Onboarding() {
             </div>
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                <span className="form-label" style={{ margin: 0 }}>Your Bio</span>
+                <label className="form-label" htmlFor="onboarding-bio" style={{ margin: 0 }}>Your Bio</label>
                 <span style={{ fontSize: 'var(--font-size-xs)', color: bio.length >= 20 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                   {bio.length}/20 min chars
                 </span>
               </div>
               <textarea
+                id="onboarding-bio"
+                aria-describedby="onboarding-bio-hint"
                 className="form-input form-textarea"
                 placeholder="e.g. Certified personal trainer with 6+ years of experience helping busy professionals achieve lasting fitness and posture strength."
                 value={bio}
@@ -638,7 +641,7 @@ export default function Onboarding() {
                 }}
                 rows={4}
               />
-              <span className="form-hint">At least 20 characters required. Helps clients trust your expertise.</span>
+              <span id="onboarding-bio-hint" className="form-hint">At least 20 characters required. Helps clients trust your expertise.</span>
             </div>
           </div>
         );
@@ -650,12 +653,12 @@ export default function Onboarding() {
             <p>You can add more services later from your dashboard.</p>
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <label className="form-label">Service name</label>
+                <label className="form-label" htmlFor="onboarding-service-name">Service name</label>
                 <span style={{ fontSize: 'var(--font-size-xs)', color: service.name.length >= 3 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                   min 3 chars
                 </span>
               </div>
-              <input
+              <input id="onboarding-service-name"
                 className="form-input"
                 placeholder="e.g. Personal Training Session"
                 value={service.name}
@@ -667,12 +670,12 @@ export default function Onboarding() {
             </div>
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <label className="form-label">Description</label>
+                <label className="form-label" htmlFor="onboarding-service-description">Description</label>
                 <span style={{ fontSize: 'var(--font-size-xs)', color: service.description.length >= 15 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                   {service.description.length}/15 min chars
                 </span>
               </div>
-              <textarea
+              <textarea id="onboarding-service-description"
                 className="form-input form-textarea"
                 placeholder="e.g. Comprehensive 1-on-1 session covering goal setting, fitness assessment, and customized workout plan."
                 value={service.description}
@@ -686,8 +689,8 @@ export default function Onboarding() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Price (₹)</label>
-                <input
+                <label className="form-label" htmlFor="onboarding-service-price">Price (₹)</label>
+                <input id="onboarding-service-price"
                   className="form-input"
                   type="number"
                   min="0"
@@ -696,8 +699,8 @@ export default function Onboarding() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Duration (minutes)</label>
-                <input
+                <label className="form-label" htmlFor="onboarding-service-duration">Duration (minutes)</label>
+                <input id="onboarding-service-duration"
                   className="form-input"
                   type="number"
                   min="15"
@@ -708,8 +711,8 @@ export default function Onboarding() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">How is this service delivered?</label>
-              <select className="form-input" value={service.meetingType} onChange={e => setService({ ...service, meetingType: e.target.value })}>
+              <label className="form-label" htmlFor="onboarding-service-mode">How is this service delivered?</label>
+              <select id="onboarding-service-mode" className="form-input" value={service.meetingType} onChange={e => setService({ ...service, meetingType: e.target.value })}>
                 <option value="online">Online with Google Meet</option>
                 <option value="in-person">In person</option>
                 <option value="both">Online or in person</option>
@@ -717,8 +720,8 @@ export default function Onboarding() {
             </div>
             {service.meetingType !== 'online' && (
               <div className="form-group">
-                <label className="form-label">Service address</label>
-                <textarea className="form-input form-textarea" value={service.locationAddress} onChange={e => setService({ ...service, locationAddress: e.target.value })} placeholder="Full address customers should visit" rows={2} />
+                <label className="form-label" htmlFor="onboarding-service-address">Service address</label>
+                <textarea id="onboarding-service-address" className="form-input form-textarea" value={service.locationAddress} onChange={e => setService({ ...service, locationAddress: e.target.value })} placeholder="Full address customers should visit" rows={2} />
               </div>
             )}
             {service.name && (
@@ -755,6 +758,7 @@ export default function Onboarding() {
                       <input
                         type="time"
                         className="form-input onb-time-input"
+                        aria-label={`${DAY_FULL_LABELS[day]} opening time`}
                         value={availability[day].start}
                         onChange={e => setAvailability({
                           ...availability,
@@ -765,6 +769,7 @@ export default function Onboarding() {
                       <input
                         type="time"
                         className="form-input onb-time-input"
+                        aria-label={`${DAY_FULL_LABELS[day]} closing time`}
                         value={availability[day].end}
                         onChange={e => setAvailability({
                           ...availability,
@@ -787,37 +792,37 @@ export default function Onboarding() {
             <h2>Booking rules</h2>
             <p>Set how far in advance clients can book and other scheduling preferences.</p>
             <div className="form-group">
-              <label className="form-label">Minimum scheduling notice</label>
+              <label className="form-label" htmlFor="onboarding-min-notice">Minimum scheduling notice</label>
               <div className="onb-input-with-unit">
-                <input
+                <input id="onboarding-min-notice" aria-describedby="onboarding-min-notice-unit"
                   className="form-input"
                   type="number"
                   min="0"
                   value={bookingRules.minNotice}
                   onChange={e => setBookingRules({ ...bookingRules, minNotice: Number(e.target.value) })}
                 />
-                <span className="onb-unit">hours</span>
+                <span id="onboarding-min-notice-unit" className="onb-unit">hours</span>
               </div>
               <span className="form-hint">How much notice do you need before an appointment?</span>
             </div>
             <div className="form-group">
-              <label className="form-label">Maximum advance booking</label>
+              <label className="form-label" htmlFor="onboarding-max-advance">Maximum advance booking</label>
               <div className="onb-input-with-unit">
-                <input
+                <input id="onboarding-max-advance" aria-describedby="onboarding-max-advance-unit"
                   className="form-input"
                   type="number"
                   min="1"
                   value={bookingRules.maxAdvanceBooking}
                   onChange={e => setBookingRules({ ...bookingRules, maxAdvanceBooking: Number(e.target.value) })}
                 />
-                <span className="onb-unit">days</span>
+                <span id="onboarding-max-advance-unit" className="onb-unit">days</span>
               </div>
               <span className="form-hint">How far in advance can clients book?</span>
             </div>
             <div className="form-group">
-              <label className="form-label">Buffer time between appointments</label>
+              <label className="form-label" htmlFor="onboarding-buffer">Buffer time between appointments</label>
               <div className="onb-input-with-unit">
-                <input
+                <input id="onboarding-buffer" aria-describedby="onboarding-buffer-unit"
                   className="form-input"
                   type="number"
                   min="0"
@@ -826,21 +831,21 @@ export default function Onboarding() {
                   value={bookingRules.bufferTime}
                   onChange={e => setBookingRules({ ...bookingRules, bufferTime: Number(e.target.value) })}
                 />
-                <span className="onb-unit">minutes</span>
+                <span id="onboarding-buffer-unit" className="onb-unit">minutes</span>
               </div>
               <span className="form-hint">Available starts advance by the service duration plus this break.</span>
             </div>
             <div className="form-group">
-              <label className="form-label">Cancellation window</label>
+              <label className="form-label" htmlFor="onboarding-cancellation">Cancellation window</label>
               <div className="onb-input-with-unit">
-                <input
+                <input id="onboarding-cancellation" aria-describedby="onboarding-cancellation-unit"
                   className="form-input"
                   type="number"
                   min="0"
                   value={bookingRules.cancellationWindow}
                   onChange={e => setBookingRules({ ...bookingRules, cancellationWindow: Number(e.target.value) })}
                 />
-                <span className="onb-unit">hours before appointment</span>
+                <span id="onboarding-cancellation-unit" className="onb-unit">hours before appointment</span>
               </div>
               <span className="form-hint">Cancellations after this window are considered "late"</span>
             </div>
