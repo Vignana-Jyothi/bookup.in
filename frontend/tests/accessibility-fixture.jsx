@@ -10,6 +10,7 @@ import Analytics from '../src/pages/dashboard/Analytics.jsx';
 import Availability from '../src/pages/dashboard/Availability.jsx';
 import BookingPage from '../src/pages/booking/BookingPage.jsx';
 import CustomerBooking from '../src/pages/booking/CustomerBooking.jsx';
+import DashboardLayout from '../src/layouts/DashboardLayout.jsx';
 import '../src/styles/global.css';
 import '../src/styles/components.css';
 import '../src/pages/Landing.css';
@@ -47,6 +48,7 @@ export function Fixture() {
     availability: <Availability />,
     booking: <BookingPage />,
     customer: <CustomerBooking />,
+    shell: <DashboardLayout />,
   };
   const entry = surface === 'booking' ? '/book/a11y-fixture' : surface === 'customer' ? '/booking-details' : '/dashboard';
   return <MemoryRouter initialEntries={[entry]}><Routes>

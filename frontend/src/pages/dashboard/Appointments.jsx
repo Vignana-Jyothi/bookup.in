@@ -27,20 +27,21 @@ import { whatsAppService } from '../../services/notifications/MockWhatsAppProvid
 import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
-import StatCard from '../../components/ui/StatCard';
 import PillButton from '../../components/ui/PillButton';
 import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 import BookingRefundRequest from '../../components/dashboard/BookingRefundRequest';
 import { DEFAULT_POLICY } from '../../utils/policyEngine';
 import { appointmentRefundLabel } from '../../utils/appointmentRefundStatus.js';
 
-const TABS = [
+const APPOINTMENT_VIEWS = [
   { key: 'all', label: 'All' },
   { key: 'upcoming', label: 'Upcoming' },
+  { key: 'confirmed', label: 'All confirmed' },
   { key: 'payment-pending', label: 'Payment Pending' },
-  { key: 'refunds-due', label: 'Refunds Due' },
+  { key: 'refunds-due', label: 'Refund ledger' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
+  { key: 'late-cancellation', label: 'Late cancellations' },
   { key: 'no-show', label: 'No-show' },
 ];
 
@@ -71,7 +72,6 @@ export default function Appointments() {
   useEffect(() => { setSearchQuery(routeFilters.query); setCurrentPage(1); setFilterDatePreset(['today', 'next7', 'next30', 'past'].includes(location.state?.appointmentDatePreset) ? location.state.appointmentDatePreset : 'all'); setFilterStatus('all'); setFilterService('all'); setActiveTab('all'); }, [location.key, location.state?.appointmentDatePreset, routeFilters.query]);
 */
   const [filterService, setFilterService] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterDatePreset, setFilterDatePreset] = useState('all');
   const [sortBy, setSortBy] = useState('date-newest');
 
@@ -705,25 +705,12 @@ export default function Appointments() {
     setShowManualModal(false);
   };
 
-  // Top summary metric counts
-  const summaryMetrics = useMemo(() => {
-    const upcoming = state.bookings.filter(b => b.date >= today && b.status === 'confirmed').length;
-    const completed = state.bookings.filter(b => b.status === 'completed').length;
-    const cancelled = state.bookings.filter(b => b.status === 'cancelled' || b.status === 'late-cancellation').length;
-    const noShows = state.bookings.filter(b => b.status === 'no-show').length;
-    return {
-      upcoming,
-      completed,
-      cancelled,
-      noShows,
-      total: state.bookings.length,
-    };
-  }, [state.bookings, today]);
-
   // Tab counts
   const tabCounts = useMemo(() => {
     return {
       all: state.bookings.length,
+      confirmed: state.bookings.filter(b => b.status === 'confirmed').length,
+      'late-cancellation': state.bookings.filter(b => b.status === 'late-cancellation').length,
       upcoming: state.bookings.filter(b => b.date >= today && b.status === 'confirmed').length,
       'payment-pending': state.bookings.filter(b => b.paymentStatus === 'verification_pending').length,
       'refunds-due': unifiedRefundsDue.filter(r => r.status === 'refund_due').length,
@@ -774,17 +761,6 @@ export default function Appointments() {
           return false;
         }
 
-        // 4. Status dropdown filter
-        if (filterStatus !== 'all') {
-          if (filterStatus === 'payment-pending') {
-            if (b.paymentStatus !== 'verification_pending') return false;
-          } else if (filterStatus === 'cancelled') {
-            if (b.status !== 'cancelled' && b.status !== 'late-cancellation') return false;
-          } else if (b.status !== filterStatus) {
-            return false;
-          }
-        }
-
 /* Disabled navigation enhancement (user request):
         if (routeFilters.from && b.date < routeFilters.from) return false;
 */
@@ -822,10 +798,16 @@ export default function Appointments() {
             return b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime);
         }
       });
-  }, [state.bookings, activeTab, searchQuery, filterService, filterStatus, filterDatePreset, sortBy, today]);
+  }, [state.bookings, activeTab, searchQuery, filterService, filterDatePreset, sortBy, today]);
 
   // Active filters count
-  const hasActiveFilters = searchQuery.trim() !== '' || filterService !== 'all' || filterStatus !== 'all' || filterDatePreset !== 'all' || sortBy !== 'date-newest';
+  const moreFiltersCount = Number(filterService !== 'all') + Number(filterDatePreset !== 'all') + Number(sortBy !== 'date-newest');
+  const hasActiveFilters = searchQuery.trim() !== '' || moreFiltersCount > 0 || activeTab !== 'all';
+  const changeFilter = (setter, value) => {
+    setter(value);
+    setCurrentPage(1);
+    setOpenDropdownId(null);
+  };
 
   const handleResetFilters = () => {
 /* Disabled navigation enhancement (user request):
@@ -834,10 +816,11 @@ export default function Appointments() {
 
 */    setSearchQuery('');
     setFilterService('all');
-    setFilterStatus('all');
     setFilterDatePreset('all');
     setSortBy('date-newest');
     setActiveTab('all');
+    setCurrentPage(1);
+    setOpenDropdownId(null);
   };
 
   // Pagination calculation
@@ -1320,332 +1303,75 @@ export default function Appointments() {
         </PillButton>
       </div>
 
-      {/* Pending Payment Confirmations Alert Block */}
       {pendingPaymentBookings.length > 0 && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          borderRadius: 'var(--radius-card)',
-          padding: '20px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          boxShadow: '0 4px 14px rgba(245, 158, 11, 0.08)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Pending Payment Confirmations
-                  <span style={{
-                    background: '#F59E0B',
-                    color: '#FFFFFF',
-                    fontSize: '11px',
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    fontWeight: 800,
-                  }}>
-                    {pendingPaymentBookings.length}
-                  </span>
-                </h3>
-                <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#B45309' }}>
-                  These customers marked their payment as paid via UPI. Verify in your UPI app, then confirm or reject.
-                </p>
-              </div>
-            </div>
+        <section className="appointment-review-task" aria-label="Payment review task">
+          <div>
+            <strong>{pendingPaymentBookings.length} {pendingPaymentBookings.length === 1 ? 'payment needs' : 'payments need'} review</strong>
+            <p>Check the payment in your UPI app, then open the appointment to review proof and accept or reject it.</p>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-            {pendingPaymentBookings.map(b => (
-              <div key={b.id} style={{
-                background: 'var(--theme-bg-card)',
-                border: '1px solid rgba(245, 158, 11, 0.25)',
-                borderRadius: '12px',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '12px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-              }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
-                    <div>
-                      <div
-                        onClick={() => setSelectedBooking(b.id)}
-                        style={{ fontWeight: 700, fontSize: '15px', color: 'var(--color-text)', cursor: 'pointer' }}
-                        title="View details"
-                      >
-                        {b.customerName}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--theme-text-muted)', marginTop: '1px' }}>
-                        {b.customerEmail || b.customerPhone || '—'}
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--color-text)' }}>
-                      {formatCurrency(b.price)}
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    <div>
-                      <span style={{ opacity: 0.8 }}>Session:</span> <strong>{b.serviceName}</strong> ({b.duration} min)
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.8 }}>Scheduled:</span>  {formatDate(b.date)} at {formatTime(b.startTime)}
-                    </div>
-                    {b.paymentMarkedPaidAt && (
-                      <div style={{ fontSize: '11.5px', color: '#B45309', marginTop: '2px' }}>
-                         Marked paid {new Date(b.paymentMarkedPaidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({formatDate(b.paymentMarkedPaidAt.split('T')[0])})
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Screenshot Thumbnail */}
-                  <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {b.paymentScreenshotUrl ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <img
-                          src={b.paymentScreenshotUrl}
-                          alt="Screenshot"
-                          style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--theme-border)', cursor: 'pointer' }}
-                          onClick={() => setViewScreenshotUrl(b.paymentScreenshotUrl)}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: '12px', padding: '4px 8px' }}
-                          onClick={() => setViewScreenshotUrl(b.paymentScreenshotUrl)}
-                        >
-                           View Proof
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', fontStyle: 'italic' }}>
-                        No screenshot uploaded
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--theme-border)' }}>
-                  <button
-                    type="button"
-                    className="btn btn-success btn-sm"
-                    style={{ flex: 1 }}
-                    disabled={processingPaymentId === b.id}
-                    onClick={() => handleConfirmPayment(b)}
-                  >
-                    {processingPaymentId === b.id ? 'Confirming...' : '✓ Confirm'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
-                    disabled={processingPaymentId === b.id}
-                    onClick={() => handleOpenRejectPayment(b)}
-                  >
-                    ✕ Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => { handleResetFilters(); changeFilter(setActiveTab, 'payment-pending'); }}>
+            Review payments
+          </button>
+        </section>
       )}
 
-      {/* Top Summary Metrics Cards */}
-      <div className="appointments-metrics-grid">
-        <StatCard
-          icon=""
-          label="Upcoming"
-          value={summaryMetrics.upcoming}
-          subtext="Active confirmed bookings"
-          isActive={activeTab === 'upcoming'}
-          onClick={() => setActiveTab('upcoming')}
-        />
-        <StatCard
-          icon="✓"
-          label="Completed"
-          value={summaryMetrics.completed}
-          subtext="Concluded sessions"
-          isActive={activeTab === 'completed'}
-          onClick={() => setActiveTab('completed')}
-        />
-        <StatCard
-          icon="✕"
-          label="Cancelled"
-          value={summaryMetrics.cancelled}
-          subtext="Cancelled & late cancellations"
-          isActive={activeTab === 'cancelled'}
-          onClick={() => setActiveTab('cancelled')}
-        />
-        <StatCard
-          icon=""
-          label="No-shows"
-          value={summaryMetrics.noShows}
-          subtext="Missed appointments"
-          isActive={activeTab === 'no-show'}
-          onClick={() => setActiveTab('no-show')}
-        />
-      </div>
-
-      {/* Toolbar: Tabs + Search + Multi-dropdown filters */}
-      <div style={{
-        background: 'var(--theme-bg-card)',
-        borderRadius: 'var(--radius-card)',
-        border: '1px solid var(--theme-border)',
-        padding: '18px 20px',
-        boxShadow: 'var(--shadow-card)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-      }}>
-        {/* Status Tabs */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--theme-border)', paddingBottom: '14px' }}>
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                borderRadius: 'var(--radius-pill)',
-                padding: '6px 14px',
-                border: '1px solid',
-                borderColor: activeTab === tab.key ? 'var(--color-lime)' : 'var(--theme-border)',
-                background: activeTab === tab.key ? 'var(--color-lime-soft)' : 'var(--theme-input-bg)',
-                color: activeTab === tab.key ? '#0E0E0E' : 'var(--theme-text-muted)',
-                fontWeight: activeTab === tab.key ? 700 : 500,
-                fontSize: '12.5px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all var(--transition-fast)',
-              }}
-            >
-              <span>{tab.label}</span>
-              <span style={{
-                background: activeTab === tab.key ? '#0E0E0E' : 'rgba(0,0,0,0.06)',
-                color: activeTab === tab.key ? '#FFFFFF' : 'var(--color-text)',
-                fontSize: '10px',
-                padding: '1px 6px',
-                borderRadius: '10px',
-                fontWeight: 700,
-              }}>
-                {tabCounts[tab.key] || 0}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Search & Filter controls row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Search Input */}
-          <div style={{ position: 'relative', flex: '1 1 100%', minWidth: '160px', width: '100%' }}>
-            <input
-              type="text"
-              className="form-input"
-              style={{ paddingLeft: '38px', height: '40px', fontSize: '13px' }}
-              placeholder="Search by booking ID, customer, or service..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, pointerEvents: 'none' }}>
-              
-            </span>
-            {searchQuery && (
-              <button
-                type="button"
-                className="search-clear-btn"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Service Dropdown */}
-          <div className="filter-select-wrapper">
-            <select
-              className="form-input"
-              style={{ height: '40px', fontSize: '13px', padding: '6px 14px', width: 'auto', minWidth: '130px' }}
-              value={filterService}
-              onChange={e => setFilterService(e.target.value)}
-            >
-              <option value="all">All services</option>
-              {state.services?.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+      <section className="appointment-filters" aria-label="Appointment filters">
+        <div className="appointment-filter-primary">
+          <label className="appointment-filter-field">
+            <span>Appointment view</span>
+            <select className="form-input" value={activeTab} onChange={event => changeFilter(setActiveTab, event.target.value)}>
+              {APPOINTMENT_VIEWS.map(view => <option key={view.key} value={view.key}>{view.label}{view.key === 'refunds-due' ? ' (' + tabCounts[view.key] + ' due)' : ' (' + tabCounts[view.key] + ')'}</option>)}
             </select>
-          </div>
-
-          {/* Status Dropdown */}
-          <div className="filter-select-wrapper">
-            <select
-              className="form-input"
-              style={{ height: '40px', fontSize: '13px', padding: '6px 14px', width: 'auto', minWidth: '130px' }}
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-            >
-              <option value="all">All statuses</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="payment-pending">Payment pending</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="no-show">No-show</option>
-              <option value="late-cancellation">Late cancellation</option>
-            </select>
-          </div>
-
-          {/* Date Dropdown */}
-          <div className="filter-select-wrapper">
-            <select
-              className="form-input"
-              style={{ height: '40px', fontSize: '13px', padding: '6px 14px', width: 'auto', minWidth: '120px' }}
-              value={filterDatePreset}
-              onChange={e => setFilterDatePreset(e.target.value)}
-            >
-              <option value="all">All dates</option>
-              <option value="today">Today</option>
-              <option value="next7">Next 7 days</option>
-              <option value="next30">Next 30 days</option>
-              <option value="past">Past dates</option>
-            </select>
-          </div>
-
-          {/* Sort By Dropdown */}
-          <div className="filter-select-wrapper sort-select-wrapper">
-            <select
-              className="form-input"
-              style={{ height: '40px', fontSize: '13px', padding: '6px 14px', width: 'auto' }}
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-            >
-              <option value="date-newest">Sort: Date — newest</option>
-              <option value="date-oldest">Sort: Date — oldest</option>
-              <option value="customer-asc">Sort: Customer A–Z</option>
-              <option value="customer-desc">Sort: Customer Z–A</option>
-              <option value="amount-desc">Sort: Amount — highest</option>
-              <option value="amount-asc">Sort: Amount — lowest</option>
-            </select>
-          </div>
-
-          {/* Clear Filters button */}
-          {hasActiveFilters && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={handleResetFilters}
-            >
-              Reset filters
-            </button>
+          </label>
+          {activeTab !== 'refunds-due' && (
+            <label className="appointment-filter-field appointment-filter-search">
+              <span>Search appointments</span>
+              <input type="search" className="form-input" placeholder="Booking ID, customer, or service" value={searchQuery} onChange={event => changeFilter(setSearchQuery, event.target.value)} />
+            </label>
           )}
         </div>
-      </div>
+        {activeTab !== 'refunds-due' && (
+          <>
+            <details className="appointment-more-filters">
+              <summary>More filters{moreFiltersCount > 0 ? ' (' + moreFiltersCount + ' active)' : ''}</summary>
+              <div className="appointment-filter-secondary">
+                <label className="appointment-filter-field">
+                  <span>Service</span>
+                  <select className="form-input" value={filterService} onChange={event => changeFilter(setFilterService, event.target.value)}>
+                    <option value="all">All services</option>
+                    {state.services?.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
+                  </select>
+                </label>
+                <label className="appointment-filter-field">
+                  <span>Appointment dates</span>
+                  <select className="form-input" value={filterDatePreset} onChange={event => changeFilter(setFilterDatePreset, event.target.value)}>
+                    <option value="all">All dates</option>
+                    <option value="today">Today</option>
+                    <option value="next7">Next 7 days</option>
+                    <option value="next30">Next 30 days</option>
+                    <option value="past">Past dates</option>
+                  </select>
+                </label>
+                <label className="appointment-filter-field">
+                  <span>Sort appointments</span>
+                  <select className="form-input" value={sortBy} onChange={event => changeFilter(setSortBy, event.target.value)}>
+                    <option value="date-newest">Date: newest first</option>
+                    <option value="date-oldest">Date: oldest first</option>
+                    <option value="customer-asc">Customer A to Z</option>
+                    <option value="customer-desc">Customer Z to A</option>
+                    <option value="amount-desc">Amount: highest first</option>
+                    <option value="amount-asc">Amount: lowest first</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+            <div className="appointment-filter-results">
+              <p role="status">{totalCount} {totalCount === 1 ? 'appointment matches' : 'appointments match'}</p>
+              {hasActiveFilters && <button type="button" className="btn btn-ghost btn-sm" onClick={handleResetFilters}>Reset filters</button>}
+            </div>
+          </>
+        )}
+      </section>
 
       {/* Refunds Due Tab View */}
       {activeTab === 'refunds-due' ? (

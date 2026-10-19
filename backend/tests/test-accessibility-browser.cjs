@@ -64,6 +64,15 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
       if (scenario === 'dispute') Object.assign(item, { status: 'no-show', customerNoShowAt: new Date().toISOString() });
     }
     globalThis.__CALUP_A11Y_FIXTURE__ = { state, data };
+    if (scenario === 'operations') {
+      state.services.push({ ...data.service, id: 'other-service', name: 'Other consultation' });
+      state.bookings = Array.from({ length: 15 }, (_, index) => ({ ...data.booking, id: 'operation-' + index, bookingId: 'M' + String(123456780 + index), customerName: 'Client ' + String(index).padStart(2, '0') }));
+      state.bookings.push(
+        { ...data.booking, id: 'completed-fixture', customerName: 'Completed Client', status: 'completed' },
+        { ...data.booking, id: 'late-fixture', customerName: 'Late Client', status: 'late-cancellation', refundStatus: 'refund_due' },
+        { ...data.booking, id: 'pending-fixture', customerName: 'Pending Client', status: 'pending_payment', paymentStatus: 'verification_pending' },
+      );
+    }
   }, { state, data });
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -74,6 +83,8 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
     if (/\/src\/data\/store(?:\.jsx)?$/.test(pathname)) return js(storeMock);
     if (modulePath.endsWith('/services/supabase/dbService')) return js(dbMock);
     if (modulePath.endsWith('/services/supabase/supabaseClient')) return js(`export const isSupabaseConfigured=()=>true; export const supabase={auth:{getUser:async()=>({data:{user:{id:'fixture-user'}}}),getSession:async()=>({data:{session:null}})}};`);
+    if (modulePath.endsWith('/components/support/SupportWidget')) return js('export default function SupportStub(){return null;}');
+    if (modulePath.endsWith('/services/payments/subscriptionService')) return js('export const subscriptionService={get:async()=>({})};');
     if (modulePath.endsWith('/services/merchant/merchantSchedulingService')) return js(`export const merchantSchedulingService={load:async()=>({instructors:globalThis.__CALUP_A11Y_FIXTURE__.data.instructors})};`);
     if (modulePath.endsWith('/services/booking/customerBookingService')) return js(`export const customerBookingService={getBooking:async()=>globalThis.__CALUP_A11Y_FIXTURE__.data,getTrackingStatus:async()=>globalThis.__CALUP_A11Y_FIXTURE__.data};`);
     if (modulePath.endsWith('/services/calendar/RealGoogleCalendarProvider')) return js(`export const realGoogleCalendarService={getBusyTimes:async()=>[]};`);
@@ -160,6 +171,64 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
     }
     await pass('Analytics: named canvases, real expandable tables, 320/390px document reflow');
 
+    for (const width of [1366, 390, 320]) {
+      await open('shell', width);
+      const header = page.locator('.janjiyuk-topbar');
+      assert.equal(await header.locator('input').count(), 0, 'Header has no inert search');
+      assert.equal(await header.getByRole('button', { name: /Notifications|Filter/i }).count(), 0);
+      if (width < 768) {
+        await header.getByRole('button', { name: 'Open menu', exact: true }).click();
+        assert(await page.locator('.drawer-nav-list').getByRole('link', { name: 'Appointments', exact: true }).isVisible());
+        await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+      }
+      assert(await page.getByRole('link', { name: width < 768 ? 'Bookings' : 'Appointments', exact: true }).isVisible());
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await pass('Merchant header: no inert search/filter or notification shortcut; existing mobile/desktop navigation works');
+
+    await open('appointments', 1366, 'operations');
+    const view = page.getByRole('combobox', { name: 'Appointment view', exact: true });
+    assert.equal(await page.getByRole('combobox').count(), 1, 'Only the main view selector is initially visible');
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await page.getByRole('searchbox', { name: 'Search appointments', exact: true }).fill('Client 00');
+    assert.match(await page.getByRole('status').innerText(), /1 appointment matches/);
+    assert(await page.getByRole('button', { name: 'Previous page', exact: true }).isDisabled());
+    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await view.selectOption('late-cancellation');
+    assert.match(await page.getByRole('status').innerText(), /1 appointment matches/);
+    await view.selectOption('confirmed');
+    assert.match(await page.getByRole('status').innerText(), /15 appointments match/);
+    await page.getByText('More filters', { exact: true }).click();
+    await page.getByRole('combobox', { name: 'Service', exact: true }).selectOption('other-service');
+    assert.match(await page.getByRole('status').innerText(), /0 appointments match/);
+    await page.getByRole('combobox', { name: 'Service', exact: true }).selectOption('fixture-service');
+    assert.match(await page.getByRole('status').innerText(), /15 appointments match/);
+    await page.getByRole('combobox', { name: 'Sort appointments', exact: true }).selectOption('customer-desc');
+    assert.match(await page.locator('.appointments-desktop-table tbody tr').first().innerText(), /Client 14/);
+    await page.getByRole('combobox', { name: 'Appointment dates', exact: true }).selectOption('past');
+    assert.match(await page.getByRole('status').innerText(), /0 appointments match/);
+    await page.getByRole('searchbox', { name: 'Search appointments', exact: true }).fill('no match');
+    await page.getByRole('button', { name: 'Review payments', exact: true }).click();
+    assert.equal(await view.inputValue(), 'payment-pending');
+    assert.equal(await page.getByRole('searchbox', { name: 'Search appointments', exact: true }).inputValue(), '');
+    assert.match(await page.getByRole('status').innerText(), /1 appointment matches/);
+    await page.getByRole('button', { name: 'Actions', exact: true }).click();
+    assert(await page.getByRole('button', { name: /Accept Payment$/ }).isVisible());
+    assert(await page.getByRole('button', { name: /Reject Payment$/ }).isVisible());
+    await view.selectOption('refunds-due');
+    assert.equal(await page.getByRole('searchbox').count(), 0, 'Appointment filters do not imply they filter the refund ledger');
+    assert.equal(await page.locator('.appointment-more-filters').count(), 0);
+    assert(await page.getByRole('heading', { name: 'Refunds Due & Ledger', exact: true }).isVisible());
+    await pass('Appointment filtering: single view, preserved statuses, combined dates/search, pagination reset, payment-review shortcut and separate ledger');
+    for (const width of [390, 320]) {
+      await open('appointments', width, 'operations');
+      await page.getByText('More filters', { exact: true }).click();
+      for (const name of ['Appointment view', 'Service', 'Appointment dates', 'Sort appointments']) assert(await page.getByRole('combobox', { name, exact: true }).isVisible());
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `appointment-filters-${width}.png`), fullPage: true });
+    }
+    await pass('Appointment filters: 320/390px layout, labelled fields and accessible disclosure');
+
     await open('appointments');
     const newAppointment = page.getByRole('button', { name: /New Appointment/ });
     await newAppointment.click();
@@ -220,7 +289,7 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
     await pass('Real payment rejection and proof dialogs: keyboard behavior and focus return without submitting');
 
     await open('appointments', 1366, 'refund');
-    await page.getByRole('button', { name: /Refunds Due/ }).last().click();
+    await page.getByRole('combobox', { name: 'Appointment view', exact: true }).selectOption('refunds-due');
     const refund = page.getByRole('button', { name: 'Mark Refunded', exact: true });
     await refund.click();
     await assertModalFocus(page.getByRole('dialog', { name: 'Record refund', exact: true }), refund);

@@ -898,17 +898,90 @@ dialog.accessible-modal::backdrop { background: transparent; }
   gap: 14px;
 }
 
-.appointments-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.appointment-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-block: 16px;
+  border-block: 1px solid var(--theme-border);
+  min-width: 0;
+}
+
+.appointment-filter-primary,
+.appointment-filter-secondary {
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
-@media (max-width: 992px) {
-  .appointments-metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
+.appointment-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.appointment-filter-search {
+  flex-grow: 2;
+}
+
+.appointment-filter-field .form-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+}
+
+.appointment-more-filters summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding-block: 6px;
+}
+
+.appointment-more-filters[open] .appointment-filter-secondary {
+  padding-top: 12px;
+}
+
+.appointment-review-task,
+.appointment-filter-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.appointment-review-task {
+  padding: 16px;
+  background: var(--theme-bg-card-subtle);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+}
+
+.appointment-review-task > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.appointment-review-task strong {
+  font-size: 14px;
+}
+
+.appointment-review-task p,
+.appointment-filter-results p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-size: 13px;
+}
+
+.appointment-review-task p {
+  margin-top: 4px;
+  max-width: 70ch;
 }
 
 .appointments-desktop-table,
@@ -923,11 +996,6 @@ dialog.accessible-modal::backdrop { background: transparent; }
 
 @media (max-width: 768px) {
   .overview-quick-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 10px;
-  }
-
-  .appointments-metrics-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 10px;
   }
