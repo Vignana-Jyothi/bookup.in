@@ -33,6 +33,7 @@ const testFiles = [
   'backend/tests/test-payment-status-recovery.js',
   'backend/tests/test-confirmed-feedback.js',
   'backend/tests/test-cashfree-booking-session.js',
+  'backend/tests/test-pending-booking-payments.js',
   'backend/tests/test-cashfree-v1-contract.js',
   'backend/tests/test-cashfree-public-availability.js',
   'backend/tests/test-buffer-driven-slots.js',

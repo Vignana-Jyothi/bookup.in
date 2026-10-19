@@ -80,6 +80,16 @@ function setAttemptCookie(res, token, attemptId) {
   res.append('Set-Cookie', `${ATTEMPT_REFERENCE_COOKIE}=${encodeURIComponent(encryptToken(String(attemptId)))}; Path=/api/v1/public; HttpOnly; Max-Age=900${security}`);
 }
 
+export function setRecoveredAttemptCookie(res, context) {
+  if (!context?.providerId || !context?.attemptId || typeof context.idempotencyKey !== 'string'
+    || !/^[a-f0-9]{64}$/i.test(context.attemptTokenHash || '')) throw new Error('RECOVERY_UNAVAILABLE');
+  const token = attemptTokenFor(context.providerId, context.idempotencyKey);
+  if (!crypto.timingSafeEqual(Buffer.from(sha256(token), 'hex'), Buffer.from(context.attemptTokenHash, 'hex'))) {
+    throw new Error('RECOVERY_UNAVAILABLE');
+  }
+  setAttemptCookie(res, token, context.attemptId);
+}
+
 function attemptIdFromRequest(req) {
   const routeId = String(req.params?.id || '').trim();
   if (routeId && routeId !== 'current') return routeId;
@@ -204,21 +214,24 @@ export async function reconcileAttempt(attemptId, { database = serviceRoleClient
   if (order.order_status !== 'PAID') {
     // A failed transaction does not close an ACTIVE Cashfree order. Reuse that
     // checkout for retry instead of creating a second order/15-minute hold.
-    if (order.order_status !== 'ACTIVE' || context.paymentStatus !== 'pending'
-      || context.attemptStatus !== 'hold_active' || Date.parse(context.holdExpiresAt) <= Date.now()
-      || !Number.isFinite(Date.parse(context.holdExpiresAt))) return context;
+    if (context.paymentStatus !== 'pending') return context;
+    if (!['ACTIVE', 'EXPIRED', 'TERMINATED'].includes(order.order_status)) return { ...context, gatewayPaymentInProgress: true };
     if (amountToPaise(order.order_amount) !== context.amountPaise || order.order_currency !== context.currency) {
       throw new Error('Authoritative Cashfree amount or currency mismatch');
     }
     const payments = await client.getOrderPayments(context.providerOrderId);
-    const retryableFailure = payments.length > 0
+    const retryableFailure = order.order_status === 'ACTIVE' && context.attemptStatus === 'hold_active'
+      && Number.isFinite(Date.parse(context.holdExpiresAt)) && Date.parse(context.holdExpiresAt) > Date.now()
+      && payments.length > 0
       && payments.every(payment => ['FAILED', 'USER_DROPPED'].includes(payment.payment_status));
-    return { ...context, retryableFailure };
+    return { ...context, retryableFailure,
+      gatewayPaymentInProgress: payments.some(payment => !['FAILED', 'USER_DROPPED'].includes(payment.payment_status)),
+    };
   }
 
   const payments = await client.getOrderPayments(context.providerOrderId);
   const payment = findSuccessfulPayment(payments);
-  if (!payment) return context;
+  if (!payment) return { ...context, gatewayPaymentInProgress: true };
 
   const paidPaise = amountToPaise(payment.payment_amount);
   if (paidPaise !== context.amountPaise || order.order_currency !== context.currency) {
@@ -263,6 +276,29 @@ export async function restoreBookingCheckout(attempt, { database = serviceRoleCl
     return { ...await reconcile(attempt.attemptId), paymentSessionId: null, gatewayReconciling: true };
   }
   return { ...attempt, paymentSessionId: order.payment_session_id, cashfreeMode: config.cashfreeEnvironment };
+}
+
+export async function finishBookingCheckout(attempt, tokenHash, {
+  database = serviceRoleClient, reconcile = reconcileAttempt,
+  wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+} = {}) {
+  let reconciled;
+  try {
+    for (let lookup = 0; lookup < 3; lookup++) {
+      if (lookup) await wait(lookup * 350);
+      reconciled = await reconcile(attempt.attemptId);
+      if (reconciled?.paymentStatus !== 'pending') break;
+    }
+  } catch {
+    return { ...attempt, gatewayReconciling: true };
+  }
+  if (reconciled?.paymentStatus === 'succeeded') return reconciled;
+  if (!reconciled || reconciled.gatewayPaymentInProgress || reconciled.attemptStatus === 'manual_review') return { ...(reconciled || attempt), gatewayReconciling: true };
+  const { data, error } = await database.rpc('abandon_cashfree_checkout_v1', {
+    p_attempt_id: attempt.attemptId, p_attempt_token_hash: tokenHash,
+  });
+  if (error) throw error;
+  return rpcValue(data);
 }
 
 export function createCashfreeV1Router() {
@@ -529,33 +565,11 @@ export function createCashfreeV1Router() {
     const attempt = await authorizeAttempt(req, res, reqId);
     if (!attempt) return;
 
-    // Cashfree is authoritative. Check once more before releasing ownership so
-    // a successful payment cannot be misclassified from popup output alone.
-    let reconciled;
     try {
-      // Give gateway status a short bounded window to settle after the modal
-      // returns. This reduces false unpaid closures without extending the hold.
-      for (let lookup = 0; lookup < 3; lookup += 1) {
-        if (lookup > 0) await new Promise(resolve => setTimeout(resolve, lookup * 350));
-        reconciled = await reconcileAttempt(attempt.attemptId);
-        if (reconciled?.paymentStatus !== 'pending') break;
-      }
-    } catch (error) {
-      console.error('[CashfreeV1] Checkout-end reconciliation failed:', error?.message);
-      return sendData(res, 202, { ...attempt, gatewayReconciling: true }, reqId);
-    }
-    if (reconciled?.paymentStatus === 'succeeded') {
-      return sendData(res, 200, reconciled, reqId);
-    }
-
-    const rawToken = parseCookies(req)[ATTEMPT_COOKIE];
-    const { data, error } = await serviceRoleClient.rpc('abandon_cashfree_checkout_v1', {
-      p_attempt_id: attempt.attemptId,
-      p_attempt_token_hash: sha256(rawToken),
-    });
-    if (error) return mapDatabaseError(error, res, reqId);
-    if (!data) return sendError(res, 404, 'NOT_FOUND', 'Payment attempt was not found.', reqId);
-    return sendData(res, 200, rpcValue(data), reqId);
+      const result = await finishBookingCheckout(attempt, sha256(parseCookies(req)[ATTEMPT_COOKIE]));
+      if (!result) return sendError(res, 404, 'NOT_FOUND', 'Payment attempt was not found.', reqId);
+      return sendData(res, result.gatewayReconciling ? 202 : 200, result, reqId);
+    } catch (error) { return mapDatabaseError(error, res, reqId); }
   });
 
   return router;

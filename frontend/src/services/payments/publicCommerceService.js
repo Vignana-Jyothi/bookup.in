@@ -8,7 +8,7 @@ export function publicCommerceService(slug) {
       ...(body===undefined?{}:{body:JSON.stringify(body)}),
     });
     const result=await response.json().catch(()=>({}));
-    if(!response.ok){const error=new Error(result.error || 'This catalog is temporarily unavailable.');error.status=response.status;throw error;}
+    if(!response.ok){const error=new Error((typeof result.error==='string' ? result.error : result.error?.message) || 'This service is temporarily unavailable. Please try again.');error.status=response.status;throw error;}
     return result.data;
   }
   return {catalog:signal=>request('/catalog',undefined,signal),session:()=>request('/session'),
@@ -16,6 +16,8 @@ export function publicCommerceService(slug) {
     verify:(challengeId,code)=>request('/otp/verify',{challengeId,code}),
     requestAccess:id=>request(`/items/${id}/access`,{}),logout:()=>request('/logout',{}),
     orders:()=>request('/orders'),
+    bookingPayments:()=>request('/booking-payments'),
+    openBookingPayment:id=>request(`/booking-payments/${encodeURIComponent(id)}/open`,{}),
     checkout:(id,version,requestKey)=>request(`/items/${id}/checkout`,{version,requestKey,sandboxAcknowledged:true}),
     openOrder:id=>request(`/orders/${id}/open`,{}),refreshOrder:id=>request(`/orders/${id}/refresh`,{})};
 }

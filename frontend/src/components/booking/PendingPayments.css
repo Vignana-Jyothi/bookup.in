@@ -1,0 +1,14 @@
+.pending-payments-modal { width: min(520px, 100%); }
+.pending-payments-modal h2 { font-size: 20px; }
+.pending-payments-modal h3 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+.pending-payments-modal p { font-size: 14px; line-height: 1.5; margin-block: 8px; }
+.pending-payments-modal form,
+.pending-payments-modal label { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pending-payments-modal label { gap: 6px; font-size: 14px; font-weight: 600; }
+.pending-payments-toolbar,
+.pending-payments-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+.pending-payments-list { list-style: none; padding: 0; margin: 12px 0; }
+.pending-payments-list > li { padding-block: 16px; border-top: 1px solid var(--theme-border); }
+.pending-payment-confirm { margin-top: 12px; padding: 12px; background: var(--theme-bg-card-subtle); border-radius: 8px; }
+.pending-payment-confirm .btn { margin: 4px; }
+.pending-payments-modal .btn { white-space: normal; }

@@ -27,6 +27,8 @@
 }
 
 /* Header */
+.booking-payment-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px; }
+.booking-payment-entry span { font-size: 13px; color: var(--color-text); }
 .booking-checkout-recovery {
   margin: 16px;
   padding: 16px;

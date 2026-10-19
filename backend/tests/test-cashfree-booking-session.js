@@ -52,10 +52,16 @@ const before = paymentLookups;
 assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).paymentStatus, 'closed_unpaid');
 assert.equal(paymentLookups, before, 'Closed local orders cannot be revived by ACTIVE gateway state');
 context.paymentStatus = 'pending'; context.holdExpiresAt = new Date(0).toISOString();
-assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).retryableFailure, undefined);
-assert.equal(paymentLookups, before, 'Expired holds cannot advertise payment retries');
+assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).retryableFailure, false);
+assert.equal(paymentLookups, before + 1, 'Expired holds still check for a processing payment before cancellation');
 context.holdExpiresAt = attempt.holdExpiresAt; context.amountPaise = 20000;
 await assert.rejects(reconcileAttempt(attempt.attemptId, retryDependencies), /amount or currency mismatch/);
+context.amountPaise = 10000;
+retryDependencies.client.getOrder = async () => ({ order_status: 'PAID', order_amount: 100, order_currency: 'INR' });
+transactionStatuses = ['FAILED'];
+assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).gatewayPaymentInProgress, true, 'PAID without matching SUCCESS stays uncertain and cannot be closed unpaid');
+retryDependencies.client.getOrder = async () => ({ order_status: 'UNKNOWN', order_amount: 100, order_currency: 'INR' });
+assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).gatewayPaymentInProgress, true, 'Unknown gateway state cannot authorize cancellation');
 console.log('PASS: current booking sessions, immutable hold deadline, amount checks, and paid-order reconciliation.');
 console.log('PASS: failed/dropped payments reuse an active checkout; pending, successful, unknown, closed and expired outcomes do not offer an unsafe retry.');
 

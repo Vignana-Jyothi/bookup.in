@@ -18,6 +18,9 @@ async function main() {
       window.feedback = { mode: 'fail', toasts: [], refreshes: 0, writes: 0, openedSessions: [] };
       window.attempt = { attemptId: 'fixture', paymentStatus: 'pending', attemptStatus: 'hold_active', holdExpiresAt: new Date(Date.now() + 60000).toISOString(), paymentSessionId: 'fixture' };
       window.attempt.retryableFailure = new URLSearchParams(location.search).get('scenario') === 'failed-payment';
+      window.feedback.verified = false;
+      window.feedback.cancelMode = 'processing';
+      window.feedback.pending = ['first', 'second'].map(id => ({attemptId:id,serviceName:id+' appointment',bookingDate:'2026-11-01',startTime:'10:00',amountPaise:10000,currency:'INR',paymentStatus:'pending',attemptStatus:'hold_active'}));
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
         writeText: async () => {
           window.feedback.writes++;
@@ -41,8 +44,10 @@ async function main() {
         import Availability from '/src/pages/dashboard/Availability.jsx';
         import Sharing from '/src/pages/dashboard/BookingPageMgmt.jsx';
         import Payment from '/src/pages/booking/CashfreePaymentStatus.jsx';
+        import PendingPayments from '/src/components/booking/PendingPayments.jsx';
         import '/src/styles/global.css'; import '/src/styles/components.css';
-        const Page={availability:Availability,sharing:Sharing,payment:Payment}[new URLSearchParams(location.search).get('surface')];
+        const Pending=()=>{const [open,setOpen]=React.useState(true);return open?React.createElement(PendingPayments,{slug:'fixture',onClose:()=>{window.feedback.closed=true;setOpen(false)},onOpen:()=>{window.feedback.openedPayment=true}}):React.createElement('p',null,'Pending payments closed')};
+        const Page={availability:Availability,sharing:Sharing,payment:Payment,pending:Pending}[new URLSearchParams(location.search).get('surface')];
         ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MemoryRouter,null,React.createElement(Page)));
         </script></body></html>` });
       if (pathname.endsWith('/src/data/store')) return js(`
@@ -54,7 +59,13 @@ async function main() {
       if (pathname.endsWith('/services/supabase/supabaseClient')) return js('export const isSupabaseConfigured=()=>true;');
       if (pathname.endsWith('/services/supabase/dbService')) return js(`export const dbService={saveAvailability:async()=>{await new Promise(r=>setTimeout(r,100));if(window.feedback.mode==='fail')throw new Error('Offline');return true;}};`);
       if (pathname.endsWith('/services/booking/merchantSchedulingService')) return js('export const merchantSchedulingService={load:async()=>({instructors:[]})};');
-      if (pathname.endsWith('/services/payments/cashfreeCheckout')) return js(`export const cashfreeCheckoutService={refreshPayment:async()=>{window.feedback.refreshes++;return window.attempt},getAttempt:async()=>window.attempt,getRestartPath:()=>'/book/fixture',getCheckoutSession:async()=>window.attempt,openHostedPopup:async session=>{window.feedback.openedSessions.push(session.paymentSessionId);return {redirect:true}}};`);
+      if (pathname.endsWith('/services/payments/publicCommerceService')) return js(`export const publicCommerceService=()=>({
+        bookingPayments:async()=>{if(!feedback.verified)throw Object.assign(new Error('Verify your phone'),{status:401});return {maskedPhone:'******0001',attempts:feedback.pending}},
+        send:async()=>{feedback.smsRequests=(feedback.smsRequests||0)+1;return {challengeId:'fixture',maskedPhone:'******0001'}},
+        verify:async(_id,code)=>{if(code!=='123456')throw Object.assign(new Error('Incorrect verification code'),{status:400});feedback.verified=true},
+        openBookingPayment:async id=>{feedback.selected=id},logout:async()=>{feedback.verified=false}
+      });`);
+      if (pathname.endsWith('/services/payments/cashfreeCheckout')) return js(`export const cashfreeCheckoutService={refreshPayment:async()=>{window.feedback.refreshes++;return window.attempt},getAttempt:async()=>window.attempt,getRestartPath:()=>'/book/fixture',getCheckoutSession:async()=>window.attempt,openHostedPopup:async session=>{window.feedback.modalWasClosed=!document.querySelector('dialog[open]');window.feedback.openedSessions.push(session.paymentSessionId);return {redirect:true}},finishCheckoutReturn:async()=>{if(feedback.cancelMode==='processing')return {paymentStatus:'pending',gatewayReconciling:true};feedback.pending=feedback.pending.filter(item=>item.attemptId!==feedback.selected);return {paymentStatus:'closed_unpaid',attemptStatus:'released'}}};`);
       if (pathname.endsWith('/hooks/usePopupFeedback')) return js(`const clear=()=>{}; export const usePopupFeedback=()=>['',clear];`);
       if (['/components/dashboard/CommerceManager','/components/support/TicketPanel','/components/ui/receipt-printer/BookingReceipt'].some(s=>pathname.endsWith(s))) return js('export default function Stub(){return null;}');
       if (pathname.startsWith('/api/')) throw new Error('Unexpected API request in isolated test');
@@ -93,6 +104,38 @@ async function main() {
       assert.equal(await page.getByRole('alert').count(), 0);
     }
     console.log('PASS browser: both clipboard failures select the link; retries show one success.');
+
+    await open('pending');
+    const pendingDialog = page.getByRole('dialog', { name: 'Pending payments', exact: true });
+    await pendingDialog.getByLabel('Phone number', { exact: true }).fill('9000000001');
+    assert.equal(await page.evaluate(() => feedback.smsRequests || 0), 0, 'No SMS is sent automatically');
+    await pendingDialog.getByRole('button', { name: 'Send verification code', exact: true }).click();
+    await pendingDialog.getByLabel('Verification code', { exact: true }).fill('000000');
+    await pendingDialog.getByRole('button', { name: 'Verify and find payments', exact: true }).click();
+    await pendingDialog.getByRole('alert').waitFor();
+    assert.equal(await pendingDialog.getByText('first appointment', { exact: true }).count(), 0);
+    await pendingDialog.getByLabel('Verification code', { exact: true }).fill('123456');
+    await pendingDialog.getByRole('button', { name: 'Verify and find payments', exact: true }).click();
+    await pendingDialog.getByRole('heading', { name: 'first appointment', exact: true }).waitFor();
+    assert.equal(await pendingDialog.getByRole('button', { name: 'Retry payment', exact: true }).count(), 2);
+    await pendingDialog.getByRole('button', { name: 'Cancel payment', exact: true }).first().click();
+    await pendingDialog.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
+    await pendingDialog.getByRole('status').filter({ hasText: 'could not be closed yet' }).waitFor();
+    assert.equal(await pendingDialog.getByRole('button', { name: 'Retry payment', exact: true }).count(), 2);
+    await page.evaluate(() => { feedback.cancelMode='closed'; });
+    await pendingDialog.getByRole('button', { name: 'Cancel payment', exact: true }).first().click();
+    await pendingDialog.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
+    await pendingDialog.getByRole('status').filter({ hasText: 'Checkout closed' }).waitFor();
+    assert.equal(await pendingDialog.getByRole('heading', { name: 'first appointment', exact: true }).count(), 0);
+    await page.setViewportSize({width:320,height:844});
+    assert(await pendingDialog.locator('.modal').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    await page.screenshot({path:'guides/project/accessibility-browser-evidence/pending-payments-320.png',fullPage:true});
+    await pendingDialog.getByRole('button', { name: 'Retry payment', exact: true }).click();
+    await page.waitForFunction(() => feedback.openedPayment === true);
+    assert.equal(await page.evaluate(() => feedback.selected), 'second');
+    assert.equal(await page.evaluate(() => feedback.openedSessions.length), 1);
+    assert.equal(await page.evaluate(() => feedback.modalWasClosed), true, 'Native dialog must close before the gateway mounts outside it');
+    console.log('PASS browser: phone/SMS proof, invalid code, unfinished list, pending cancellation retained, confirmed cancellation removed, owned retry and 320px layout.');
 
     await open('payment', 'failed-payment');
     await page.getByRole('heading', { name: 'Your payment attempt was unsuccessful', exact: true }).waitFor();

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import { openApiDocument } from '../server/openapi.js';
 
 const requiredOperations = {
+  '/api/v1/public/commerce/{slug}/booking-payments': ['get'],
+  '/api/v1/public/commerce/{slug}/booking-payments/{id}/open': ['post'],
   '/api/v1/public/commerce/{slug}/orders': ['get'],
   '/api/v1/public/commerce/{slug}/items/{id}/checkout': ['post'],
   '/api/v1/public/commerce/{slug}/orders/{id}/open': ['post'],

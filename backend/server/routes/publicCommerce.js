@@ -7,6 +7,7 @@ import { encryptToken, decryptToken } from '../utils/crypto.js';
 import { customerRequestIsTrusted } from '../utils/customerAccess.js';
 import { config } from '../config.js';
 import { commerceOrderPayments } from '../services/commerceOrderPayments.js';
+import { setRecoveredAttemptCookie } from './cashfreeV1.js';
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
@@ -14,7 +15,7 @@ const errors={AUTH_REQUIRED:[401,'Verify your phone to continue.'],ACCESS_UNAVAI
 Object.assign(errors,{COMMERCE_CHECKOUT_DISABLED:[503,'Sandbox payments are not configured for this offering yet.'],NOT_FOUND:[404,'Order not found.'],VERSION_CONFLICT:[409,'The listing changed. Refresh and review the new price before paying.'],IDEMPOTENCY_CONFLICT:[409,'This retry belongs to another purchase. Check your orders.'],ORDER_ACTIVE:[409,'A payment is already open for this item. Resume it or check its status below.'],ORDER_RATE_LIMIT:[429,'Too many orders. Please wait before trying again.'],PURCHASE_LIMIT:[409,'Your purchase allowance for this product has been reached.'],APPROVAL_REQUIRED:[403,'Your merchant must approve product access before purchase.']});
 errors.RESERVATION_EXPIRED=[409,'This purchase reservation expired. Start a new checkout after checking your orders.'];
 export function commerceError(res,error) {
-  const [status,message]=errors[error?.message] || [503,'Commerce access is temporarily unavailable. Please retry.'];
+  const [status,message]=errors[error?.message] || [503,'This service is temporarily unavailable. Please retry.'];
   return res.status(status).json({error:message});
 }
 function cookie(req,name) {
@@ -95,6 +96,22 @@ export function createPublicCommerceRouter({client=serviceRoleClient,otp=twoFact
       const current=await session(req);
       const requests=check(await client.from('commerce_access_requests').select('id,product_id,status,version,reason,created_at').eq('contact_id',current.contactId).order('created_at',{ascending:false}).limit(100));
       res.json({data:{maskedPhone:current.maskedPhone,bookingVerified:Boolean(current.bookingId),requests}});
+    } catch(error) {next(error);}
+  });
+  router.get('/:slug/booking-payments',async(req,res,next)=>{
+    try {
+      const current=await session(req);
+      const attempts=check(await client.rpc('get_verified_booking_payments_v1',{p_hash:current.hash,p_slug:req.params.slug}));
+      res.json({data:{maskedPhone:current.maskedPhone,attempts}});
+    } catch(error) {next(error);}
+  });
+  router.post('/:slug/booking-payments/:id/open',async(req,res,next)=>{
+    if(!uuid.test(req.params.id) || Object.keys(req.body || {}).length) return res.status(422).json({error:'Select a payment. No phone or payment evidence is accepted here.'});
+    try {
+      const current=await session(req);
+      const owned=check(await client.rpc('get_verified_booking_payments_v1',{p_hash:current.hash,p_slug:req.params.slug,p_attempt_id:req.params.id}));
+      setRecoveredAttemptCookie(res,owned);
+      res.json({data:{opened:true}});
     } catch(error) {next(error);}
   });
   router.post('/:slug/items/:id/access',async(req,res,next)=>{

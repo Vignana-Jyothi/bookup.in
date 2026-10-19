@@ -21,6 +21,7 @@ import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCal
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { cashfreeCheckoutService, isCashfreeV1Enabled } from '../../services/payments/cashfreeCheckout';
 import { bookingPaymentIntent, shouldResetBookingPaymentIntent } from '../../services/payments/bookingPaymentIntent.js';
+import PendingPayments from '../../components/booking/PendingPayments.jsx';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import {
@@ -176,6 +177,7 @@ export default function PublicBookingPage() {
     ? state.provider
     : null);
   const [existingCheckout, setExistingCheckout] = useState(null);
+  const [pendingPaymentsOpen, setPendingPaymentsOpen] = useState(false);
   useEffect(() => {
     if (!isCashfreeV1Enabled() || !provider?.slug || isDemo) return undefined;
     let cancelled = false;
@@ -868,6 +870,11 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
             <BrandLogo iconOnly size="sm" to={null} />
           </div>
         </header>
+        {isCashfreeV1Enabled() && <div className="booking-payment-entry">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPendingPaymentsOpen(true)}>Pending payments</button>
+          <span>Find an unfinished checkout using your phone.</span>
+        </div>}
+        {pendingPaymentsOpen && <PendingPayments slug={provider.slug || slug} onClose={() => setPendingPaymentsOpen(false)} onOpen={state => navigate('/payment-status', { state })} />}
         {existingCheckout?.providerSlug === provider.slug && (
           <section className="booking-checkout-recovery" aria-label="Existing checkout">
             <strong>You have an unfinished checkout</strong>
