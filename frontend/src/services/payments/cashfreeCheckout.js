@@ -1,4 +1,4 @@
-import { getApiBase } from '../../utils/api.js';
+import { getPublicSessionApiBase as getApiBase } from '../../utils/api.js';
 import { installCheckoutRecovery } from './checkoutRecovery.js';
 
 const SDK_URL = 'https://sdk.cashfree.com/js/v3/cashfree.js';

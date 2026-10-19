@@ -103,7 +103,10 @@ export function createPublicCommerceRouter({client=serviceRoleClient,otp=twoFact
       const current=await session(req);
       const attempts=check(await client.rpc('get_verified_booking_payments_v1',{p_hash:current.hash,p_slug:req.params.slug}));
       res.json({data:{maskedPhone:current.maskedPhone,attempts}});
-    } catch(error) {next(error);}
+    } catch(error) {
+      if(error?.code==='PGRST202') return res.status(503).json({error:'We could not load unfinished payments. Please try again later or contact the merchant.'});
+      next(error);
+    }
   });
   router.post('/:slug/booking-payments/:id/open',async(req,res,next)=>{
     if(!uuid.test(req.params.id) || Object.keys(req.body || {}).length) return res.status(422).json({error:'Select a payment. No phone or payment evidence is accepted here.'});

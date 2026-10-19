@@ -14,7 +14,18 @@ export async function verifyAdminProxyOutput(root = '.vercel/output') {
   assert((await stat(path.join(functionRoot, functionConfig.handler))).isFile(), 'Packaged admin handler is missing');
 }
 
+export async function verifyCustomerProxyOutput(root = '.vercel/output') {
+  const config = JSON.parse(await readFile(path.join(root, 'config.json'), 'utf8'));
+  const rule = config.routes?.find(item => item.src === '/api/v1/public/(.*)');
+  assert(rule?.dest?.startsWith('/api/customer-proxy?'), 'Missing first-party customer API function route');
+  const functionRoot = path.join(root, 'functions', 'api', 'customer-proxy.func');
+  const fn = JSON.parse(await readFile(path.join(functionRoot, '.vc-config.json'), 'utf8'));
+  assert.match(fn.runtime, /^nodejs/, 'Customer API bridge must be a Node function');
+  assert((await stat(path.join(functionRoot, fn.handler))).isFile(), 'Packaged customer handler is missing');
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   await verifyAdminProxyOutput(process.argv[2]);
-  console.log('PASS: Vercel admin function, handler and explicit route exist in prebuilt output.');
+  await verifyCustomerProxyOutput(process.argv[2]);
+  console.log('PASS: Vercel admin/customer cookie functions, handlers and explicit routes exist in prebuilt output.');
 }

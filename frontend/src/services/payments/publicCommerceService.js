@@ -1,4 +1,4 @@
-import { getApiBase } from '../../utils/api.js';
+import { getPublicSessionApiBase as getApiBase } from '../../utils/api.js';
 
 export function publicCommerceService(slug) {
   async function request(path,body,signal) {

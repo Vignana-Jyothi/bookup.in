@@ -12,10 +12,11 @@ const contactId = crypto.randomUUID(); const access = crypto.randomBytes(32).toS
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const key = 'fixture-payment-request-key';
 const attemptToken = crypto.createHmac('sha256', Buffer.from(config.tokenEncryptionKey, 'hex')).update(`cashfree-v1:${providerId}:${key}`).digest('base64url');
-let validHash = true; let trusted = true; let lookups = 0;
+let validHash = true; let trusted = true; let lookups = 0; let lookupMissing = false;
 const client = { async rpc(name, args) {
   if (name === 'commerce_session_v1') return { data: args.p_hash === hash(access) && args.p_slug === 'fixture' ? { contactId, providerId, maskedPhone: '******0001' } : null };
   assert.equal(name, 'get_verified_booking_payments_v1'); lookups++;
+  if (lookupMissing) return { error: { code: 'PGRST202' } };
   assert.equal(args.p_hash, hash(access)); assert.equal(args.p_slug, 'fixture');
   if (args.p_attempt_id) return args.p_attempt_id !== attemptId ? { error: new Error('NOT_FOUND') } : { data: { attemptId, providerId, idempotencyKey: key, attemptTokenHash: validHash ? hash(attemptToken) : '0'.repeat(64) } };
   return { data: [{ attemptId, serviceName: 'Fixture appointment', amountPaise: 10000, currency: 'INR', paymentStatus: 'pending' }] };
@@ -34,6 +35,11 @@ try {
   assert.match(response.headers.get('cache-control'), /no-store/);
   const listed = await response.text(); assert.match(listed, /Fixture appointment/);
   assert.doesNotMatch(listed, /idempotencyKey|attemptTokenHash|paymentSessionId|customerName|customerPhone/);
+  lookupMissing = true;
+  response = await fetch(`${origin}/public/fixture/booking-payments`, { headers });
+  assert.equal(response.status, 503, 'Missing lookup is not an empty payment list');
+  assert.match((await response.json()).error, /could not load unfinished payments/);
+  lookupMissing = false;
   assert.equal((await open(attemptId, { phone: '9000000001' })).status, 422);
   assert.equal((await open(crypto.randomUUID())).status, 404);
   trusted = false; assert.equal((await open()).status, 403); trusted = true;

@@ -241,6 +241,7 @@ export default function CashfreePaymentStatus() {
           <div className="payment-status-actions">
             {unavailable && <button className="payment-status-button payment-status-button--primary" type="button" onClick={refresh} disabled={loading}>{loading ? 'Checking…' : 'Try again'}</button>}
             {unavailable && <Link className="payment-status-button" to="/booking-status">Find your booking</Link>}
+            {unavailable && restartPath.startsWith('/book/') && <Link className="payment-status-button" to={restartPath} state={{ openPendingPayments: true }}>Find pending payments</Link>}
             {pending && holdProtected && attempt?.paymentSessionId && (
               <button className="payment-status-button payment-status-button--primary" type="button" onClick={continuePayment} disabled={openingCheckout || loading}>
                 {openingCheckout ? 'Opening…' : retryableFailure ? 'Retry payment' : 'Continue payment'}

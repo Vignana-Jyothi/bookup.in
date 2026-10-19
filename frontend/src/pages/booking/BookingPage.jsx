@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useStore, formatCurrency, formatDate, formatTime, generateId } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import { usePopupFeedback } from '../../hooks/usePopupFeedback.js';
@@ -177,7 +177,8 @@ export default function PublicBookingPage() {
     ? state.provider
     : null);
   const [existingCheckout, setExistingCheckout] = useState(null);
-  const [pendingPaymentsOpen, setPendingPaymentsOpen] = useState(false);
+  const recoveryLocation = useLocation();
+  const [pendingPaymentsOpen, setPendingPaymentsOpen] = useState(() => Boolean(recoveryLocation.state?.openPendingPayments));
   useEffect(() => {
     if (!isCashfreeV1Enabled() || !provider?.slug || isDemo) return undefined;
     let cancelled = false;

@@ -52,7 +52,7 @@ jobs:
             vercel build --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
           fi
 
-      - name: Verify Administrator API Function
+      - name: Verify First-Party Cookie API Functions
         run: node backend/scripts/verify-vercel-admin-proxy.mjs
 
       - name: Deploy Project Artifacts to Vercel

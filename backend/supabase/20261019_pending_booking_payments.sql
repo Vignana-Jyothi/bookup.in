@@ -51,4 +51,5 @@ end $$;
 
 revoke all on function public.get_verified_booking_payments_v1(text, text, uuid) from public, anon, authenticated;
 grant execute on function public.get_verified_booking_payments_v1(text, text, uuid) to service_role;
+notify pgrst, 'reload schema';
 commit;

@@ -14,6 +14,10 @@
       "src": "/api/v1/admin/(.*)",
       "dest": "/api/admin-proxy?__calup_admin_path=$1"
     },
+    {
+      "src": "/api/v1/public/(.*)",
+      "dest": "/api/customer-proxy?__calup_public_path=$1"
+    },
     { "handle": "filesystem" },
     {
       "src": "/(?:assets|src|api)(?:/.*)?$",

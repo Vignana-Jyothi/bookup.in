@@ -33,3 +33,8 @@ export function getApiBase() {
 export function getAdminApiBase() {
   return typeof window !== 'undefined' ? '/api' : getApiBase();
 }
+
+// Checkout and phone-verification proof must use the same first-party origin.
+export function getPublicSessionApiBase() {
+  return typeof window !== 'undefined' ? '/api' : getApiBase();
+}

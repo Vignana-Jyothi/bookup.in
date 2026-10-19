@@ -44,7 +44,7 @@ function pageHarness() {
     usePopupFeedback: () => ['', message => { if (message) notifications.push(message); }],
     cashfreeCheckoutService: {
       refreshPayment: async () => { refreshes++; return respond(); }, getAttempt: respond, finishCheckoutReturn: respond,
-      getCheckoutSession: respond, getRestartPath: () => '/',
+      getCheckoutSession: respond, getRestartPath: () => '/book/fixture',
       openHostedPopup: async session => { openedSessions.push(session.paymentSessionId); return {}; },
     },
     BrandLogo: () => null, TicketPanel: () => null, BookingReceipt: () => null,
@@ -81,6 +81,7 @@ await page.load();
 assert.match(page.text(), /We couldn’t access your payment session/);
 assert.match(page.text(), /browser where you started checkout/);
 assert.match(page.text(), /Find your booking/);
+assert.match(page.text(), /Find pending payments/);
 assert.doesNotMatch(page.text(), /Confirming your payment|slot.*protected|Continue payment|Cancel payment/);
 assert.deepEqual(page.notifications, []);
 

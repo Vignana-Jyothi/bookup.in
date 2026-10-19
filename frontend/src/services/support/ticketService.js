@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/supabaseClient.js';
-import { getApiBase, getAdminApiBase } from '../../utils/api.js';
+import { getApiBase, getAdminApiBase, getPublicSessionApiBase } from '../../utils/api.js';
 
 export function createTicketService(scope = 'customer', context = 'booking') {
   const segment = scope === 'customer' ? 'public' : scope;
@@ -11,7 +11,8 @@ export function createTicketService(scope = 'customer', context = 'booking') {
       if (!session?.access_token) throw new Error('Sign in to access support.');
       headers.Authorization = `Bearer ${session.access_token}`;
     }
-    const apiBase = scope === 'admin' ? getAdminApiBase() : getApiBase();
+    const apiBase = scope === 'admin' ? getAdminApiBase()
+      : scope === 'customer' && context === 'payment' ? getPublicSessionApiBase() : getApiBase();
     const response = await fetch(`${apiBase}/v1/${segment}/support/tickets${path}`, { ...options, credentials: 'include', headers });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
