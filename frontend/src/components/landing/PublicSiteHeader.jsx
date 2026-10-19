@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import BrandLogo from '../ui/BrandLogo';
 import PillButton from '../ui/PillButton';
+import AccessibleModal from '../ui/AccessibleModal.jsx';
 /* Disabled navigation enhancement (user request):
 import { useStore } from '../../data/store';
 */
@@ -18,11 +19,13 @@ export default function PublicSiteHeader() {
 /* Disabled navigation enhancement (user request):
   const workspaceLink = state.auth.isAuthenticated && <Link to="/dashboard">{state.onboarding?.completed ? 'Dashboard' : 'Resume setup'}</Link>;
 */
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   const navigate = useNavigate();
   const { nav } = LANDING_CONTENT;
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuTriggerRef = useRef(null);
+  useEffect(() => { setMobileMenuOpen(false); }, [pathname, hash, isMobile]);
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     handleScroll();
@@ -39,10 +42,14 @@ export default function PublicSiteHeader() {
             {nav.login}
           </Link>
           <button
+            ref={menuTriggerRef}
             type="button"
             className="mobile-hamburger-btn"
             onClick={() => setMobileMenuOpen(prev => !prev)}
-            aria-label="Toggle Navigation Menu"
+            aria-label="Open navigation menu"
+            aria-haspopup="dialog"
+            aria-expanded={mobileMenuOpen}
+            aria-controls={mobileMenuOpen ? 'public-mobile-navigation' : undefined}
           >
             {mobileMenuOpen ? <X size={20} strokeWidth={2} /> : <Menu size={20} strokeWidth={2} />}
           </button>
@@ -51,13 +58,14 @@ export default function PublicSiteHeader() {
 
       {/* ---------------- MOBILE HAMBURGER DRAWER ---------------- */}
       {mobileMenuOpen && (
-        <div className="mobile-drawer-overlay animate-fade-in-up" onClick={() => setMobileMenuOpen(false)}>
-          <div className="mobile-drawer-content" onClick={e => e.stopPropagation()}>
-            <nav className="mobile-drawer-links">
+        <AccessibleModal label="Site navigation" onClose={() => setMobileMenuOpen(false)} returnFocusRef={menuTriggerRef}>
+          <div id="public-mobile-navigation" className="mobile-drawer-content public-mobile-drawer">
+            <div className="public-mobile-drawer-heading"><h2>Site navigation</h2><button type="button" className="mobile-hamburger-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close navigation menu"><X size={20} aria-hidden="true" /></button></div>
+            <nav className="mobile-drawer-links" aria-label="Main navigation">
 {/* Disabled navigation enhancement (user request):
               <Link to="/booking-status" className="mobile-drawer-link" onClick={() => setMobileMenuOpen(false)}>Track booking</Link>
 */}
-              <Link to="/subscriptions" className="mobile-drawer-link" onClick={() => setMobileMenuOpen(false)}>Subscriptions</Link>
+              <Link to="/subscriptions" aria-current={pathname === '/subscriptions' ? 'page' : undefined} className="mobile-drawer-link" onClick={() => setMobileMenuOpen(false)}>Subscriptions</Link>
               {nav.links.map(l => (
                 <Link key={l.href} to={`/${l.href}`}
                   className="mobile-drawer-link"
@@ -94,7 +102,7 @@ export default function PublicSiteHeader() {
               </PillButton>
             </div>
           </div>
-        </div>
+        </AccessibleModal>
       )}
 
 

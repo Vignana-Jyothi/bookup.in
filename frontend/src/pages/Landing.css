@@ -1145,6 +1145,21 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
 }
 
+/* Shared public navigation uses the native modal boundary for focus and Escape. */
+.public-mobile-drawer {
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border: 1px solid #d8d7cf;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.public-mobile-drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.public-mobile-drawer-heading h2 { font-size: 20px; margin: 0; }
+.public-mobile-drawer :focus-visible { outline: 3px solid #536923; outline-offset: 3px; }
+.public-mobile-drawer .mobile-drawer-link[aria-current="page"] { text-decoration: underline; text-underline-offset: 5px; }
+@media (prefers-reduced-motion: reduce) { .accessible-modal:has(.public-mobile-drawer) { animation: none; } }
+
 .mobile-drawer-links {
   display: flex;
   flex-direction: column;
