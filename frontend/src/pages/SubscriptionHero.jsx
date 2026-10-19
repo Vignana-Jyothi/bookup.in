@@ -36,6 +36,7 @@ export default function SubscriptionHero({ signupHref = '/signup', loginHref = '
   const price = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(amount / 100);
   const questions = [
     ['What will I pay?', `Calup access costs ${price} plus applicable tax for ${days} days. Your subscription dashboard shows the tax breakdown and final payable amount before payment.`],
+    ['Is early access free?', 'Selected merchants receive free early access under their issued access terms. Otherwise the paid plan applies. Check your account or redeem your Calup-issued access code to confirm eligibility.'],
     ['Does my subscription renew automatically?', `No. You choose when to renew your ${days}-day access from your subscription dashboard. We do not automatically debit your account.`],
     ['What happens when my access expires?', 'There is a five-day grace period after access expires. Renew from your dashboard to keep accepting new bookings. Your account shows your exact access and grace-period dates.'],
     ['Where do I redeem an access code?', 'Create your account or sign in, then open the subscription page to redeem your Calup-issued access code. Access codes do not create a payment or tax invoice.'],
@@ -59,6 +60,7 @@ export default function SubscriptionHero({ signupHref = '/signup', loginHref = '
             <div className="sh-price"><strong>{price}</strong><span>/ {days} days</span></div>
             <p className="sh-tax">+ applicable tax</p>
             <p className="sh-pricing-note">See the tax breakdown and final total before you pay.</p>
+            <p className="sh-pricing-note">Free early access for selected merchants under their issued access terms.</p>
             <Link className="sh-button sh-button-lime" to={signupHref}>Create your account <Arrow /></Link>
             <p className="sh-member-link">Already have an account? <Link to={loginHref}>Sign in</Link></p>
             <div className="sh-plan-terms"><Check /><span>Renew when you choose. No automatic debit.</span></div>

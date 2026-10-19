@@ -2,7 +2,7 @@ import { SUPPORT_EMAIL } from './landingContent';
 
 const env = import.meta.env || {};
 export const LEGAL_DETAILS = {
-  name: env.VITE_LEGAL_NAME || 'CalUp',
+  name: env.VITE_LEGAL_NAME || 'Calup',
   address: env.VITE_BUSINESS_ADDRESS || '',
   supportEmail: SUPPORT_EMAIL || 'support@calup.app',
   grievanceName: env.VITE_GRIEVANCE_CONTACT_NAME || '',

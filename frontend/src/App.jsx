@@ -18,6 +18,7 @@ const NotFound = lazy(() => import('./pages/NotFound.jsx'));
 */
 const LegalPage = lazy(() => import('./pages/LegalPage.jsx'));
 const SubscriptionHero = lazy(() => import('./pages/SubscriptionHero.jsx'));
+const SandboxBooking = lazy(() => import('./pages/SandboxBooking.jsx'));
 
 // Pages
 import Landing from './pages/Landing';
@@ -133,6 +134,7 @@ function AppRoutes() {
     <Routes>
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
+      <Route path="/sandbox/booking" element={<Suspense fallback={<RouteLoading />}><SandboxBooking /></Suspense>} />
       <Route path="/subscriptions" element={<Suspense fallback={<RouteLoading />}><SubscriptionHero /></Suspense>} />
       {LEGAL_PAGES.map(page => <Route key={page.slug} path={`/${page.slug}`} element={<Suspense fallback={<RouteLoading />}><LegalPage slug={page.slug} /></Suspense>} />)}
       <Route path="/login" element={<Login />} />

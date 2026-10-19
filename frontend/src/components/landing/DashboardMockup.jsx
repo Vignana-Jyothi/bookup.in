@@ -5,7 +5,7 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
   const [imageError, setImageError] = useState(false);
 
   return (
-    <div className="laptop-mockup-frame dashboard-browser-frame">
+    <div className="laptop-mockup-frame dashboard-browser-frame" role="img" aria-label="Illustration of an example merchant dashboard">
       <div className="laptop-screen">
         {/* Browser Chrome Header */}
         <div className="laptop-chrome">
@@ -16,7 +16,7 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
           </div>
           <div className="chrome-address">
             <Lock size={11} strokeWidth={2} style={{ marginRight: 4, verticalAlign: 'middle', opacity: 0.7 }} />
-            <span>calup.in/dashboard</span>
+            <span>Example dashboard</span>
           </div>
         </div>
 
@@ -43,7 +43,7 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
                   <span className="dash-logo-symbol" style={{ display: 'inline-flex', alignItems: 'center' }}>
                     <Zap size={14} strokeWidth={2.5} fill="#D4F933" />
                   </span>
-                  <span className="dash-logo-brand">CalUp</span>
+                  <span className="dash-logo-brand">Calup</span>
                 </div>
                 <div className="dash-nav-items">
                   <span className="dash-nav-active">Overview</span>
@@ -60,7 +60,7 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
               <div className="dash-stat-card">
                 <div className="dash-stat-label">Confirmed Sessions</div>
                 <div className="dash-stat-number">18</div>
-                <div className="dash-stat-change positive">100% direct UPI</div>
+                <div className="dash-stat-change positive">Example payment status</div>
               </div>
               <div className="dash-stat-card">
                 <div className="dash-stat-label">Active Clients</div>
@@ -68,9 +68,9 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
                 <div className="dash-stat-change positive">No login needed</div>
               </div>
               <div className="dash-stat-card">
-                <div className="dash-stat-label">Platform Commission</div>
-                <div className="dash-stat-number" style={{ color: 'var(--color-lime-hover, #B3E323)' }}>0%</div>
-                <div className="dash-stat-change positive">Direct to bank</div>
+                <div className="dash-stat-label">Example bookings</div>
+                <div className="dash-stat-number" style={{ color: 'var(--color-lime-hover, #B3E323)' }}>18</div>
+                <div className="dash-stat-change positive">Illustrative data</div>
               </div>
             </div>
 
@@ -79,7 +79,7 @@ export default function DashboardMockup({ imageSrc = '/assets/coach-dashboard-pr
               <div className="appt-header">
                 <span className="appt-title">Today's Schedule</span>
                 <span className="appt-view-all" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span>Synced to Google Meet</span>
+                  <span>Connected online services</span>
                   <Check size={12} strokeWidth={2.5} style={{ color: '#16A34A' }} />
                 </span>
               </div>

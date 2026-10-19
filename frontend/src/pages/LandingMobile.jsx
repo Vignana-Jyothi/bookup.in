@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Zap,
@@ -10,8 +9,6 @@ import {
   Dumbbell,
   Briefcase,
   GraduationCap,
-  Plus,
-  Minus,
   Check,
   ArrowDown,
 } from 'lucide-react';
@@ -24,16 +21,11 @@ import { LANDING_CONTENT } from '../data/landingContent';
 import './Landing.css';
 
 export default function LandingMobile() {
-  const navigate = useNavigate();
-  const [openFaqIndex, setOpenFaqIndex] = useState(0);
-  const [howVisible, setHowVisible] = useState(false);
+  const [howVisible, setHowVisible] = useState(() => typeof IntersectionObserver === 'undefined');
   const howSectionRef = useRef(null);
 
-  const toggleFaq = (index) => {
-    setOpenFaqIndex(prev => prev === index ? null : index);
-  };
-
   useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return undefined;
     // Scroll reveal observer (triggers once)
     const elements = document.querySelectorAll('.reveal-on-scroll');
     const revealObserver = new IntersectionObserver(
@@ -85,7 +77,9 @@ export default function LandingMobile() {
   return (
     <div className="landing-mobile landing-janjiyuk">
       {/* ---------------- MOBILE HEADER BAR ---------------- */}
+      <a className="landing-skip" href="#landing-main">Skip to content</a>
       <PublicSiteHeader />
+      <main id="landing-main" tabIndex={-1}>
 
       {/* ---------------- 1. HERO SECTION (MOBILE SINGLE COLUMN) ---------------- */}
       <section className="mobile-hero-section">
@@ -108,7 +102,7 @@ export default function LandingMobile() {
             arrow
             className="mobile-tap-target"
             style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => navigate('/signup')}
+            href="/signup"
           >
             {hero.primaryCta}
           </PillButton>
@@ -118,7 +112,7 @@ export default function LandingMobile() {
             size="lg"
             className="mobile-tap-target"
             style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => navigate(hero.demoUrl)}
+            href={hero.demoUrl}
           >
             {hero.secondaryCta}
           </PillButton>
@@ -176,7 +170,7 @@ export default function LandingMobile() {
               <div className="after-icon-tile">
                 <Check size={20} strokeWidth={2.5} />
               </div>
-              <h3 className="after-card-title">Booked. Paid. Meet link sent.</h3>
+              <h3 className="after-card-title">Bookings and payment status, together.</h3>
             </div>
             <p className="after-card-desc">
               {problem.resolution}
@@ -188,11 +182,11 @@ export default function LandingMobile() {
               </div>
               <div className="after-check-item">
                 <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
-                <span>Direct UPI payment with instant proof</span>
+                <span>Checkout with verified payment status</span>
               </div>
               <div className="after-check-item">
                 <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
-                <span>Google Calendar invite + Meet link attached</span>
+                <span>Calendar and Meet for connected online services</span>
               </div>
             </div>
           </div>
@@ -299,14 +293,14 @@ export default function LandingMobile() {
             <div className="mobile-step-ui-preview">
               <div className="mobile-mini-paid">
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>UPI Paid ₹1,500</span>
+                  <span>Example verified payment</span>
                   <Check size={12} strokeWidth={2.5} style={{ color: '#16A34A' }} />
                 </span>
                 <span className="mobile-approve-badge">Approve</span>
               </div>
               <div className="mobile-mini-meet" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <GoogleMeetIcon size={13} />
-                <span>Google Meet link attached</span>
+                <span>Meet for connected online services</span>
               </div>
             </div>
           </div>
@@ -392,7 +386,7 @@ export default function LandingMobile() {
             arrow
             className="mobile-tap-target"
             style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => navigate(liveDemo.demoUrl)}
+            href={liveDemo.demoUrl}
           >
             {liveDemo.cta}
           </PillButton>
@@ -407,28 +401,10 @@ export default function LandingMobile() {
         </div>
 
         <div className="mobile-faq-stack">
-          {faq.items.map((item, idx) => {
-            const isOpen = openFaqIndex === idx;
-            return (
-              <div
-                key={idx}
-                className={`mobile-faq-item ${isOpen ? 'open' : ''}`}
-                onClick={() => toggleFaq(idx)}
-              >
-                <div className="mobile-faq-header">
-                  <span className="mobile-faq-question">{item.question}</span>
-                  <span className="mobile-faq-icon">
-                    {isOpen ? <Minus size={18} strokeWidth={2} /> : <Plus size={18} strokeWidth={2} />}
-                  </span>
-                </div>
-                {isOpen && (
-                  <div className="mobile-faq-body animate-fade-in-up">
-                    <p>{item.answer}</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {faq.items.map(item => <details key={item.question} className="landing-faq-disclosure">
+            <summary>{item.question}<span aria-hidden="true">+</span></summary>
+            <p>{item.answer}</p>
+          </details>)}
         </div>
       </section>
 
@@ -444,7 +420,7 @@ export default function LandingMobile() {
             arrow
             className="mobile-tap-target"
             style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => navigate('/signup')}
+            href="/signup"
           >
             {finalCta.cta}
           </PillButton>
@@ -452,13 +428,14 @@ export default function LandingMobile() {
       </section>
 
       {/* ---------------- 9. FOOTER ---------------- */}
+      </main>
       <PublicSiteFooter />
 
       {/* ---------------- STICKY BOTTOM "START FREE" BAR ---------------- */}
       <div className="mobile-sticky-bottom-bar">
         <div className="sticky-bar-info">
           <span className="sticky-bar-title">Calup</span>
-          <span className="sticky-bar-sub">Free during early access</span>
+          <span className="sticky-bar-sub">₹299 + tax / 30 days; selected early access free</span>
         </div>
         <PillButton
           variant="primary"
@@ -466,7 +443,7 @@ export default function LandingMobile() {
           arrow
           className="mobile-tap-target"
           style={{ padding: '10px 20px', minHeight: '44px' }}
-          onClick={() => navigate('/signup')}
+          href="/signup"
         >
           {nav.cta}
         </PillButton>

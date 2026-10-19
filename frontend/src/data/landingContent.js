@@ -22,17 +22,17 @@ export const LANDING_CONTENT = {
       { label: "FAQ", href: "#faq" },
     ],
     login: "Login",
-    cta: "Start free",
+    cta: "Create account",
   },
 
   hero: {
     headlineBold: "Share one link.",
     headlineItalic: "Get booked and paid.",
-    subline: "Calup is the booking page for coaches, consultants and tutors. Clients pick a time, pay you directly on UPI, and get a Google Meet link. No WhatsApp back-and-forth.",
-    primaryCta: "Start free",
-    secondaryCta: "See a live booking page",
-    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
-    badges: "Free during early access · No client sign-up · 0% commission",
+    subline: "Calup is the booking page for coaches, consultants and tutors. Clients choose a time and pay through your enabled checkout. Manage bookings and payment updates in one place.",
+    primaryCta: "Create account",
+    secondaryCta: "Try the sandbox",
+    demoUrl: '/sandbox/booking',
+    badges: "Free early access for selected merchants. Otherwise ₹299 + applicable tax / 30 days.",
   },
 
   problem: {
@@ -54,7 +54,7 @@ export const LANDING_CONTENT = {
         sender: "client",
       },
     ],
-    resolution: "Calup handles all three, automatically.",
+    resolution: "Keep availability, payment status and booking changes together in Calup.",
   },
 
   howItWorks: {
@@ -73,46 +73,46 @@ export const LANDING_CONTENT = {
       {
         number: "3",
         title: "Clients book and pay",
-        desc: "They pick a slot, pay by UPI and upload the screenshot. You approve in one tap, and they get a Google Meet link.",
+        desc: "Clients pick an available slot and use the enabled payment checkout. Confirmation follows verified payment and slot allocation. Connect Google Calendar for supported online sessions.",
       },
     ],
   },
 
   features: {
-    headline: "Everything that exists. Nothing that doesn't.",
+    headline: "Tools for bookings, payments and sessions",
     items: [
       {
         title: "Smart availability",
-        desc: "Set working hours and buffers. Booked slots disappear so you never get double-booked.",
+        desc: "Set working hours and buffers. Server-held slots help prevent overlapping bookings.",
         icon: "calendar",
       },
       {
-        title: "Direct UPI payments",
-        desc: "Money goes straight to you. Calup takes 0% commission.",
+        title: "Cashfree checkout",
+        desc: "Offer enabled payment methods through Cashfree. Available methods and provider charges depend on your payment setup.",
         icon: "upi",
       },
       {
         title: "Google Calendar + Meet",
-        desc: "Bookings land on your calendar with a Meet link attached.",
+        desc: "Connect Google Calendar to create calendar events and Meet links for supported online services.",
         icon: "video",
       },
       {
-        title: "Instant emails",
-        desc: "You and your client both get confirmation and payment updates.",
+        title: "Booking updates",
+        desc: "Keep track of booking confirmations and payment updates through enabled notifications.",
         icon: "mail",
       },
       {
         title: "Client self-service",
-        desc: "Clients track, reschedule or cancel from a private link. No account needed.",
+        desc: "Clients track their booking and request eligible changes through verified booking access. No client account is needed.",
         icon: "link",
       },
       {
         title: "One dashboard",
-        desc: "All bookings, payment approvals and clients in one place.",
+        desc: "All bookings, payment status and clients in one place.",
         icon: "dashboard",
       },
     ],
-    comingSoon: "Coming soon: WhatsApp reminders, online card payments.",
+    comingSoon: "Payment methods and notifications depend on your enabled integrations.",
   },
 
   whoItsFor: {
@@ -143,10 +143,10 @@ export const LANDING_CONTENT = {
   },
 
   liveDemo: {
-    headline: "Try it as a client",
-    desc: "See how smooth and simple booking feels from your client's perspective.",
-    cta: "See a live booking page",
-    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
+    headline: "Explore a sandbox booking",
+    desc: "Choose an example slot and simulate payment. No money is collected and no real appointment is created.",
+    cta: "Try the sandbox",
+    demoUrl: '/sandbox/booking',
   },
 
   faq: {
@@ -154,26 +154,26 @@ export const LANDING_CONTENT = {
     items: [
       {
         question: "Do my clients need an account?",
-        answer: "No. They book with a link and track it with a private link.",
+        answer: "No. Clients book from your link and use verified booking access to manage their appointment.",
       },
       {
         question: "How do I get paid?",
-        answer: "Clients pay you directly by UPI or QR. You confirm each payment.",
+        answer: "Cashfree checkout supports the payment methods enabled for your account. A booking is confirmed only after verified payment and slot allocation. Any separately offered merchant payment arrangement must be clearly explained before payment.",
       },
       {
         question: "Does it work with Google Calendar?",
-        answer: "Yes, and every booking gets a Meet link.",
+        answer: "Connect your Google Calendar account to create calendar events and Meet links for supported online services. Availability depends on the connected integration.",
       },
       {
         question: "What does it cost?",
-        answer: "Free during early access.",
+        answer: "Early access is free for selected merchants under their issued access terms. Otherwise Calup access costs ₹299 plus applicable tax for 30 days. Review your eligibility, tax and final payable amount in your account before payment.",
       },
     ],
   },
 
   finalCta: {
     headline: "Give your clients a link that just works.",
-    cta: "Start free",
+    cta: "Create account",
   },
 
   footer: {
@@ -184,7 +184,7 @@ export const LANDING_CONTENT = {
       { label: "Who it's for", href: "#who-its-for" },
       { label: "FAQ", href: "#faq" },
       { label: "Login", href: "/login" },
-      { label: "Start free", href: "/signup" },
+      { label: "Create account", href: "/signup" },
     ],
     contactEmail: SUPPORT_EMAIL,
   },

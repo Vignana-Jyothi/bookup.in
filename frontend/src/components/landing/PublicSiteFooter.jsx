@@ -68,7 +68,7 @@ export default function PublicSiteFooter() {
                 <span>{SUPPORT_EMAIL}</span>
               </a>) : <Link to="/contact">Contact Calup</Link>}
               <div className="footer-direct-note">
-                Early access support for verified coaches & tutors.
+                Support for booking, payment and account questions.
               </div>
             </div>
           </div>
@@ -76,7 +76,7 @@ export default function PublicSiteFooter() {
           <div className="footer-bottom-row">
             <p>© {new Date().getFullYear()} Calup. All rights reserved.</p>
             <div className="footer-legal">
-              <span>0% Commission Booking</span>
+              <span>Booking and payment tools</span>
             </div>
           </div>
         </div>

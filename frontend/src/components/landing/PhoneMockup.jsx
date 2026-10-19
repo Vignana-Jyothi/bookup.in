@@ -3,12 +3,12 @@ import { Lock, Check, Sparkles, Zap, ArrowRight } from 'lucide-react';
 
 export default function PhoneMockup({ className = '', style = {} }) {
   return (
-    <div className={`phone-mockup-wrapper ${className}`} style={style}>
+    <div className={`phone-mockup-wrapper ${className}`} style={style} role="img" aria-label="Illustration of an example booking page. Try the sandbox link to interact.">
       <div className="phone-mockup-frame">
         <div className="phone-notch" />
         <div className="phone-url-bar">
           <Lock size={11} strokeWidth={2} style={{ marginRight: 4, verticalAlign: 'middle', opacity: 0.7 }} />
-          <span>calup.in/book/arjun-patel</span>
+          <span>Example booking page</span>
         </div>
         <div className="phone-screen-content">
           {/* Coach Header */}
@@ -18,8 +18,8 @@ export default function PhoneMockup({ className = '', style = {} }) {
             </div>
             <div className="phone-coach-meta">
               <div className="phone-coach-name">
-                Dr. Arjun Patel
-                <span className="phone-verified-tick" title="Verified coach" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                Example coach
+                <span className="phone-verified-tick" aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Check size={10} strokeWidth={3} />
                 </span>
               </div>
@@ -80,16 +80,16 @@ export default function PhoneMockup({ className = '', style = {} }) {
           {/* Direct UPI Callout */}
           <div className="phone-upi-badge">
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Zap size={12} strokeWidth={2.5} fill="currentColor" /> Pay directly on UPI
+              <Zap size={12} strokeWidth={2.5} fill="currentColor" /> Example checkout
             </span>
-            <span className="phone-upi-zero">0% fee</span>
+            <span className="phone-upi-zero">Simulation preview</span>
           </div>
 
           {/* Confirm Button */}
-          <button type="button" className="phone-action-btn" tabIndex="-1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <div className="phone-action-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
             <span>Book & Pay ₹1,500</span>
             <ArrowRight size={13} strokeWidth={2.5} />
-          </button>
+          </div>
         </div>
       </div>
     </div>

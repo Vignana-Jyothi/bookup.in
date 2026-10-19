@@ -1,0 +1,36 @@
+.booking-sandbox { min-height: 100vh; background: #fff; color: #0e0e0e; font-family: var(--font-body); font-size: 16px; line-height: 1.65; }
+.booking-sandbox * { box-sizing: border-box; }
+.booking-sandbox :focus-visible { outline: 3px solid #536923; outline-offset: 4px; }
+.booking-sandbox :where(p,h1,small,dd,a,span) { overflow-wrap: anywhere; }
+.booking-sandbox a { color: #384c22; text-underline-offset: 4px; }
+.sandbox-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: min(960px, calc(100% - 40px)); margin: auto; padding-block: 20px; }
+.sandbox-header > a:first-child { font-family: var(--font-heading); font-size: 24px; font-weight: 800; color: #0e0e0e; text-decoration: none; }
+.sandbox-main { width: min(680px, calc(100% - 40px)); margin: 12px auto 0; padding-bottom: 48px; }
+.sandbox-notice { background: #e9f7b8; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+.sandbox-notice p { margin: 8px 0 0; }
+.sandbox-panel { border: 1px solid #d8ddcf; border-radius: 16px; padding: clamp(20px, 4vw, 32px); }
+.sandbox-panel h1 { font-size: clamp(26px, 5vw, 34px); letter-spacing: -.025em; line-height: 1.2; margin: 0 0 20px; text-wrap: balance; }
+.sandbox-panel p, .sandbox-field-note, .sandbox-footer { color: #4e5548; }
+.sandbox-panel fieldset { min-width: 0; border: 0; padding: 0; margin: 28px 0; }
+.sandbox-panel legend { font-weight: 700; padding: 0; margin-bottom: 12px; }
+.sandbox-field-note { font-size: 14px; margin: 0 0 12px; }
+.sandbox-option { display: flex; align-items: center; gap: 12px; padding: 14px; min-height: 48px; border: 1px solid #c5cdb8; border-radius: 10px; cursor: pointer; margin-bottom: 10px; }
+.sandbox-option:has(input:checked) { background: #f3f9e2; border-color: #536923; }
+.sandbox-option input { accent-color: #465e25; flex: 0 0 auto; width: 18px; height: 18px; }
+.sandbox-option small { display: block; font-size: 14px; color: #4e5548; }
+.sandbox-slots { display: flex; flex-wrap: wrap; gap: 10px; }
+.sandbox-slots .sandbox-option { flex: 1 1 140px; margin-bottom: 0; }
+.sandbox-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; border: 1px solid #536923; border-radius: 999px; padding: 12px 20px; background: #fff; color: #0e0e0e; font: inherit; font-weight: 650; cursor: pointer; max-width: 100%; }
+.sandbox-button.primary { background: #c6f135; border-color: #c6f135; }
+.sandbox-button:hover { background: #e9f7b8; }
+.sandbox-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.sandbox-summary { margin: 0 0 24px; }
+.sandbox-summary div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 24px; padding-block: 12px; border-bottom: 1px solid #d8ddcf; }
+.sandbox-summary dt { color: #4e5548; }
+.sandbox-summary dd { margin: 0; font-weight: 650; }
+.sandbox-back { display: block; border: 0; padding: 12px 0; margin-top: 16px; background: transparent; color: #384c22; font: inherit; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.sandbox-footer { display: grid; gap: 16px; margin: 24px 0 0; font-size: 14px; }
+.sandbox-footer a { display: inline-block; min-height: 44px; padding-block: 10px; }
+.sandbox-skip { position: fixed; top: -100px; left: 16px; z-index: var(--z-tooltip, 110); padding: 12px; background: #c6f135; }
+.sandbox-skip:focus { top: 16px; }
+@media (max-width: 480px) { .sandbox-actions { flex-direction: column; }.sandbox-actions .sandbox-button, .sandbox-panel form > .sandbox-button { width: 100%; } }

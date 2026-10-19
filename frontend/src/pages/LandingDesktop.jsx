@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Zap,
@@ -10,8 +9,6 @@ import {
   Dumbbell,
   Briefcase,
   GraduationCap,
-  Plus,
-  Minus,
   Check,
   CalendarCheck,
   ShieldCheck,
@@ -27,16 +24,11 @@ import { LANDING_CONTENT } from '../data/landingContent';
 import './Landing.css';
 
 export default function LandingDesktop() {
-  const navigate = useNavigate();
-  const [openFaqIndex, setOpenFaqIndex] = useState(0);
-  const [howVisible, setHowVisible] = useState(false);
+  const [howVisible, setHowVisible] = useState(() => typeof IntersectionObserver === 'undefined');
   const howSectionRef = useRef(null);
 
-  const toggleFaq = (index) => {
-    setOpenFaqIndex(prev => prev === index ? null : index);
-  };
-
   useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return undefined;
 
 
     // Scroll reveal observer (triggers once)
@@ -89,7 +81,9 @@ export default function LandingDesktop() {
   return (
     <div className="landing-desktop landing-janjiyuk">
       {/* ---------------- NAVIGATION ---------------- */}
+      <a className="landing-skip" href="#landing-main">Skip to content</a>
       <PublicSiteHeader />
+      <main id="landing-main" tabIndex={-1}>
 
       {/* ---------------- 1. HERO SECTION ---------------- */}
       <section className="landing-hero-section">
@@ -115,7 +109,7 @@ export default function LandingDesktop() {
                 variant="primary"
                 size="lg"
                 arrow
-                onClick={() => navigate('/signup')}
+                href="/signup"
               >
                 {hero.primaryCta}
               </PillButton>
@@ -123,7 +117,7 @@ export default function LandingDesktop() {
               <PillButton
                 variant="secondary"
                 size="lg"
-                onClick={() => navigate(hero.demoUrl)}
+                href={hero.demoUrl}
               >
                 {hero.secondaryCta}
               </PillButton>
@@ -160,8 +154,8 @@ export default function LandingDesktop() {
                     <ShieldCheck size={16} strokeWidth={2} />
                   </div>
                   <div className="floating-card-text">
-                    <span className="floating-card-title">Payment approved</span>
-                    <span className="floating-card-sub">₹1,500 · Direct UPI</span>
+                    <span className="floating-card-title">Example payment verified</span>
+                    <span className="floating-card-sub">₹1,500 · Cashfree checkout</span>
                   </div>
                 </div>
 
@@ -171,8 +165,8 @@ export default function LandingDesktop() {
                     <Video size={16} strokeWidth={2} />
                   </div>
                   <div className="floating-card-text">
-                    <span className="floating-card-title">Meet link sent</span>
-                    <span className="floating-card-sub">Calendar synced</span>
+                    <span className="floating-card-title">Example online session</span>
+                    <span className="floating-card-sub">Calendar connected</span>
                   </div>
                 </div>
               </div>
@@ -226,7 +220,7 @@ export default function LandingDesktop() {
                   <div className="after-icon-tile">
                     <Check size={20} strokeWidth={2.5} />
                   </div>
-                  <h3 className="after-card-title">Booked. Paid. Meet link sent.</h3>
+                  <h3 className="after-card-title">Bookings and payment status, together.</h3>
                 </div>
                 <p className="after-card-desc">
                   {problem.resolution}
@@ -239,11 +233,11 @@ export default function LandingDesktop() {
                   </div>
                   <div className="after-check-item">
                     <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
-                    <span>Direct UPI payment with instant proof</span>
+                    <span>Checkout with verified payment status</span>
                   </div>
                   <div className="after-check-item">
                     <span className="after-check-bullet"><Check size={14} strokeWidth={2.5} /></span>
-                    <span>Google Calendar invite + Meet link attached</span>
+                    <span>Calendar and Meet for connected online services</span>
                   </div>
                 </div>
               </div>
@@ -352,18 +346,18 @@ export default function LandingDesktop() {
               <div className="how-mini-ui step-ui-3">
                 <div className="mini-payment-receipt">
                   <div className="mini-receipt-top">
-                    <span>UPI Direct Pay</span>
+                    <span>Example Cashfree payment</span>
                     <span className="mini-green-check" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <Check size={12} strokeWidth={2.5} /> Paid
                     </span>
                   </div>
                   <div className="mini-meet-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <GoogleMeetIcon size={13} />
-                    <span>Google Meet Link Attached</span>
+                    <span>Meet for connected online services</span>
                   </div>
                 </div>
                 <div className="mini-approve-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <span>1-Tap Approve</span>
+                  <span>Verified payment status</span>
                   <Check size={14} strokeWidth={2.5} />
                 </div>
               </div>
@@ -460,7 +454,7 @@ export default function LandingDesktop() {
                 variant="primary"
                 size="lg"
                 arrow
-                onClick={() => navigate(liveDemo.demoUrl)}
+                href={liveDemo.demoUrl}
               >
                 {liveDemo.cta}
               </PillButton>
@@ -487,32 +481,10 @@ export default function LandingDesktop() {
           </div>
 
           <div className="faq-accordion-list">
-            {faq.items.map((item, idx) => {
-              const isOpen = openFaqIndex === idx;
-              return (
-                <div
-                  key={idx}
-                  className={`faq-accordion-item ${isOpen ? 'open' : ''}`}
-                  onClick={() => toggleFaq(idx)}
-                >
-                  <button
-                    type="button"
-                    className="faq-accordion-header"
-                    aria-expanded={isOpen}
-                  >
-                    <span className="faq-question-text">{item.question}</span>
-                    <span className="faq-toggle-icon">
-                      {isOpen ? <Minus size={18} strokeWidth={2} /> : <Plus size={18} strokeWidth={2} />}
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div className="faq-accordion-body animate-fade-in-up">
-                      <p>{item.answer}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          {faq.items.map(item => <details key={item.question} className="landing-faq-disclosure">
+            <summary>{item.question}<span aria-hidden="true">+</span></summary>
+            <p>{item.answer}</p>
+          </details>)}
           </div>
         </div>
       </section>
@@ -528,7 +500,7 @@ export default function LandingDesktop() {
               variant="primary"
               size="lg"
               arrow
-              onClick={() => navigate('/signup')}
+              href="/signup"
             >
               {finalCta.cta}
             </PillButton>
@@ -537,6 +509,7 @@ export default function LandingDesktop() {
       </section>
 
       {/* ---------------- 9. FOOTER ---------------- */}
+      </main>
       <PublicSiteFooter />
     </div>
   );
