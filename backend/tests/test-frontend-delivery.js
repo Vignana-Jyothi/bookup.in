@@ -19,7 +19,11 @@ for(const resource of ['/assets/index-old.js','/assets/passwordStrength-missing.
 }
 assert(hosting.routes[0].headers['Cache-Control'].includes('no-store'));
 assert(hosting.routes[1].headers['Cache-Control'].includes('immutable'));
-assert(hosting.routes.slice(0,filesystemIndex).every(rule=>rule.continue),'Header rules must continue to filesystem resolution');
+assert(hosting.routes.slice(0,filesystemIndex).filter(rule=>rule.headers).every(rule=>rule.continue),'Header rules must continue to filesystem resolution');
+const adminRoute=hosting.routes.find(rule=>rule.src==='/api/v1/admin/(.*)');
+assert.equal(adminRoute?.dest,'/api/admin-proxy?__calup_admin_path=$1','Admin API needs an explicit function route before the resource 404');
+assert(hosting.routes.indexOf(adminRoute)<filesystemIndex);
+assert((await stat(new URL('../../frontend/api/admin-proxy.mjs',import.meta.url))).isFile());
 const workflow=await readFile(new URL('../../.github/workflows/vercel.yml',import.meta.url),'utf8');
 assert.equal((workflow.match(/--local-config=frontend\/vercel\.json/g)||[]).length,6,'Both environments must use the frontend config in pull, build and deploy');
 

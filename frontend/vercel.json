@@ -10,6 +10,10 @@
       "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
       "continue": true
     },
+    {
+      "src": "/api/v1/admin/(.*)",
+      "dest": "/api/admin-proxy?__calup_admin_path=$1"
+    },
     { "handle": "filesystem" },
     {
       "src": "/(?:assets|src|api)(?:/.*)?$",

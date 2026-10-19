@@ -1,4 +1,4 @@
-// Vercel same-origin bridge. The backend still authenticates JWT + SMS proof.
+// Explicit ES module, outside api/ so only its entry is deployed.
 export function createAdminProxy({ fetchImpl = fetch,
   target = () => process.env.API_PROXY_TARGET || process.env.VITE_API_URL || '',
 } = {}) {
@@ -10,6 +10,12 @@ export function createAdminProxy({ fetchImpl = fetch,
       if (upstream.protocol !== 'https:' || upstream.username || upstream.password
         || upstream.search || upstream.hash || !['', '/', '/api', '/api/'].includes(upstream.pathname)) throw new Error();
       const path = new URL(req.url, 'https://proxy.invalid');
+      if (path.pathname === '/api/admin-proxy' || path.pathname === '/api/admin-proxy.mjs') {
+        const route = req.query?.__calup_admin_path ?? path.searchParams.get('__calup_admin_path');
+        if (typeof route !== 'string' || !/^[A-Za-z0-9/-]+$/.test(route)) throw new Error();
+        path.pathname = `/api/v1/admin/${route}`;
+      }
+      path.searchParams.delete('__calup_admin_path');
       if (!/^\/api\/v1\/admin\/[A-Za-z0-9/-]+$/.test(path.pathname)) {
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: 'Administrator route not found.' }));
@@ -72,4 +78,3 @@ export function createAdminProxy({ fetchImpl = fetch,
   };
 }
 
-export default createAdminProxy();

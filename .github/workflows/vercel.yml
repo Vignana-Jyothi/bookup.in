@@ -52,6 +52,9 @@ jobs:
             vercel build --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
           fi
 
+      - name: Verify Administrator API Function
+        run: node backend/scripts/verify-vercel-admin-proxy.mjs
+
       - name: Deploy Project Artifacts to Vercel
         run: |
           if [ "$GITHUB_REF" = "refs/heads/dev" ]; then
