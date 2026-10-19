@@ -9,7 +9,8 @@ import { StoreProvider, useAuth, useStore } from './data/store';
 import { onboardingService } from './services/merchant/onboardingService';
 import { isSupabaseConfigured } from './services/supabase/supabaseClient';
 import { isCalupAdmin } from './services/supabase/adminMfa.js';
-import Admin, { AdminRoute } from './pages/Admin.jsx';
+const Admin = lazy(() => import('./pages/Admin.jsx'));
+const AdminRoute = lazy(() => import('./pages/Admin.jsx').then(module => ({ default: module.AdminRoute })));
 
 import { LEGAL_PAGES } from './data/legalContent';
 
@@ -22,28 +23,29 @@ const SandboxBooking = lazy(() => import('./pages/SandboxBooking.jsx'));
 
 // Pages
 import Landing from './pages/Landing';
-import { Login, Signup } from './pages/Auth';
-import Onboarding from './pages/Onboarding';
-import PasswordRecovery from './pages/PasswordRecovery';
+const Login = lazy(() => import('./pages/Auth.jsx').then(module => ({ default: module.Login })));
+const Signup = lazy(() => import('./pages/Auth.jsx').then(module => ({ default: module.Signup })));
+const Onboarding = lazy(() => import('./pages/Onboarding.jsx'));
+const PasswordRecovery = lazy(() => import('./pages/PasswordRecovery.jsx'));
 
 // Dashboard
-import DashboardLayout from './layouts/DashboardLayout';
-import Overview from './pages/dashboard/Overview';
-import Appointments from './pages/dashboard/Appointments';
-import Services from './pages/dashboard/Services';
-import Availability from './pages/dashboard/Availability';
-import BookingPageMgmt from './pages/dashboard/BookingPageMgmt';
-import Policies from './pages/dashboard/Policies';
-import Analytics from './pages/dashboard/Analytics';
-import Settings from './pages/dashboard/Settings';
-import Subscription from './pages/dashboard/Subscription';
-import Support from './pages/dashboard/Support';
-import CommerceCatalog from './pages/booking/CommerceCatalog.jsx';
+const DashboardLayout = lazy(() => import('./layouts/DashboardLayout.jsx'));
+const Overview = lazy(() => import('./pages/dashboard/Overview.jsx'));
+const Appointments = lazy(() => import('./pages/dashboard/Appointments.jsx'));
+const Services = lazy(() => import('./pages/dashboard/Services.jsx'));
+const Availability = lazy(() => import('./pages/dashboard/Availability.jsx'));
+const BookingPageMgmt = lazy(() => import('./pages/dashboard/BookingPageMgmt.jsx'));
+const Policies = lazy(() => import('./pages/dashboard/Policies.jsx'));
+const Analytics = lazy(() => import('./pages/dashboard/Analytics.jsx'));
+const Settings = lazy(() => import('./pages/dashboard/Settings.jsx'));
+const Subscription = lazy(() => import('./pages/dashboard/Subscription.jsx'));
+const Support = lazy(() => import('./pages/dashboard/Support.jsx'));
+const CommerceCatalog = lazy(() => import('./pages/booking/CommerceCatalog.jsx'));
 
 // Booking
-import PublicBookingPage from './pages/booking/BookingPage';
-import CustomerBooking from './pages/booking/CustomerBooking';
-import CashfreePaymentStatus from './pages/booking/CashfreePaymentStatus';
+const PublicBookingPage = lazy(() => import('./pages/booking/BookingPage.jsx'));
+const CustomerBooking = lazy(() => import('./pages/booking/CustomerBooking.jsx'));
+const CashfreePaymentStatus = lazy(() => import('./pages/booking/CashfreePaymentStatus.jsx'));
 
 // Components & Context
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -78,8 +80,8 @@ function ProtectedRoute({ children }) {
 
 function RouteLoading() {
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg-subtle, #f8fafc)' }}>
-      <div className="spinner" />
+    <div role="status" aria-label="Loading page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg-subtle, #f8fafc)' }}>
+      <div className="spinner" aria-hidden="true" />
     </div>
   );
 }
@@ -131,7 +133,7 @@ function DashboardRoute({ children }) {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<RouteLoading />}><Routes>
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/sandbox/booking" element={<Suspense fallback={<RouteLoading />}><SandboxBooking /></Suspense>} />
@@ -150,42 +152,42 @@ function AppRoutes() {
       {/* Public booking page & Customer management / tracking */}
       <Route path="/book/:slug" element={
         <ErrorBoundary title="Booking page error, please refresh">
-          <PublicBookingPage />
+          <main aria-label="Book a service"><PublicBookingPage /></main>
         </ErrorBoundary>
       } />
       <Route path="/track/:token" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/track/:id" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/track" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking-status/:token" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking-status/:id" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking-status" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking-details" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/payment-status" element={
@@ -195,17 +197,17 @@ function AppRoutes() {
       } />
       <Route path="/manage/:token" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking/:token" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
       <Route path="/booking/:id" element={
         <ErrorBoundary title="Something went wrong, please refresh">
-          <CustomerBooking />
+          <main aria-label="Manage your booking"><CustomerBooking /></main>
         </ErrorBoundary>
       } />
 
@@ -236,7 +238,7 @@ function AppRoutes() {
 <Route path="*" element={<Suspense fallback={<RouteLoading />}><NotFound /></Suspense>} />
 */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    </Routes></Suspense>
   );
 }
 

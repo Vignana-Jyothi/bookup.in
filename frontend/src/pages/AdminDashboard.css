@@ -6,7 +6,7 @@
 .calup-admin button, .calup-admin a, .calup-admin select { -webkit-tap-highlight-color: transparent; }
 .calup-admin button { cursor: pointer; }
 .calup-admin button:disabled { cursor: not-allowed; opacity: .45; }
-.calup-admin button:focus-visible, .calup-admin a:focus-visible, .calup-admin input:focus-visible, .calup-admin select:focus-visible { outline: 3px solid var(--color-primary-500); outline-offset: 3px; }
+.calup-admin button:focus-visible, .calup-admin a:focus-visible, .calup-admin input:focus-visible, .calup-admin select:focus-visible { outline: 3px solid var(--theme-focus-ring, #536b1f); outline-offset: 3px; }
 .calup-admin a { color: inherit; }
 .calup-admin h1, .calup-admin h2, .calup-admin h3, .calup-admin p { margin: 0; }
 .calup-admin h1, .calup-admin h2, .calup-admin h3 { font-family: var(--font-heading, sans-serif); }

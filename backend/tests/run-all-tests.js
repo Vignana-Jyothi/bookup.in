@@ -9,6 +9,8 @@ process.env.TOKEN_STORE_MEMORY_ONLY = 'true';
 const testFiles = [
   'backend/tests/test-accessibility-ui.js',
   'backend/tests/test-public-sandbox.js',
+  'backend/tests/test-merchant-appointment-truth.js',
+  'backend/tests/test-subscription-order-feedback.js',
   'backend/tests/test-admin-same-origin-proxy.js',
   'backend/tests/test-customer-same-origin-proxy.js',
   'backend/tests/test-merchant-phone-verification.js',

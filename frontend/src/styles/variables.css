@@ -93,8 +93,8 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  --radius-card: 26px;
-  --radius-2xl: 26px;
+  --radius-card: 16px;
+  --radius-2xl: 16px;
   --radius-input: 16px;
   --radius-pill: 9999px;
   --radius-full: 9999px;
@@ -104,7 +104,7 @@
   --shadow-md: 0 8px 24px rgba(14, 14, 14, 0.06);
   --shadow-lg: 0 16px 36px rgba(14, 14, 14, 0.08);
   --shadow-xl: 0 24px 52px rgba(14, 14, 14, 0.12);
-  --shadow-card: 0 12px 32px -4px rgba(14, 14, 14, 0.06);
+  --shadow-card: none;
 
   /* --- Transitions --- */
   --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);

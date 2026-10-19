@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireProviderAuth, serviceRoleClient } from '../middleware/auth.js';
+import { requireActiveEntitlement } from '../middleware/entitlement.js';
 
 const router = Router();
 
@@ -44,6 +45,9 @@ function mapLegacyBooking(b) {
     disputedAt: b.disputed_at || null,
     disputeReason: b.dispute_reason || null,
     sourceSystem: 'legacy',
+    googleEventId: b.google_event_id || null,
+    meetLink: b.meet_link || null,
+    syncedToGoogleCalendar: Boolean(b.google_event_id),
   };
 }
 
@@ -90,4 +94,45 @@ router.get('/', requireProviderAuth, async (req, res) => {
   return res.json({ success: true, appointments });
 });
 
+export function createManualAppointmentHandler(database = serviceRoleClient) {
+  return async (req, res) => {
+    res.set('Cache-Control', 'private, no-store');
+    if (!database) return res.status(503).json({ error: 'Appointment storage is unavailable.' });
+    const body = req.body || {};
+    const key = String(req.headers['idempotency-key'] || '');
+    const fields = ['serviceId', 'customerName', 'customerEmail', 'customerPhone', 'customerWhatsApp', 'bookingDate', 'startTime', 'notes'];
+    const phone = String(body.customerPhone || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '');
+    const date = String(body.bookingDate || '');
+    const parsedDate = new Date(`${date}T00:00:00Z`);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key) ||
+        Object.keys(body).some(field => !fields.includes(field) || typeof body[field] !== 'string') ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.serviceId || '')) ||
+        !/^[6-9]\d{9}$/.test(phone) || String(body.customerName || '').trim().length < 2 ||
+        String(body.customerName || '').length > 120 || String(body.notes || '').length > 2000 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(body.startTime || '')) ||
+        (body.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.customerEmail))) {
+      return res.status(422).json({ error: 'Enter a valid service, date, time, customer name and Indian mobile number.' });
+    }
+    const payload = {
+      serviceId: body.serviceId, customerName: body.customerName.trim(),
+      customerEmail: String(body.customerEmail || '').trim().toLowerCase(), customerPhone: phone,
+      customerWhatsApp: String(body.customerWhatsApp || phone).trim(),
+      bookingDate: body.bookingDate, startTime: body.startTime, notes: String(body.notes || '').trim(),
+    };
+    try {
+      const { data, error } = await database.rpc('create_merchant_booking_v1', { p_provider_id: req.providerId, p_key: key, p_payload: payload });
+      if (error) {
+        const conflict = /SLOT_UNAVAILABLE|IDEMPOTENCY_CONFLICT|REQUEST_ENDED|conflict|overlap/i.test(error.message || '');
+        return res.status(conflict ? 409 : 503).json({ error: conflict ? 'The appointment could not be saved. Check the selected slot or refresh your appointments before retrying.' : 'Appointment saving is temporarily unavailable. Your entries are preserved; retry the same request.' });
+      }
+      const row = typeof data === 'string' ? JSON.parse(data) : data;
+      if (!row?.id || row.provider_id !== req.providerId) return res.status(503).json({ error: 'The saved appointment could not be verified. Retry the same request.' });
+      return res.status(201).json({ success: true, appointment: mapLegacyBooking(row) });
+    } catch {
+      return res.status(503).json({ error: 'Appointment saving is temporarily unavailable. Retry the same request.' });
+    }
+  };
+}
+router.post('/', requireProviderAuth, requireActiveEntitlement, createManualAppointmentHandler());
 export default router;

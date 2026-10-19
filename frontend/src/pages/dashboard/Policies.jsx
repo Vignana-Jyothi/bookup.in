@@ -11,10 +11,10 @@
  * - Live plain-language policy preview
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
-import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import { DEFAULT_POLICY, validatePolicy, generatePolicyText } from '../../utils/policyEngine';
 import PillButton from '../../components/ui/PillButton';
@@ -42,39 +42,33 @@ export default function Policies() {
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Load existing policy from database on mount
+  const [loadError, setLoadError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [saveError, setSaveError] = useState('');
+  const [reload, setReload] = useState(0);
+  // This strict read distinguishes an absent policy from a failed request.
+  const loadPolicy = useCallback(async () => {
+    if (state.auth?.isDemoMode) return { ...DEFAULT_POLICY, ...state.policies };
+    if (!isSupabaseConfigured() || !providerId) throw new Error('Your merchant policy is unavailable. Reload your account and try again.');
+    const { data, error } = await supabase.from('cancellation_policies').select('*').eq('provider_id', providerId).maybeSingle();
+    if (error) throw new Error('We could not load your saved policy. Retry before editing.');
+    return Object.fromEntries(Object.entries(DEFAULT_POLICY).map(([key, fallback]) => [key, data?.[key] ?? fallback]));
+  }, [providerId, state.auth?.isDemoMode, state.policies]);
   useEffect(() => {
-    async function loadPolicy() {
-      if (providerId) {
-        try {
-          const loaded = await dbService.getPolicy(providerId);
-          if (loaded) {
-            setPolicy({
-              full_refund_hours: loaded.full_refund_hours ?? DEFAULT_POLICY.full_refund_hours,
-              partial_refund_hours: loaded.partial_refund_hours ?? DEFAULT_POLICY.partial_refund_hours,
-              partial_refund_percent: loaded.partial_refund_percent ?? DEFAULT_POLICY.partial_refund_percent,
-              no_show_grace_minutes: loaded.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes,
-              max_reschedules: loaded.max_reschedules ?? DEFAULT_POLICY.max_reschedules,
-              reschedule_min_hours_before: loaded.reschedule_min_hours_before ?? DEFAULT_POLICY.reschedule_min_hours_before,
-              payment_verification_timeout_hours: loaded.payment_verification_timeout_hours ?? DEFAULT_POLICY.payment_verification_timeout_hours,
-            });
-          }
-        } catch (err) {
-          console.warn('Failed to load policy:', err);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
-      }
-    }
-    loadPolicy();
-  }, [providerId]);
+    let active = true;
+    setLoading(true); setLoadError('');
+    loadPolicy().then(value => { if (active) setPolicy(value); })
+      .catch(error => { if (active) setLoadError(error.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadPolicy, reload]);
 
   const updateField = (field, value) => {
+    setFieldErrors(current => ({ ...current, [field]: undefined }));
+    setSaveError('');
     setPolicy(prev => ({
       ...prev,
-      [field]: Number(value),
+      [field]: value === '' ? '' : Number(value),
     }));
   };
 
@@ -87,19 +81,31 @@ export default function Policies() {
   const noRefundBelowHours = policy.partial_refund_hours;
 
   const handleSave = async () => {
+    if (loading || loadError || isSaving) return;
+    const errors = {};
+    for (const [field, value] of Object.entries(policy)) {
+      if (value === '' || !Number.isFinite(Number(value)) || Number(value) < (field === 'payment_verification_timeout_hours' ? 1 : 0)) errors[field] = 'Enter a valid non-negative value.';
+    }
+    if (Number(policy.partial_refund_percent) > 100) errors.partial_refund_percent = 'Enter a percentage from 0 to 100.';
+    if (Number(policy.full_refund_hours) < Number(policy.partial_refund_hours)) errors.full_refund_hours = 'The full refund window must be at least the partial refund window.';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) { document.getElementById('policy-' + Object.keys(errors)[0])?.focus(); return; }
     const validation = validatePolicy(policy);
     if (!validation.valid) {
       addToast(validation.errors[0], 'error');
       return;
     }
 
+    setSaveError('');
     setIsSaving(true);
     try {
-      if (providerId) {
-        await dbService.savePolicy(providerId, {
+      if (!state.auth?.isDemoMode) {
+        if (!isSupabaseConfigured() || !providerId) throw new Error('Reconnect your merchant account before saving.');
+        const saved = await dbService.savePolicy(providerId, {
           ...policy,
           policyText: plainLanguageText,
         });
+        if (!saved) throw new Error('The policy was not saved. Please retry.');
       }
 
       dispatch({
@@ -110,9 +116,10 @@ export default function Policies() {
         },
       });
 
-      addToast('Booking & refund policies saved successfully ✓');
+      addToast(state.auth?.isDemoMode ? 'Demo policy updated on this device.' : 'Booking and refund policies saved.');
     } catch (err) {
       console.error('Failed to save policy:', err);
+      setSaveError('Your changes are still here. ' + (err.message || 'Could not save the policy. Try saving again.'));
       addToast(err.message || 'Failed to save policies.', 'error');
     } finally {
       setIsSaving(false);
@@ -134,12 +141,13 @@ export default function Policies() {
             Set authoritative cancellation, refund, reschedule, and no-show rules for all client sessions.
           </p>
         </div>
-        <PillButton variant="primary" size="md" onClick={handleSave} disabled={isSaving || loading}>
+        <PillButton variant="primary" size="md" onClick={handleSave} disabled={isSaving || loading || Boolean(loadError)}>
           {isSaving ? 'Saving...' : 'Save Policy'}
         </PillButton>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+      {saveError && <p role="alert">{saveError}</p>}
+      {loading ? <p role="status">Loading saved policy...</p> : loadError ? <section aria-label="Policy unavailable"><p role="alert">{loadError}</p><button type="button" className="btn btn-secondary" onClick={() => setReload(value => value + 1)}>Retry loading policy</button></section> : <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '24px' }}>
         {/* Settings Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Card 1: Cancellation & Refunds */}
@@ -150,16 +158,18 @@ export default function Policies() {
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>100% Refund Window</label>
+                <label className="form-label" htmlFor="policy-full_refund_hours" style={{ fontWeight: 600 }}>100% Refund Window</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="number"
                     min="0"
                     className="form-input"
                     style={{ width: 120 }}
+                    id="policy-full_refund_hours" aria-label="100% Refund Window" aria-invalid={Boolean(fieldErrors.full_refund_hours)} aria-describedby={fieldErrors.full_refund_hours ? 'policy-full_refund_hours-error' : undefined}
                     value={policy.full_refund_hours}
                     onChange={e => updateField('full_refund_hours', e.target.value)}
                   />
+                  {fieldErrors.full_refund_hours && <span id="policy-full_refund_hours-error" className="form-field-error" role="alert">{fieldErrors.full_refund_hours}</span>}
                   <span style={{ fontSize: '14px', color: '#666' }}>hours before session start</span>
                 </div>
                 <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
@@ -176,9 +186,11 @@ export default function Policies() {
                       min="0"
                       className="form-input"
                       style={{ width: 90 }}
-                      value={policy.partial_refund_hours}
+                      id="policy-partial_refund_hours" aria-label="Partial refund window (hours)" aria-invalid={Boolean(fieldErrors.partial_refund_hours)} aria-describedby={fieldErrors.partial_refund_hours ? 'policy-partial_refund_hours-error' : undefined}
+                    value={policy.partial_refund_hours}
                       onChange={e => updateField('partial_refund_hours', e.target.value)}
                     />
+                  {fieldErrors.partial_refund_hours && <span id="policy-partial_refund_hours-error" className="form-field-error" role="alert">{fieldErrors.partial_refund_hours}</span>}
                     <span style={{ fontSize: '13px', color: '#666' }}>hours to</span>
                   </div>
                   <div style={{ fontSize: '13px', color: '#666' }}>
@@ -191,9 +203,11 @@ export default function Policies() {
                       max="100"
                       className="form-input"
                       style={{ width: 90 }}
-                      value={policy.partial_refund_percent}
+                      id="policy-partial_refund_percent" aria-label="Partial refund percentage" aria-invalid={Boolean(fieldErrors.partial_refund_percent)} aria-describedby={fieldErrors.partial_refund_percent ? 'policy-partial_refund_percent-error' : undefined}
+                    value={policy.partial_refund_percent}
                       onChange={e => updateField('partial_refund_percent', e.target.value)}
                     />
+                  {fieldErrors.partial_refund_percent && <span id="policy-partial_refund_percent-error" className="form-field-error" role="alert">{fieldErrors.partial_refund_percent}</span>}
                     <span style={{ fontSize: '14px', fontWeight: 600 }}>% refund</span>
                   </div>
                 </div>
@@ -222,16 +236,18 @@ export default function Policies() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>Maximum Reschedules Allowed</label>
+                <label className="form-label" htmlFor="policy-max_reschedules" style={{ fontWeight: 600 }}>Maximum Reschedules Allowed</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="number"
                     min="0"
                     className="form-input"
                     style={{ width: 120 }}
+                    id="policy-max_reschedules" aria-label="Maximum Reschedules Allowed" aria-invalid={Boolean(fieldErrors.max_reschedules)} aria-describedby={fieldErrors.max_reschedules ? 'policy-max_reschedules-error' : undefined}
                     value={policy.max_reschedules}
                     onChange={e => updateField('max_reschedules', e.target.value)}
                   />
+                  {fieldErrors.max_reschedules && <span id="policy-max_reschedules-error" className="form-field-error" role="alert">{fieldErrors.max_reschedules}</span>}
                   <span style={{ fontSize: '14px', color: '#666' }}>reschedules per booking</span>
                 </div>
                 <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
@@ -240,31 +256,35 @@ export default function Policies() {
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>Reschedule Minimum Notice</label>
+                <label className="form-label" htmlFor="policy-reschedule_min_hours_before" style={{ fontWeight: 600 }}>Reschedule Minimum Notice</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="number"
                     min="0"
                     className="form-input"
                     style={{ width: 120 }}
+                    id="policy-reschedule_min_hours_before" aria-label="Reschedule Minimum Notice" aria-invalid={Boolean(fieldErrors.reschedule_min_hours_before)} aria-describedby={fieldErrors.reschedule_min_hours_before ? 'policy-reschedule_min_hours_before-error' : undefined}
                     value={policy.reschedule_min_hours_before}
                     onChange={e => updateField('reschedule_min_hours_before', e.target.value)}
                   />
+                  {fieldErrors.reschedule_min_hours_before && <span id="policy-reschedule_min_hours_before-error" className="form-field-error" role="alert">{fieldErrors.reschedule_min_hours_before}</span>}
                   <span style={{ fontSize: '14px', color: '#666' }}>hours before session start</span>
                 </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>No-Show Grace Period</label>
+                <label className="form-label" htmlFor="policy-no_show_grace_minutes" style={{ fontWeight: 600 }}>No-Show Grace Period</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="number"
                     min="0"
                     className="form-input"
                     style={{ width: 120 }}
+                    id="policy-no_show_grace_minutes" aria-label="No-Show Grace Period" aria-invalid={Boolean(fieldErrors.no_show_grace_minutes)} aria-describedby={fieldErrors.no_show_grace_minutes ? 'policy-no_show_grace_minutes-error' : undefined}
                     value={policy.no_show_grace_minutes}
                     onChange={e => updateField('no_show_grace_minutes', e.target.value)}
                   />
+                  {fieldErrors.no_show_grace_minutes && <span id="policy-no_show_grace_minutes-error" className="form-field-error" role="alert">{fieldErrors.no_show_grace_minutes}</span>}
                   <span style={{ fontSize: '14px', color: '#666' }}>minutes after start</span>
                 </div>
                 <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
@@ -273,20 +293,22 @@ export default function Policies() {
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>Payment Verification Timeout</label>
+                <label className="form-label" htmlFor="policy-payment_verification_timeout_hours" style={{ fontWeight: 600 }}>Legacy manual payment review timeout</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="number"
                     min="1"
                     className="form-input"
                     style={{ width: 120 }}
+                    id="policy-payment_verification_timeout_hours" aria-label="Legacy manual payment review timeout" aria-invalid={Boolean(fieldErrors.payment_verification_timeout_hours)} aria-describedby={fieldErrors.payment_verification_timeout_hours ? 'policy-payment_verification_timeout_hours-error' : undefined}
                     value={policy.payment_verification_timeout_hours}
                     onChange={e => updateField('payment_verification_timeout_hours', e.target.value)}
                   />
+                  {fieldErrors.payment_verification_timeout_hours && <span id="policy-payment_verification_timeout_hours-error" className="form-field-error" role="alert">{fieldErrors.payment_verification_timeout_hours}</span>}
                   <span style={{ fontSize: '14px', color: '#666' }}>hours to verify payment</span>
                 </div>
                 <span className="form-hint" style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                  If payment is not confirmed within this window, the slot hold expires.
+                  Applies to legacy manual payment review only. Cashfree checkout holds last 15 minutes; this setting does not extend them.
                 </span>
               </div>
             </div>
@@ -304,7 +326,7 @@ export default function Policies() {
             </div>
             
             <p style={{ fontSize: '13px', color: '#555', marginBottom: '16px', lineHeight: 1.5 }}>
-              This exact plain-language text is displayed to clients before booking and stored immutably in their booking snapshot.
+              Preview your cancellation and attendance rules below. Save to apply changes to future bookings; existing bookings retain their accepted policy.
             </p>
 
             <div style={{ background: '#FFFFFF', border: '1px solid #E5E5DE', borderRadius: '14px', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px', lineHeight: 1.6, color: '#1A1A1A' }}>
@@ -320,7 +342,7 @@ export default function Policies() {
             </div>
           </div>
         </div>
-      </div>
+      </fieldset>}
     </div>
   );
 }

@@ -218,7 +218,7 @@ export const dbService = {
     const isUuid = typeof providerId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(providerId);
     if (!isUuid) {
       console.warn(`[dbService] updateProviderProfile skipped DB update: providerId '${providerId}' is not a valid UUID.`);
-      return true;
+      throw new Error('A saved merchant profile is required. Refresh and sign in again.');
     }
 
     const updatePayload = {};
@@ -238,16 +238,17 @@ export const dbService = {
     if (fields.qrCodeUrl !== undefined) updatePayload.qr_code_url = fields.qrCodeUrl;
     if (fields.defaultLocationAddress !== undefined) updatePayload.default_location_address = fields.defaultLocationAddress;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('providers')
       .update(updatePayload)
-      .eq('id', providerId);
+      .eq('id', providerId).select('id').maybeSingle();
 
     if (error) {
       console.error('Error updating provider profile:', error);
       throw error;
     }
 
+    if (!data?.id) throw new Error('The profile change was not saved. Refresh your session and retry.');
     return true;
   },
 
@@ -707,6 +708,24 @@ export const dbService = {
     return Array.isArray(result.appointments) ? result.appointments : [];
   },
 
+  async createMerchantBooking(payload, requestKey) {
+    if (!isSupabaseConfigured()) throw new Error('Appointment storage is unavailable.');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Please sign in again to save appointments.');
+    const response = await fetch(`${getApiBase()}/v1/merchant/appointments`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, 'Idempotency-Key': requestKey },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.appointment?.id) {
+      const error = new Error(result.error || 'The appointment could not be saved. Retry with the same details.');
+      error.status = response.status;
+      throw error;
+    }
+    return result.appointment;
+  },
+
   async getRefundsDue(providerId) {
     if (!isSupabaseConfigured() || !providerId) return [];
     try {
@@ -1090,23 +1109,24 @@ export const dbService = {
       ...extraFields,
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .update(updatePayload)
-      .eq('id', bookingId);
+      .eq('id', bookingId).select('id').maybeSingle();
 
     if (error) {
       console.error('Error updating booking status:', error);
       throw error;
     }
 
+    if (!data?.id) throw new Error('The appointment change was not saved. Refresh your session and retry.');
     return true;
   },
 
   async rescheduleBooking(bookingId, newDate, newStartTime, newEndTime) {
     if (!isSupabaseConfigured() || !bookingId) return false;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .update({
         booking_date: newDate,
@@ -1114,29 +1134,31 @@ export const dbService = {
         end_time: newEndTime,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', bookingId);
+      .eq('id', bookingId).select('id').maybeSingle();
 
     if (error) {
       console.error('Error rescheduling booking:', error);
       throw error;
     }
 
+    if (!data?.id) throw new Error('The appointment change was not saved. Refresh your session and retry.');
     return true;
   },
 
   async deleteBooking(bookingId) {
     if (!isSupabaseConfigured() || !bookingId) return false;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .delete()
-      .eq('id', bookingId);
+      .eq('id', bookingId).select('id').maybeSingle();
 
     if (error) {
       console.error('Error deleting booking:', error);
       throw error;
     }
 
+    if (!data?.id) throw new Error('The appointment change was not saved. Refresh your session and retry.');
     return true;
   },
 

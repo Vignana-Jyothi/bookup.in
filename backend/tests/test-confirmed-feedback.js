@@ -51,6 +51,34 @@ async function harness(file, component, overrides = {}) {
 
 function deferred() { let resolve; let reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 
+// Execute the customer page's actual inline copy callbacks at the clipboard boundary.
+const customerSource = await readFile(new URL('../../frontend/src/pages/booking/CustomerBooking.jsx', import.meta.url), 'utf8');
+for (const value of ['fullTrackingUrl', 'providerUpiId']) {
+  const position = customerSource.indexOf(`await navigator.clipboard.writeText(${value})`);
+  const start = customerSource.lastIndexOf('onClick={', position) + 'onClick={'.length;
+  const end = customerSource.indexOf('style={{', position);
+  const callback = customerSource.slice(start, end).trim().slice(0, -1);
+  let clipboardOperation = deferred();
+  const notices = [], copied = [];
+  const env = {
+    fullTrackingUrl: 'https://example.invalid/booking-status', providerUpiId: 'fixture@example',
+    navigator: { clipboard: { writeText: () => clipboardOperation.promise } },
+    setCopiedTracking: state => copied.push(state), setTimeout() {},
+    addToast: (...args) => notices.push(args),
+  };
+  const copy = new Function('env', `with(env){return (${callback});}`)(env);
+  const failed = copy();
+  assert.equal(notices.length, 0, 'No copy success before permission resolves');
+  clipboardOperation.reject(new Error('Clipboard denied')); await failed;
+  assert.equal(notices[0][1], 'error');
+  assert(!copied.includes(true), 'Rejected copy cannot set copied badge');
+  clipboardOperation = deferred();
+  const retried = copy();
+  assert.equal(notices.length, 1);
+  clipboardOperation.resolve(); await retried;
+  assert.match(notices[1][0], /copied/);
+}
+
 const availability = await harness('Availability.jsx', 'Availability');
 const save = deferred(); availability.operation(() => save.promise);
 const firstSave = availability.click('Save Changes');

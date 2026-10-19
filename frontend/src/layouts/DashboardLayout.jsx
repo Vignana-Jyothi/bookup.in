@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { useLiveAppointments } from '../hooks/useLiveAppointments.js';
@@ -6,6 +6,7 @@ import { ACTIONS } from '../data/actions';
 import { getInitials } from '../utils/helpers';
 import { supabase, isSupabaseConfigured } from '../services/supabase/supabaseClient';
 import BrandLogo from '../components/ui/BrandLogo';
+import AccessibleModal from '../components/ui/AccessibleModal.jsx';
 import SupportWidget from '../components/support/SupportWidget.jsx';
 import { subscriptionService } from '../services/payments/subscriptionService';
 import './DashboardLayout.css';
@@ -125,6 +126,8 @@ export default function DashboardLayout() {
     return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
   }, []);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const drawerTrigger = useRef(null);
+  const openDrawer = event => { drawerTrigger.current = event.currentTarget; setMobileDrawerOpen(true); };
   const [subscriptionAccess, setSubscriptionAccess] = useState(null);
 
   useEffect(() => {
@@ -258,7 +261,8 @@ export default function DashboardLayout() {
             <button
               type="button"
               className="janjiyuk-menu-btn hide-desktop"
-              onClick={() => setMobileDrawerOpen(true)}
+              onClick={openDrawer}
+              aria-haspopup="dialog" aria-expanded={mobileDrawerOpen}
               title="Navigation menu"
               aria-label="Open menu"
             >
@@ -282,7 +286,7 @@ export default function DashboardLayout() {
 {/* Disabled navigation enhancement (user request):
 <PageLinks label="Workspace navigation" links={[{ to: '/', label: 'Website home' }, { to: '/contact', label: 'Help and support' }, merchantBookingPath(provider?.slug) && { to: merchantBookingPath(provider.slug), label: 'My booking page' }]} />
 */}
-          <Outlet context={{ bookingSync, now }} />
+          <Suspense fallback={<p role="status">Loading page...</p>}><Outlet context={{ bookingSync, now }} /></Suspense>
         </main>
       </div>
 
@@ -328,7 +332,8 @@ export default function DashboardLayout() {
               ? 'active'
               : ''
           }`}
-          onClick={() => setMobileDrawerOpen(true)}
+          onClick={openDrawer}
+              aria-haspopup="dialog" aria-expanded={mobileDrawerOpen}
         >
           <span className="tab-icon">{ICONS.menu}</span>
           <span className="tab-label">More</span>
@@ -339,7 +344,8 @@ export default function DashboardLayout() {
 
       {/* Slide-out Mobile Navigation Drawer */}
       {mobileDrawerOpen && (
-        <div className="janjiyuk-mobile-drawer-overlay" onClick={() => setMobileDrawerOpen(false)}>
+        <AccessibleModal label="Merchant navigation" returnFocusRef={drawerTrigger} onClose={() => setMobileDrawerOpen(false)}>
+        <div className="janjiyuk-mobile-drawer-overlay" onClick={event => { if (event.target === event.currentTarget) setMobileDrawerOpen(false); }}>
           <aside className="janjiyuk-mobile-drawer" onClick={e => e.stopPropagation()}>
             <div className="drawer-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -352,7 +358,7 @@ export default function DashboardLayout() {
                 type="button"
                 className="drawer-close-btn"
                 onClick={() => setMobileDrawerOpen(false)}
-                title="Close menu"
+                title="Close menu" aria-label="Close menu"
               >
                 {ICONS.close}
               </button>
@@ -402,6 +408,7 @@ export default function DashboardLayout() {
             </div>
           </aside>
         </div>
+        </AccessibleModal>
       )}
 
     </div>

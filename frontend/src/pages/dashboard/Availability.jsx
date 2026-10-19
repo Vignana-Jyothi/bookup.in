@@ -267,7 +267,7 @@ export default function Availability() {
             Buffer & Advance Booking Rules
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: 0 }}>
-            Fine-tune the dynamic slot calculation engine.
+            Choose the time between sessions and how far ahead clients can book.
           </p>
         </div>
 
@@ -431,7 +431,7 @@ export default function Availability() {
                 Google Calendar Busy Times
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--theme-text-muted)', margin: 0 }}>
-                Two-way calendar sync automatically blocks candidate booking slots.
+                Events from your connected Google Calendar block conflicting booking times.
               </p>
             </div>
           </div>

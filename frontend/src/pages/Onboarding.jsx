@@ -946,7 +946,7 @@ export default function Onboarding() {
             {missing.includes('calup_access') && <button className="btn btn-secondary btn-lg" onClick={() => navigate('/dashboard/subscription')}>Activate Calup access</button>}
             {missing.includes('phone_verification') && <button className="btn btn-secondary btn-lg" onClick={() => setStep(6)}>Verify mobile</button>}
             <button className="btn btn-secondary btn-lg" onClick={() => navigate('/book/' + slug)} disabled={!publishReady}>Open Booking Page</button>
-            {publishReady && <button className="btn btn-whatsapp" onClick={() => { const url = getBookingUrl(slug); navigator.clipboard?.writeText(url).catch(() => {}); addToast('Booking link copied.'); }}>Share to WhatsApp</button>}
+            {publishReady && <a className="btn btn-whatsapp" href={`https://wa.me/?text=${encodeURIComponent(getBookingUrl(slug))}`} target="_blank" rel="noopener noreferrer">Share to WhatsApp</a>}
           </div>
         </div>
       </div>

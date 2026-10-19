@@ -19,7 +19,6 @@ import {
   getDepositBadgeClass,
   getStatusLabel,
   getDepositLabel,
-  generateId,
 } from '../../data/store';
 import { ACTIONS } from '../../data/actions';
 import { timeToMinutes, minutesToTime, getTimeSlotsDetailedForDate } from '../../utils/helpers';
@@ -50,6 +49,7 @@ export default function Appointments() {
   const { now } = useOutletContext() || {};
   const actionReturnFocus = useRef(null);
   const rememberActionFocus = () => {
+    setActionError('');
     const active = document.activeElement;
     actionReturnFocus.current = active?.closest('.actions-dropdown-anchor')?.querySelector('.btn-table-action') || active;
   };
@@ -82,6 +82,28 @@ export default function Appointments() {
   // Row dropdown & Action target
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const [actionBooking, setActionBooking] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const actionBusyRef = useRef(false);
+  const manualIntentRef = useRef(null);
+  const runSavedAction = async action => {
+    if (actionBusyRef.current) return;
+    actionBusyRef.current = true; setActionBusy(true); setActionError('');
+    try { await action(); }
+    catch (error) { setActionError(error.message || 'The appointment could not be saved. Please retry.'); addToast(error.message || 'The appointment could not be saved. Please retry.', 'error'); }
+    finally { actionBusyRef.current = false; setActionBusy(false); }
+  };
+  const requirePersistedBooking = booking => {
+    if (!state.auth?.isDemoMode && (!isSupabaseConfigured() || !booking?.id || booking.id.startsWith('booking-'))) {
+      throw new Error('This appointment is not saved on the server. Refresh appointments before changing it.');
+    }
+  };
+  const syncCalendarAfterSave = async (booking, action) => {
+    if (!state.googleCalendar?.isConnected || !booking.googleEventId) return;
+    let result;
+    try { result = await action(); } catch { /* The appointment is already saved; report calendar failure separately. */ }
+    if (!result?.success) addToast('The appointment was saved, but Google Calendar could not be updated. Check the calendar connection.', 'warning');
+  };
 
   // Modals
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -173,7 +195,7 @@ export default function Appointments() {
         },
       });
 
-      addToast('Refund marked as sent. Customer notified ✓');
+      addToast('Refund marked as sent.');
       setShowRefundModal(false);
       setSelectedRefundTarget(null);
       setRefundProofFile(null);
@@ -230,6 +252,7 @@ export default function Appointments() {
 
 
   const openManualBookingModal = () => {
+    setActionError('');
     setManualForm({
       customerName: '',
       customerPhone: '',
@@ -273,7 +296,8 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmReschedule = (booking) => {
+  const handleConfirmReschedule = (booking) => runSavedAction(async () => {
+    requirePersistedBooking(booking);
     if (!rescheduleDate || !rescheduleTime) return;
 
     // Validate that slot is still available
@@ -299,9 +323,7 @@ export default function Appointments() {
     const newEndTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
     if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
-      dbService.rescheduleBooking(booking.id, rescheduleDate, rescheduleTime, newEndTime).catch(err => {
-        console.error('Failed to persist reschedule to Supabase:', err);
-      });
+      if (!await dbService.rescheduleBooking(booking.id, rescheduleDate, rescheduleTime, newEndTime)) throw new Error('The reschedule was not saved. Retry or refresh appointments.');
     }
 
     dispatch({
@@ -317,18 +339,18 @@ export default function Appointments() {
     // Sync reschedule to Google Calendar
     if (state.googleCalendar?.isConnected && booking.googleEventId) {
       const providerId = state.provider?.id || 'provider-1';
-      realGoogleCalendarService.updateEvent(booking.googleEventId, {
+      await syncCalendarAfterSave(booking, () => realGoogleCalendarService.updateEvent(booking.googleEventId, {
         ...booking,
         date: rescheduleDate,
         startTime: rescheduleTime,
         endTime: newEndTime,
-      }, providerId);
+      }, providerId));
     }
 
-    addToast('Appointment rescheduled successfully.');
+    addToast('Appointment rescheduled.');
     setShowRescheduleModal(false);
     setActionBooking(null);
-  };
+  });
 
   const handleOpenComplete = (booking) => {
     rememberActionFocus();
@@ -338,7 +360,8 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmComplete = (booking) => {
+  const handleConfirmComplete = (booking) => runSavedAction(async () => {
+    requirePersistedBooking(booking);
     const scheduledEndMin = timeToMinutes(booking.endTime);
     const actualEndMin = timeToMinutes(completionEndTime);
     const freedMin = Math.max(0, scheduledEndMin - actualEndMin);
@@ -349,9 +372,7 @@ export default function Appointments() {
     };
 
     if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
-      dbService.updateBookingStatus(booking.id, 'completed', {
-        actual_end_time: freedMin > 0 ? completionEndTime : null,
-      }).catch(err => console.error('Failed to persist complete to Supabase:', err));
+      if (!await dbService.updateBookingStatus(booking.id, 'completed', { actual_end_time: freedMin > 0 ? completionEndTime : null })) throw new Error('Completion was not saved. Please retry.');
     }
 
     dispatch({ type: ACTIONS.MARK_COMPLETED, payload });
@@ -364,7 +385,7 @@ export default function Appointments() {
 
     setShowCompleteModal(false);
     setActionBooking(null);
-  };
+  });
 
   const handleOpenNoShow = (booking) => {
     rememberActionFocus();
@@ -373,21 +394,17 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmNoShow = async (id) => {
-    try {
-      if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
-        await dbService.markCustomerNoShow(id);
-      }
-      dispatch({ type: ACTIONS.MARK_NO_SHOW, payload: id });
-      addToast('No-show recorded (0% refund). Customer notified with 48h dispute link.');
-    } catch (err) {
-      console.error('Failed to mark no-show:', err);
-      addToast(err.message || 'Failed to record no-show.', 'error');
-    } finally {
-      setShowNoShowModal(false);
-      setActionBooking(null);
+  const handleConfirmNoShow = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode) {
+      const result = await dbService.markCustomerNoShow(id);
+      if (!result || result.success === false) throw new Error('No-show could not be saved. Please retry.');
     }
-  };
+    dispatch({ type: ACTIONS.MARK_NO_SHOW, payload: id });
+    addToast('No-show recorded. Review the booking for dispute updates.');
+    setShowNoShowModal(false); setActionBooking(null);
+  });
 
   const handleOpenCancel = (booking) => {
     rememberActionFocus();
@@ -396,48 +413,26 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmCancel = async (id) => {
-    const target = state.bookings.find(b => b.id === id);
-    if (state.googleCalendar?.isConnected && target?.googleEventId) {
-      const providerId = state.provider?.id || 'provider-1';
-      realGoogleCalendarService.deleteEvent(target.googleEventId, providerId);
+  const handleConfirmCancel = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode) {
+      if (!await dbService.coachCancelBooking(id)) throw new Error('Cancellation was not saved. Please retry.');
     }
+    dispatch({ type: ACTIONS.UPDATE_BOOKING, payload: { id, status: 'cancelled', refundStatus: target?.price > 0 ? 'refund_due' : 'none', refundAmount: target?.price || 0 } });
+    await syncCalendarAfterSave(target, () => realGoogleCalendarService.deleteEvent(target.googleEventId, state.provider.id));
+    addToast(`Appointment cancelled.${target?.price > 0 ? ' Refund review is available in the refund ledger.' : ''}`);
+    fetchRefundsDue();
+    setShowCancelModal(false); setActionBooking(null);
+  });
 
-    try {
-      if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
-        await dbService.coachCancelBooking(id);
-      }
-      dispatch({
-        type: ACTIONS.UPDATE_BOOKING,
-        payload: {
-          id,
-          status: 'cancelled',
-          refundStatus: target?.price > 0 ? 'refund_due' : 'none',
-          refundAmount: target?.price || 0,
-        },
-      });
-      addToast(`Appointment cancelled. ${target?.price > 0 ? '100% refund due to customer.' : ''}`);
-      fetchRefundsDue();
-    } catch (err) {
-      console.error('Failed to cancel appointment:', err);
-      addToast(err.message || 'Failed to cancel appointment.', 'error');
-    } finally {
-      setShowCancelModal(false);
-      setActionBooking(null);
-    }
-  };
-
-  const handleMarkLateCancellation = (booking) => {
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking?.id && !booking.id.startsWith('booking-')) {
-      dbService.updateBookingStatus(booking.id, 'late-cancellation', {
-        deposit_status: 'forfeited',
-      }).catch(err => console.error('Failed to persist late-cancellation to Supabase:', err));
-    }
-
+  const handleMarkLateCancellation = booking => runSavedAction(async () => {
+    requirePersistedBooking(booking);
+    if (!state.auth?.isDemoMode && !await dbService.updateBookingStatus(booking.id, 'late-cancellation', { deposit_status: 'forfeited' })) throw new Error('Late cancellation was not saved. Please retry.');
     dispatch({ type: ACTIONS.MARK_LATE_CANCELLATION, payload: booking.id });
-    addToast('Late cancellation recorded. Deposit forfeited. ');
+    addToast('Late cancellation recorded. Deposit status saved as forfeited.');
     setOpenDropdownId(null);
-  };
+  });
 
   const handleOpenDelete = (booking) => {
     rememberActionFocus();
@@ -446,25 +441,16 @@ export default function Appointments() {
     setOpenDropdownId(null);
   };
 
-  const handleConfirmDelete = (id) => {
-    const target = state.bookings.find(b => b.id === id);
-    if (state.googleCalendar?.isConnected && target?.googleEventId) {
-      const providerId = state.provider?.id || 'provider-1';
-      realGoogleCalendarService.deleteEvent(target.googleEventId, providerId);
-    }
-
-    if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('booking-')) {
-      dbService.deleteBooking(id).catch(err => console.error('Failed to delete booking in Supabase:', err));
-    }
-
+  const handleConfirmDelete = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode && !await dbService.deleteBooking(id)) throw new Error('Deletion was not saved. Please retry.');
     dispatch({ type: ACTIONS.DELETE_BOOKING, payload: id });
+    await syncCalendarAfterSave(target, () => realGoogleCalendarService.deleteEvent(target.googleEventId, state.provider.id));
     addToast('Appointment deleted.');
-    setShowDeleteModal(false);
-    setActionBooking(null);
-    if (selectedBooking === id) {
-      setSelectedBooking(null);
-    }
-  };
+    setShowDeleteModal(false); setActionBooking(null);
+    if (selectedBooking === id) setSelectedBooking(null);
+  });
 
   // Payment verification handlers
   const handleConfirmPayment = async (booking) => {
@@ -536,7 +522,7 @@ export default function Appointments() {
         } catch (_) {}
       }
 
-      addToast('Payment rejected, customer notified');
+      addToast('Payment rejected.');
       setRejectModalBooking(null);
       setRejectReason('');
       if (selectedBooking === booking.id) {
@@ -647,62 +633,32 @@ export default function Appointments() {
     );
   }, [manualForm.date, manualForm.serviceId, state.availability, state.services, state.bookings, getGcalBusyTimesForDate]);
 
-  const handleCreateManualBooking = (e) => {
-    e.preventDefault();
-    if (!manualForm.customerName.trim() || !manualForm.customerPhone.trim() || !manualForm.serviceId || !manualForm.date || !manualForm.startTime) {
-      addToast('Please complete all required fields and select a valid time slot.', 'error');
-      return;
-    }
-
-    const slotObj = manualSlotsDetailed.find(s => s.time === manualForm.startTime);
-    if (!slotObj || !slotObj.available) {
-      addToast('The selected time slot is not available. Please choose another slot.', 'error');
-      return;
-    }
-
-    const selectedSvc = state.services.find(s => s.id === manualForm.serviceId);
-    if (!selectedSvc) return;
-
-    const [h, m] = manualForm.startTime.split(':').map(Number);
-    const endMinutes = h * 60 + m + selectedSvc.duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-    const custId = generateId('cust');
-
-    const newBooking = {
-      id: generateId('booking'),
-      providerId: state.provider?.id || 'provider-1',
-      serviceId: selectedSvc.id,
-      serviceName: selectedSvc.name,
-      customerId: custId,
-      customerName: manualForm.customerName.trim(),
-      customerPhone: manualForm.customerPhone.trim(),
-      customerWhatsApp: manualForm.customerWhatsApp.trim() || manualForm.customerPhone.trim(),
-      customerEmail: manualForm.customerEmail.trim(),
-      date: manualForm.date,
-      startTime: manualForm.startTime,
-      endTime,
-      duration: selectedSvc.duration,
-      price: selectedSvc.price,
-      depositAmount: selectedSvc.depositAmount,
-      depositStatus: selectedSvc.depositAmount > 0 ? manualForm.depositStatus : 'na',
-      status: 'confirmed',
-      source: 'Manual entry (Provider)',
-      notes: manualForm.notes.trim(),
-      createdAt: new Date().toISOString(),
-      ...(gcalConnected ? { syncedToGoogleCalendar: true } : {}),
-    };
-
-    const customer = {
-      id: custId,
-      name: manualForm.customerName.trim(),
-      phone: manualForm.customerPhone.trim(),
-      whatsapp: manualForm.customerWhatsApp.trim() || manualForm.customerPhone.trim(),
-      email: manualForm.customerEmail.trim(),
-    };
-
-    dispatch({ type: ACTIONS.ADD_BOOKING, payload: { booking: newBooking, customer } });
-    addToast('Appointment created successfully.');
-    setShowManualModal(false);
+  const handleCreateManualBooking = event => {
+    event.preventDefault();
+    return runSavedAction(async () => {
+      if (!manualForm.customerName.trim() || !manualForm.customerPhone.trim() || !manualForm.serviceId || !manualForm.date || !manualForm.startTime) throw new Error('Complete the required customer and appointment fields.');
+      if (!manualSlotsDetailed.some(value => value.time === manualForm.startTime && value.available)) throw new Error('This slot is no longer available. Select another time.');
+      const payload = {
+        serviceId: manualForm.serviceId, customerName: manualForm.customerName.trim(),
+        customerPhone: manualForm.customerPhone.trim(), customerWhatsApp: manualForm.customerWhatsApp.trim(),
+        customerEmail: manualForm.customerEmail.trim(), bookingDate: manualForm.date,
+        startTime: manualForm.startTime, notes: manualForm.notes.trim(),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (manualIntentRef.current?.fingerprint !== fingerprint) manualIntentRef.current = { fingerprint, key: crypto.randomUUID() };
+      const saved = await dbService.createMerchantBooking(payload, manualIntentRef.current.key);
+      dispatch({ type: ACTIONS.ADD_BOOKING, payload: { booking: saved, customer: { id: saved.customerId, name: saved.customerName, phone: saved.customerPhone, email: saved.customerEmail, whatsapp: saved.customerWhatsApp } } });
+      if (gcalConnected) {
+        let calendar;
+        try { calendar = await realGoogleCalendarService.createEvent(saved, state.provider.id, state.provider.timezone || 'Asia/Kolkata'); }
+        catch { /* A calendar failure must not present the saved appointment as unsaved. */ }
+        if (calendar?.success) dispatch({ type: ACTIONS.UPDATE_BOOKING, payload: { id: saved.id, googleEventId: calendar.eventId, meetLink: calendar.meetLink, syncedToGoogleCalendar: true } });
+        else addToast('Appointment saved. Google Calendar has not synchronized; check the calendar connection.', 'warning');
+      }
+      manualIntentRef.current = null;
+      addToast('Appointment saved. Any payment remains separate from this manual record.');
+      setShowManualModal(false);
+    });
   };
 
   // Tab counts
@@ -1017,7 +973,7 @@ export default function Appointments() {
       return null;
     }
 
-    const isSyncedToGcal = gcalConnected || b.syncedToGoogleCalendar;
+    const isSyncedToGcal = Boolean(b.googleEventId);
     const scheduledEndMin = timeToMinutes(b.endTime);
     const selectedEndMin = timeToMinutes(completionEndTime || b.endTime);
     const freedPreviewMin = Math.max(0, scheduledEndMin - selectedEndMin);
@@ -1736,13 +1692,14 @@ export default function Appointments() {
 
       {/* Manual Booking Modal */}
       {showManualModal && (
-        <AccessibleModal label="Create appointment" onClose={() => setShowManualModal(false)}>
+        <AccessibleModal label="Create appointment" onClose={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Create New Appointment</h3>
-              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowManualModal(false)}>✕</button>
+              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>✕</button>
             </div>
             <form onSubmit={handleCreateManualBooking}>
+              {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div className="form-row">
                   <div className="form-group">
@@ -1881,13 +1838,13 @@ export default function Appointments() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowManualModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>Cancel</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={!manualForm.startTime}
+                  disabled={actionBusy || !manualForm.startTime}
                 >
-                  Create Appointment
+                  {actionBusy ? 'Saving appointment...' : 'Create Appointment'}
                 </button>
               </div>
             </form>
@@ -1909,13 +1866,14 @@ export default function Appointments() {
       <>
         {/* Reschedule Modal */}
         {showRescheduleModal && (
-          <AccessibleModal label="Reschedule appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowRescheduleModal(false)}>
+          <AccessibleModal label="Reschedule appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Reschedule Appointment</h3>
-                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowRescheduleModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>✕</button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
                   <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Appointment</div>
                   <div style={{ fontWeight: 600, fontSize: 'var(--font-size-md)', marginTop: 2 }}>{target.customerName}</div>
@@ -1995,11 +1953,10 @@ export default function Appointments() {
                 )}
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowRescheduleModal(false)}>Cancel</button>
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>Cancel</button>
                 <button
                   className="btn btn-primary"
-                  disabled={!rescheduleDate || !rescheduleTime}
-                  onClick={() => handleConfirmReschedule(target)}
+                  disabled={actionBusy || !rescheduleDate || !rescheduleTime} onClick={() => handleConfirmReschedule(target)}
                 >
                   Confirm Reschedule
                 </button>
@@ -2010,13 +1967,14 @@ export default function Appointments() {
 
         {/* Complete Modal */}
         {showCompleteModal && (
-          <AccessibleModal label="Complete appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowCompleteModal(false)}>
+          <AccessibleModal label="Complete appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>
             <div className="modal modal-md" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Complete Appointment</h3>
-                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowCompleteModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>✕</button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <p style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
                   Mark session with <strong>{target.customerName}</strong> ({target.serviceName}) as finished.
                 </p>
@@ -2083,8 +2041,8 @@ export default function Appointments() {
                 )}
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowCompleteModal(false)}>Cancel</button>
-                <button className="btn btn-success" onClick={() => handleConfirmComplete(target)}>
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>Cancel</button>
+                <button className="btn btn-success" disabled={actionBusy} onClick={() => handleConfirmComplete(target)}>
                   Confirm & Complete
                 </button>
               </div>
@@ -2094,13 +2052,14 @@ export default function Appointments() {
 
         {/* Cancel Modal */}
         {showCancelModal && (
-          <AccessibleModal label="Cancel appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowCancelModal(false)}>
+          <AccessibleModal label="Cancel appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Cancel Appointment?</h3>
-                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowCancelModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>✕</button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <p style={{ marginBottom: 'var(--space-3)' }}>
                   Are you sure you want to cancel this appointment with <strong>{target.customerName}</strong>?
                 </p>
@@ -2122,8 +2081,8 @@ export default function Appointments() {
                 )}
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowCancelModal(false)}>Keep Appointment</button>
-                <button className="btn btn-danger" onClick={() => handleConfirmCancel(target.id)}>
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>Keep Appointment</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmCancel(target.id)}>
                   Cancel Appointment & Issue Refund
                 </button>
               </div>
@@ -2133,13 +2092,14 @@ export default function Appointments() {
 
         {/* No-show Modal */}
         {showNoShowModal && (
-          <AccessibleModal label="Mark appointment as no-show" returnFocusRef={actionReturnFocus} onClose={() => setShowNoShowModal(false)}>
+          <AccessibleModal label="Mark appointment as no-show" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Record No-show</h3>
-                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowNoShowModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>✕</button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <p style={{ marginBottom: 'var(--space-4)' }}>
                   Are you sure you want to mark this appointment with <strong>{target.customerName}</strong> as a no-show?
                 </p>
@@ -2159,8 +2119,8 @@ export default function Appointments() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowNoShowModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={() => handleConfirmNoShow(target.id)}>Confirm No-Show (0% Refund)</button>
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>Cancel</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmNoShow(target.id)}>Confirm No-Show (0% Refund)</button>
               </div>
             </div>
           </AccessibleModal>
@@ -2168,13 +2128,14 @@ export default function Appointments() {
 
         {/* Delete Modal */}
         {showDeleteModal && (
-          <AccessibleModal label="Delete appointment" returnFocusRef={actionReturnFocus} onClose={() => setShowDeleteModal(false)}>
+          <AccessibleModal label="Delete appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Delete Appointment</h3>
-                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowDeleteModal(false)}>✕</button>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>✕</button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <p style={{ marginBottom: 'var(--space-3)' }}>
                   Are you sure you want to permanently delete the appointment for <strong>{target.customerName}</strong> ({target.serviceName})?
                 </p>
@@ -2183,8 +2144,8 @@ export default function Appointments() {
                 </p>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={() => handleConfirmDelete(target.id)}>Delete</button>
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>Cancel</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmDelete(target.id)}>Delete</button>
               </div>
             </div>
           </AccessibleModal>
@@ -2213,6 +2174,7 @@ export default function Appointments() {
                 </button>
               </div>
               <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
                 <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
                   <div style={{ fontWeight: 600, fontSize: 'var(--font-size-md)' }}>{rejectModalBooking.customerName}</div>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: 2 }}>

@@ -1225,13 +1225,14 @@ export default function CustomerBooking() {
               />
               <button
                 type="button"
-                onClick={() => {
-                  if (navigator.clipboard?.writeText) {
-                    navigator.clipboard.writeText(fullTrackingUrl);
+                onClick={async () => {
+                  try {
+                    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+                    await navigator.clipboard.writeText(fullTrackingUrl);
                     setCopiedTracking(true);
                     setTimeout(() => setCopiedTracking(false), 2500);
-                    addToast('Tracking link copied to clipboard!');
-                  }
+                    addToast('Tracking link copied.');
+                  } catch { setCopiedTracking(false); addToast('Could not copy the link. Select the tracking link above and copy it manually.', 'error'); }
                 }}
                 style={{
                   background: copiedTracking ? '#16A34A' : '#0F172A',
@@ -1566,11 +1567,12 @@ export default function CustomerBooking() {
                             <span>{providerUpiId}</span>
                             <button
                               type="button"
-                              onClick={() => {
-                                if (navigator.clipboard?.writeText) {
-                                  navigator.clipboard.writeText(providerUpiId);
-                                  addToast('UPI ID copied!');
-                                }
+                              onClick={async () => {
+                                try {
+                                  if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+                                  await navigator.clipboard.writeText(providerUpiId);
+                                  addToast('UPI ID copied.');
+                                } catch { addToast('Could not copy the UPI ID. Select the displayed ID and copy it manually.', 'error'); }
                               }}
                               style={{
                                 background: 'none',

@@ -130,14 +130,12 @@ function reducer(state, action) {
     case ACTIONS.ADD_BOOKING: {
       const newCustomer = action.payload.customer;
       const existingCustomer = state.customers.find(c => c.phone === newCustomer.phone);
-      const isGcalConnected = state.googleCalendar?.isConnected;
       const bookingToAdd = {
         ...action.payload.booking,
-        ...(isGcalConnected ? { syncedToGoogleCalendar: true } : {}),
       };
       return {
         ...state,
-        bookings: [...state.bookings, bookingToAdd],
+        bookings: [...state.bookings.filter(booking => booking.id !== bookingToAdd.id), bookingToAdd],
         customers: existingCustomer ? state.customers : [...state.customers, newCustomer],
       };
     }

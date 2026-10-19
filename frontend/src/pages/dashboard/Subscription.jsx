@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 import SubscriptionReceipt from '../../components/ui/receipt-printer/SubscriptionReceipt.jsx';
 import { cashfreeCheckoutService } from '../../services/payments/cashfreeCheckout.js';
-import { subscriptionService } from '../../services/payments/subscriptionService.js';
+import { subscriptionService, isSubscriptionOrderApplied, subscriptionOrderNotice, findSubscriptionReceipt } from '../../services/payments/subscriptionService.js';
 import { usePopupFeedback } from '../../hooks/usePopupFeedback.js';
 import './Subscription.css';
 /* Disabled navigation enhancement (user request):
@@ -43,6 +44,9 @@ export default function Subscription() {
   const [subscription, setSubscription] = useState(null);
   const [billing, setBilling] = useState(emptyBilling);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const billingDirty = useRef(false);
+  const modalTrigger = useRef(null);
 /* Disabled navigation enhancement (user request):
   const [loadFailed, setLoadFailed] = useState(false);
 */
@@ -63,12 +67,15 @@ export default function Subscription() {
 */
     try {
       const result = await subscriptionService.get();
+      if (!result?.plan || !result?.allowedActions) throw new Error('Subscription details are incomplete. Please try again.');
       setSubscription(result);
-      setBilling(result.billingProfile || emptyBilling);
+      setLoadError('');
+      if (!billingDirty.current) setBilling(result.billingProfile || emptyBilling);
     } catch (error) {
 /* Disabled navigation enhancement (user request):
       setLoadFailed(true);
 */
+      setLoadError(error.message || 'Subscription information is unavailable.');
       setNotice({ type: 'error', text: error.message });
     } finally {
       setLoading(false);
@@ -76,22 +83,6 @@ export default function Subscription() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    if (!selectedDocument && !cancellationPeriod) return undefined;
-    const previousOverflow = window.document.body.style.overflow;
-    const closeOnEscape = event => {
-      if (event.key !== 'Escape') return;
-      setSelectedDocument(null);
-      if (!cancelling) setCancellationPeriod(null);
-    };
-    window.document.body.style.overflow = 'hidden';
-    window.document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      window.document.body.style.overflow = previousOverflow;
-      window.document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [selectedDocument, cancellationPeriod, cancelling]);
 
   const entitlement = subscription?.entitlement;
   const plan = subscription?.plan;
@@ -104,7 +95,7 @@ export default function Subscription() {
     [`GST (${(plan.taxRateBps / 100).toFixed(0)}%)`, money(plan.taxAmountPaise)],
   ] : [], [plan]);
 
-  const updateBilling = event => setBilling(current => ({ ...current, [event.target.name]: event.target.value }));
+  const updateBilling = event => { billingDirty.current = true; setBilling(current => ({ ...current, [event.target.name]: event.target.value })); };
 
   const saveBilling = async event => {
     event.preventDefault();
@@ -112,6 +103,7 @@ export default function Subscription() {
     setNotice(null);
     try {
       const saved = await subscriptionService.saveBillingProfile(billing);
+      billingDirty.current = false;
       setBilling(saved);
       setSubscription(current => ({ ...current, billingProfile: saved }));
       setNotice({ type: 'success', text: 'Billing details saved.' });
@@ -125,32 +117,30 @@ export default function Subscription() {
   const applyProjection = result => {
     if (!result) return;
     setSubscription(result);
-    if (result.billingProfile) setBilling(result.billingProfile);
+    if (result.billingProfile && !billingDirty.current) setBilling(result.billingProfile);
     window.dispatchEvent(new CustomEvent('calup:subscription-updated', { detail: result }));
   };
 
-  const openLatestReceipt = async projection => {
-    const invoice = projection?.documents?.find(item => item.type === 'invoice');
-    if (!invoice?.id) return;
+  const openLatestReceipt = async (projection, orderId) => {
     try {
-      setSelectedDocument(await subscriptionService.getDocument(invoice.id));
+      const document = await findSubscriptionReceipt(projection, orderId, subscriptionService.getDocument);
+      if (document) { setSelectedDocument(document); return; }
+      setNotice({ type: 'info', text: 'Payment verified. The receipt for this renewal is not available yet. Check Documents again shortly.' });
     } catch (error) {
-      setNotice({ type: 'error', text: `Access renewed, but the receipt could not be loaded: ${error.message}` });
+      setNotice({ type: 'error', text: `Payment verified, but its receipt could not be loaded: ${error.message}` });
     }
   };
 
   const refreshPayment = async orderId => {
+    modalTrigger.current = document.activeElement;
     setRefreshing(true);
     setNotice(null);
     try {
       const result = await subscriptionService.refreshOrder(orderId);
       applyProjection(result.data);
-      const applied = result.data?.entitlement?.source === 'paid' && !result.data?.openOrder;
-      setNotice({
-        type: applied ? 'success' : 'info',
-        text: applied ? 'Payment verified. Your 30-day access is active.' : 'Cashfree has not confirmed this payment yet. You can check again.',
-      });
-      if (applied) await openLatestReceipt(result.data);
+      const applied = isSubscriptionOrderApplied(result.data, orderId);
+      setNotice(subscriptionOrderNotice(result.data, orderId));
+      if (applied) await openLatestReceipt(result.data, orderId);
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
     } finally {
@@ -159,7 +149,8 @@ export default function Subscription() {
   };
 
   const startPayment = async () => {
-    if (!billingComplete) {
+    modalTrigger.current = document.activeElement;
+    if (!billingComplete || billingDirty.current) {
       setNotice({ type: 'error', text: 'Save complete billing details before continuing to payment.' });
       window.document.getElementById('subscription-billing')?.scrollIntoView({ behavior: 'smooth' });
       return;
@@ -185,12 +176,9 @@ export default function Subscription() {
         ? await subscriptionService.refreshOrder(order.orderId)
         : await subscriptionService.finishCheckout(order.orderId);
       applyProjection(result.data);
-      const applied = result.data?.entitlement?.source === 'paid' && !result.data?.openOrder;
-      setNotice({
-        type: applied ? 'success' : 'info',
-        text: applied ? 'Payment verified. Your access has been renewed.' : 'Payment is being verified. Check the status before trying another payment.',
-      });
-      if (applied) await openLatestReceipt(result.data);
+      const applied = isSubscriptionOrderApplied(result.data, order.orderId);
+      setNotice(subscriptionOrderNotice(result.data, order.orderId));
+      if (applied) await openLatestReceipt(result.data, order.orderId);
     } catch (error) {
       setNotice({ type: 'error', text: error.message || 'Subscription payment could not be completed.' });
       await load();
@@ -237,6 +225,7 @@ export default function Subscription() {
   };
 
   const viewDocument = async id => {
+    modalTrigger.current = document.activeElement;
     try {
       setSelectedDocument(await subscriptionService.getDocument(id));
     } catch (error) {
@@ -244,7 +233,9 @@ export default function Subscription() {
     }
   };
 
-  if (loading) return <div className="subscription-loading"><div className="spinner" /><span>Loading subscription…</span></div>;
+  if (loading && !subscription) return <div className="subscription-loading"><div className="spinner" /><span>Loading subscription…</span></div>;
+
+  if (!subscription) return <section className="subscription-card"><h2>Subscription information unavailable</h2><p role="alert">{loadError || 'We cannot confirm your access or plan price.'}</p><button type="button" className="btn btn-secondary" onClick={load}>Try loading again</button></section>;
 
   return (
     <div className="subscription-page animate-fade-in-up">
@@ -255,6 +246,7 @@ export default function Subscription() {
       {loadFailed && <button type="button" className="btn btn-secondary" onClick={load}>Retry loading subscription</button>}
 */}
 
+      {loadError && <p role="alert">Your last loaded subscription details may be out of date. {loadError} <button type="button" onClick={load} disabled={loading}>Try loading again</button></p>}
       <section className={`subscription-hero status-${entitlement?.status || 'none'}`}>
         <div>
           <div className="subscription-eyebrow">CALUP ACCESS</div>
@@ -306,7 +298,7 @@ export default function Subscription() {
             size="lg"
             onClick={startPayment}
             loading={paying}
-            disabled={!subscription?.allowedActions?.renew || Boolean(subscription?.review)}
+            disabled={Boolean(loadError) || loading || !subscription?.allowedActions?.renew || Boolean(subscription?.review)}
             style={{ width: '100%' }}
           >
             {openOrder?.paymentSessionId ? 'Continue payment' : 'Renew 30-day access'}
@@ -324,7 +316,7 @@ export default function Subscription() {
               {cancellation.periods.filter(period => period.status === 'scheduled').map((period, index) => (
                 <div className="prepaid-period" key={period.id}>
                   <div><strong>Future period {index + 1}</strong><span>{dateTime(period.startsAt)} – {dateTime(period.endsAt)}</span><small>{period.invoiceNumber} · {money(period.amountPaise)}</small></div>
-                  <button type="button" onClick={() => setCancellationPeriod(period)}>Cancel</button>
+                  <button type="button" onClick={() => { modalTrigger.current = document.activeElement; setCancellationPeriod(period); }}>Cancel</button>
                 </div>
               ))}
             </div>
@@ -334,9 +326,9 @@ export default function Subscription() {
         <section className="subscription-card" id="subscription-billing">
           <div className="subscription-card-heading">
             <div><span className="section-kicker">REQUIRED FOR PAYMENT</span><h3>Billing identity</h3></div>
-            {billing.version && <span className="saved-badge">Saved</span>}
+            {billing.version && !billingDirty.current && <span className="saved-badge">Saved</span>}{billingDirty.current && <span>Unsaved changes</span>}
           </div>
-          <form className="billing-form" onSubmit={saveBilling}>
+          <form className="billing-form" onSubmit={saveBilling}><fieldset disabled={savingBilling} className="subscription-billing-fields">
             <label>Legal name<input name="legalName" value={billing.legalName || ''} onChange={updateBilling} required minLength="2" /></label>
             <label>Address line 1<input name="addressLine1" value={billing.addressLine1 || ''} onChange={updateBilling} required minLength="5" /></label>
             <label>Address line 2 <span>Optional</span><input name="addressLine2" value={billing.addressLine2 || ''} onChange={updateBilling} /></label>
@@ -348,7 +340,7 @@ export default function Subscription() {
               <label>Postal code<input name="postalCode" inputMode="numeric" maxLength="6" value={billing.postalCode || ''} onChange={updateBilling} required /></label>
               <label>GSTIN <span>Optional</span><input name="gstin" maxLength="15" value={billing.gstin || ''} onChange={updateBilling} /></label>
             </div>
-            <PillButton type="submit" variant="secondary" loading={savingBilling}>Save billing details</PillButton>
+            <PillButton type="submit" variant="secondary" loading={savingBilling}>Save billing details</PillButton></fieldset>
           </form>
         </section>
       </div>
@@ -367,7 +359,7 @@ export default function Subscription() {
           <h3>Have an access code?</h3>
           <p className="subscription-muted">Codes are used for testing or approved Calup service resolutions. They do not create a payment or tax invoice.</p>
           <form className="code-form" onSubmit={redeem}>
-            <input value={code} onChange={event => setCode(event.target.value.toUpperCase())} placeholder="CALUP-XXXX-XXXX" minLength="8" required />
+            <label className="subscription-code-label">Calup access code<input value={code} onChange={event => setCode(event.target.value.toUpperCase())} placeholder="CALUP-XXXX-XXXX" minLength="8" required /></label>
             <PillButton type="submit" variant="secondary" loading={redeeming}>Apply code</PillButton>
           </form>
         </section>
@@ -396,18 +388,18 @@ export default function Subscription() {
       )}
 
       {selectedDocument && (
-        <div className="subscription-modal-backdrop" role="presentation" onClick={() => setSelectedDocument(null)}>
-          <div className="subscription-document subscription-receipt-modal" role="dialog" aria-modal="true" aria-label="Subscription receipt" onClick={event => event.stopPropagation()}>
+        <AccessibleModal label="Subscription receipt" onClose={() => setSelectedDocument(null)} returnFocusRef={modalTrigger}>
+          <div className="subscription-document subscription-receipt-modal" onClick={event => event.stopPropagation()}>
             <div className="document-header"><div><span className="section-kicker">{selectedDocument.isTest ? 'SANDBOX RECEIPT' : 'CALUP BILLING'}</span><h2>{selectedDocument.number}</h2></div><button type="button" onClick={() => setSelectedDocument(null)} aria-label="Close receipt">×</button></div>
             <SubscriptionReceipt key={selectedDocument.id} receipt={selectedDocument} />
             <div className="document-actions"><PillButton variant="secondary" onClick={() => window.print()}>Print / Save PDF</PillButton><PillButton onClick={() => setSelectedDocument(null)}>Close</PillButton></div>
           </div>
-        </div>
+        </AccessibleModal>
       )}
 
       {cancellationPeriod && (
-        <div className="subscription-modal-backdrop" role="presentation" onClick={() => !cancelling && setCancellationPeriod(null)}>
-          <div className="subscription-cancellation-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-cancel-title" onClick={event => event.stopPropagation()}>
+        <AccessibleModal label="Cancel future subscription period" onClose={() => { if (!cancelling) setCancellationPeriod(null); }} returnFocusRef={modalTrigger}>
+          <div className="subscription-cancellation-modal" aria-labelledby="subscription-cancel-title" onClick={event => event.stopPropagation()}>
             <span className="section-kicker">CANCEL ONE PREPAID PERIOD</span>
             <h2 id="subscription-cancel-title">Cancel this future period?</h2>
             <p>The selected period runs from <strong>{dateTime(cancellationPeriod.startsAt)}</strong> to <strong>{dateTime(cancellationPeriod.endsAt)}</strong>.</p>
@@ -422,7 +414,7 @@ export default function Subscription() {
               <PillButton onClick={cancelSelectedPeriod} loading={cancelling}>Cancel period and refund</PillButton>
             </div>
           </div>
-        </div>
+        </AccessibleModal>
       )}
     </div>
   );

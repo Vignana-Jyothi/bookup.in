@@ -511,3 +511,9 @@
 .subscription-access-banner.frozen, .subscription-access-banner.deletion_scheduled { border-color: #fca5a5; background: #fff1f2; color: #881337; }
 .subscription-access-banner span { font-size: 12px; }
 @media (max-width: 640px) { .subscription-access-banner { align-items: flex-start; flex-direction: column; } }
+
+/* The native modal supplies the backdrop and keyboard boundary. */
+.accessible-modal:has(.janjiyuk-mobile-drawer-overlay) { padding: 0; background: rgb(0 0 0 / 45%); align-items: stretch; }
+.accessible-modal .janjiyuk-mobile-drawer-overlay { position: static; min-height: 100dvh; width: 100%; background: transparent; backdrop-filter: none; animation: none; }
+.accessible-modal .janjiyuk-mobile-drawer { min-height: 100dvh; height: 100dvh; box-shadow: none; border-left: 0; }
+@media (prefers-reduced-motion: reduce) { .janjiyuk-mobile-drawer { animation: none; } }

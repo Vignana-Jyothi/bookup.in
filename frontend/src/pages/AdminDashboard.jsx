@@ -113,7 +113,7 @@ export default function AdminDashboard({ initialSection = 'overview' }) {
   return <div className="calup-admin">
     <a className="skip" href="#admin-main">Skip to workspace</a>
     <div className="shell"><aside className="sidebar" aria-label="Admin navigation">
-      <Link className="brand" to="/admin"><BrandLogo size="md" /></Link><div className="workspace-label">ADMIN WORKSPACE</div>
+      <div className="brand"><BrandLogo size="md" to="/admin" /></div><div className="workspace-label">ADMIN WORKSPACE</div>
       <nav aria-label="Workspace sections">{sections.filter(([key]) => key !== 'support').map(([key,name]) => <button key={key} onClick={() => go(key)} aria-current={section === key ? 'page' : undefined}>{name}{key === 'refunds' && metrics && <span>{metrics.refundRequests}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><span className="staff-avatar" aria-hidden="true">CA</span><div><strong>Calup administrator</strong><small>{auth.user?.email}</small></div></div>
     </aside><main id="admin-main">

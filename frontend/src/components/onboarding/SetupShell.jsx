@@ -33,7 +33,7 @@ export default function SetupShell({ step, totalSteps, title, description, heade
           <span className="setup-sidebar-footer">A little setup. A lot of possibility.</span>
         </aside>
 
-        <div className="setup-main">
+        <main className="setup-main">
           <header className="setup-main-header">
             <span>Your business starts here</span>
             {headerAction}
@@ -42,7 +42,7 @@ export default function SetupShell({ step, totalSteps, title, description, heade
             {loading ? <div className="spinner" aria-label="Loading setup" /> : children}
           </div>
           {footer && <footer className="setup-main-footer">{footer}</footer>}
-        </div>
+        </main>
       </section>
     </div>
   );

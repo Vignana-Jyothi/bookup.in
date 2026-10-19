@@ -20,7 +20,6 @@ export default function Settings() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const provider = state.provider || {};
-  const reminders = state.reminderSettings || {};
   const gcal = state.googleCalendar || { isConnected: false, email: null };
 
   const [name, setName] = useState(provider.name || '');
@@ -31,12 +30,16 @@ export default function Settings() {
   const [avatar, setAvatar] = useState(provider.avatar || provider.avatarUrl || null);
   const [defaultLocationAddress, setDefaultLocationAddress] = useState(provider.defaultLocationAddress || '');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const [paymentSaveError, setPaymentSaveError] = useState('');
   const avatarInputRef = useRef(null);
   const [bioError, setBioError] = useState('');
   const [profileErrors, setProfileErrors] = useState({});
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isConnectingGcal, setIsConnectingGcal] = useState(false);
   const [isTestingGcal, setIsTestingGcal] = useState(false);
+  const [isDisconnectingGcal, setIsDisconnectingGcal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirmation: '' });
   const [changingPassword, setChangingPassword] = useState(false);
   const [, setPasswordError] = usePopupFeedback();
@@ -111,7 +114,7 @@ export default function Settings() {
         dispatch({ type: ACTIONS.DISCONNECT_GOOGLE_CALENDAR });
       }
     };
-    checkServerStatus();
+    checkServerStatus().catch(() => { /* Keep the last verified connection state when status is unavailable. */ });
   }, [provider?.id, provider?.email, dispatch, gcal.isConnected, gcal.email]);
 
   // Profile Completeness Calculation
@@ -129,6 +132,15 @@ export default function Settings() {
   if (!hasContact) completenessNudges.push('Complete your email & phone contact info');
   if (!hasServices) completenessNudges.push('Add at least one active service');
 
+  const persistProvider = async (fields, id = provider.id) => {
+    if (state.auth?.isDemoMode) return;
+    if (!isSupabaseConfigured() || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '')) throw new Error('Reconnect your merchant account before saving.');
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) throw new Error('Your sign-in could not be verified. Sign in again and retry.');
+    const saved = await dbService.updateProviderProfile(id, fields);
+    if (!saved) throw new Error('Your changes were not saved. Please retry.');
+  };
+
   const handleAvatarFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -142,15 +154,9 @@ export default function Settings() {
     try {
       const url = await dbService.uploadAvatar(provider.id, file);
       if (url) {
+        await persistProvider({ avatarUrl: url });
         setAvatar(url);
-        dispatch({
-          type: ACTIONS.UPDATE_PROVIDER,
-          payload: { avatar: url, avatarUrl: url },
-        });
-
-        if (isSupabaseConfigured() && provider.id) {
-          await dbService.updateProviderProfile(provider.id, { avatarUrl: url });
-        }
+        dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { avatar: url, avatarUrl: url } });
         addToast('Profile photo updated ✓');
       }
     } catch (err) {
@@ -163,18 +169,20 @@ export default function Settings() {
   };
 
   const handleRemoveAvatar = async () => {
-    setAvatar(null);
-    dispatch({
-      type: ACTIONS.UPDATE_PROVIDER,
-      payload: { avatar: null, avatarUrl: null },
-    });
-    if (isSupabaseConfigured() && provider.id) {
-      await dbService.updateProviderProfile(provider.id, { avatarUrl: null });
-    }
-    addToast('Profile photo removed.');
+    if (uploadingAvatar) return;
+    setUploadingAvatar(true);
+    try {
+      await persistProvider({ avatarUrl: null });
+      setAvatar(null);
+      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { avatar: null, avatarUrl: null } });
+      addToast('Profile photo removed.');
+    } catch (error) { addToast(error.message || 'Could not remove the photo. Please retry.', 'error'); }
+    finally { setUploadingAvatar(false); }
   };
 
   const handleSaveProfile = async () => {
+    if (savingProfile) return;
+    setProfileSaveError('');
     const errors = {};
     if (!name || name.trim().length < 2) {
       errors.name = 'Name must be at least 2 characters';
@@ -207,67 +215,33 @@ export default function Settings() {
     setProfileErrors({});
     setBioError('');
 
-    if (isSupabaseConfigured()) {
-      try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const existingProv = await dbService.getProviderByUserId(authUser.id);
-          let savedProv = null;
-
-          if (existingProv?.id) {
-            await dbService.updateProviderProfile(existingProv.id, {
-              name,
-              businessName,
-              bio,
-              email: email || authUser.email,
-              phone,
-              defaultLocationAddress: defaultLocationAddress.trim() || null,
-            });
-            savedProv = {
-              ...existingProv,
-              name,
-              businessName,
-              bio,
-              email: email || authUser.email,
-              phone,
-              defaultLocationAddress: defaultLocationAddress.trim() || null,
-            };
-          } else {
-            const baseSlug = generateSlug(businessName || name || 'provider');
-            const slug = `${baseSlug}-${authUser.id.slice(0, 5)}`;
-            savedProv = await dbService.createProviderProfile({
-              userId: authUser.id,
-              name: name || authUser.user_metadata?.name || 'Provider',
-              businessName,
-              slug,
-              email: email || authUser.email,
-              phone,
-              bio,
-              defaultLocationAddress: defaultLocationAddress.trim() || null,
-            });
-          }
-
-          if (savedProv) {
-            dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: savedProv });
-            addToast('Profile updated ✓');
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to save profile in Supabase:', err);
-        addToast(err.message || 'Failed to update profile in database', 'error');
+    setSavingProfile(true);
+    try {
+      const fields = { name, businessName, bio, email, phone, defaultLocationAddress: defaultLocationAddress.trim() || null };
+      if (state.auth?.isDemoMode) {
+        dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: fields });
+        addToast('Demo profile updated on this device.', 'info');
         return;
       }
-    }
-
-    if (state.auth?.isDemoMode) {
-      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone, defaultLocationAddress: defaultLocationAddress.trim() || null } });
-      addToast('Profile updated ✓ (Demo Mode)');
-      return;
-    }
-
-    dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { name, businessName, bio, email, phone, defaultLocationAddress: defaultLocationAddress.trim() || null } });
-    addToast('Profile updated ✓');
+      if (!isSupabaseConfigured()) throw new Error('Reconnect your merchant account before saving.');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) throw new Error('Your sign-in could not be verified. Sign in again; your edits are still here.');
+      const existing = await dbService.getProviderByUserId(user.id);
+      let saved;
+      if (existing?.id) {
+        await persistProvider(fields, existing.id);
+        saved = { ...existing, ...fields };
+      } else {
+        const slug = `${generateSlug(businessName || name || 'provider')}-${user.id.slice(0, 5)}`;
+        saved = await dbService.createProviderProfile({ userId: user.id, slug, ...fields });
+        if (!saved?.id) throw new Error('Your profile was not saved. Please retry.');
+      }
+      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: saved });
+      addToast('Profile updated.');
+    } catch (error) {
+      setProfileSaveError(error.message || 'Could not save your profile. Your edits are still here; try again.');
+      addToast(error.message || 'Could not save your profile.', 'error');
+    } finally { setSavingProfile(false); }
   };
 
   const handleQrCodeUpload = async (e) => {
@@ -279,27 +253,13 @@ export default function Settings() {
     }
     setUploadingQr(true);
     try {
-      let activeProviderId = provider?.id || 'coach';
-      if (isSupabaseConfigured()) {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const existingProv = await dbService.getProviderByUserId(authUser.id);
-            if (existingProv?.id) activeProviderId = existingProv.id;
-          }
-        } catch (_) {}
-      }
-
+      const activeProviderId = provider?.id;
+      if (!state.auth?.isDemoMode && !activeProviderId) throw new Error('Reconnect your merchant account before uploading.');
       const url = await dbService.uploadQrCode(activeProviderId, file);
       if (url) {
+        await persistProvider({ qrCodeUrl: url }, activeProviderId);
         setQrCodeUrl(url);
-        dispatch({
-          type: ACTIONS.UPDATE_PROVIDER,
-          payload: { qrCodeUrl: url },
-        });
-        if (isSupabaseConfigured() && activeProviderId) {
-          await dbService.updateProviderProfile(activeProviderId, { qrCodeUrl: url });
-        }
+        dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { qrCodeUrl: url } });
         addToast('QR code uploaded and saved ✓');
       }
     } catch (err) {
@@ -327,45 +287,33 @@ export default function Settings() {
       }
     }
     setPaymentErrors({});
+    setPaymentSaveError('');
     setSavingPayment(true);
     try {
-      let activeProviderId = provider?.id;
-
-      if (isSupabaseConfigured()) {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const existingProv = await dbService.getProviderByUserId(authUser.id);
-            if (existingProv?.id) {
-              activeProviderId = existingProv.id;
-            }
-          }
-        } catch (authErr) {
-          console.warn('[Settings] Auth lookup warning in handleSavePaymentSettings:', authErr.message);
-        }
-      }
-
-      if (isSupabaseConfigured() && activeProviderId) {
-        await dbService.updateProviderProfile(activeProviderId, {
-          upiId: upiId.trim() || null,
-          qrCodeUrl: qrCodeUrl || null,
-        });
-      }
-
+      await persistProvider({ upiId: trimmedUpi || null, qrCodeUrl: qrCodeUrl || null });
       dispatch({
         type: ACTIONS.UPDATE_PROVIDER,
         payload: { upiId: upiId.trim() || null, qrCodeUrl: qrCodeUrl || null },
       });
       addToast('Payment settings saved ✓');
     } catch (err) {
+      setPaymentSaveError(err.message || 'Could not save payment settings. Your edits are still here; try again.');
       addToast(err.message || 'Failed to save payment settings.', 'error');
     } finally {
       setSavingPayment(false);
     }
   };
 
-  const toggleReminder = (key) => {
-    dispatch({ type: ACTIONS.UPDATE_REMINDERS, payload: { [key]: !reminders[key] } });
+  const handleRemoveQr = async () => {
+    if (uploadingQr || savingPayment) return;
+    setUploadingQr(true); setPaymentSaveError('');
+    try {
+      await persistProvider({ qrCodeUrl: null });
+      setQrCodeUrl(null);
+      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { qrCodeUrl: null } });
+      addToast('QR code removed.');
+    } catch (error) { setPaymentSaveError(error.message || 'Could not remove your QR code. Please retry.'); }
+    finally { setUploadingQr(false); }
   };
 
   const handleConnectGcal = async () => {
@@ -410,10 +358,15 @@ export default function Settings() {
   };
 
   const handleDisconnectGcal = async () => {
-    const providerId = provider?.id || 'provider-1';
-    await realGoogleCalendarService.disconnect(providerId);
-    dispatch({ type: ACTIONS.DISCONNECT_GOOGLE_CALENDAR });
-    addToast('Google Calendar disconnected');
+    if (isDisconnectingGcal) return;
+    setIsDisconnectingGcal(true);
+    try {
+      if (!provider?.id) throw new Error('Reconnect your merchant account before disconnecting Google.');
+      await realGoogleCalendarService.disconnect(provider.id);
+      dispatch({ type: ACTIONS.DISCONNECT_GOOGLE_CALENDAR });
+      addToast('Google Calendar disconnected');
+    } catch (error) { addToast(error.message || 'Could not disconnect Google. Please retry.', 'error'); }
+    finally { setIsDisconnectingGcal(false); }
   };
 
   const handleTestGcal = async () => {
@@ -431,7 +384,7 @@ export default function Settings() {
   return (
     <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Profile Completeness Meter */}
-      <div className="card card-padding" style={{ marginBottom: 'var(--space-6)', borderLeft: '4px solid var(--color-primary-600)' }}>
+      <div className="card card-padding" style={{ marginBottom: 'var(--space-6)', border: '1px solid var(--theme-border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
           <div>
             <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, margin: 0 }}>Profile Completeness</h4>
@@ -447,10 +400,10 @@ export default function Settings() {
         </div>
         <div style={{ width: '100%', height: 8, background: 'var(--color-gray-100)', borderRadius: 999, overflow: 'hidden', marginTop: 'var(--space-3)' }}>
           <div style={{
-            width: `${completenessScore}%`,
+            width: '100%', transform: `scaleX(${completenessScore / 100})`, transformOrigin: 'left',
             height: '100%',
             background: completenessScore === 100 ? 'var(--color-success-500)' : 'var(--color-primary-600)',
-            transition: 'width 0.4s ease',
+            transition: 'none',
           }} />
         </div>
       </div>
@@ -489,7 +442,7 @@ export default function Settings() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <input
                 type="file"
-                ref={avatarInputRef}
+                ref={avatarInputRef} aria-label="Profile photo file"
                 accept="image/png,image/jpeg,image/webp"
                 style={{ display: 'none' }}
                 onChange={handleAvatarFileSelect}
@@ -507,7 +460,8 @@ export default function Settings() {
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={handleRemoveAvatar}
-                  style={{ fontSize: '12px', color: '#EF4444' }}
+                  disabled={uploadingAvatar}
+                  style={{ fontSize: '12px', color: 'var(--color-error-600)' }}
                 >
                   Remove
                 </button>
@@ -522,19 +476,19 @@ export default function Settings() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 560 }}>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Your name *</label>
+              <label className="form-label" htmlFor="settings-field-name">Your name *</label>
               <input
-                id="settings-field-name"
+                disabled={savingProfile} id="settings-field-name" aria-invalid={Boolean(profileErrors.name)} aria-describedby={profileErrors.name ? 'settings-error-name' : undefined}
                 className={`form-input${profileErrors.name ? ' form-input-error' : ''}`}
                 value={name}
                 onChange={e => { setName(e.target.value); if (profileErrors.name) setProfileErrors(prev => ({ ...prev, name: '' })); }}
               />
-              {profileErrors.name && <div className="form-field-error">{profileErrors.name}</div>}
+              {profileErrors.name && <div id="settings-error-name" className="form-field-error" role="alert">{profileErrors.name}</div>}
             </div>
             <div className="form-group">
-              <label className="form-label">Business name</label>
+              <label className="form-label" htmlFor="settings-field-businessName">Business name</label>
               <input
-                id="settings-field-businessName"
+                disabled={savingProfile} id="settings-field-businessName"
                 className="form-input"
                 value={businessName}
                 onChange={e => setBusinessName(e.target.value)}
@@ -544,13 +498,13 @@ export default function Settings() {
 
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label className="form-label">Bio</label>
+              <label className="form-label" htmlFor="settings-field-bio">Bio</label>
               <span style={{ fontSize: 'var(--font-size-xs)', color: bio.length >= 20 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                 {bio.length}/20 min chars
               </span>
             </div>
             <textarea
-              id="settings-field-bio"
+              disabled={savingProfile} id="settings-field-bio" aria-invalid={Boolean(bioError)} aria-describedby="settings-bio-help"
               className={`form-input form-textarea ${bioError ? 'form-input-error' : ''}`}
               placeholder="e.g. Certified personal trainer helping busy professionals build strength and consistency."
               value={bio}
@@ -561,44 +515,44 @@ export default function Settings() {
               rows={3}
             />
             {bioError ? (
-              <span className="form-field-error">{bioError}</span>
+              <span id="settings-bio-help" className="form-field-error" role="alert">{bioError}</span>
             ) : (
-              <span className="form-hint">Brief intro displayed on your public booking page. Minimum 20 characters recommended.</span>
+              <span id="settings-bio-help" className="form-hint">Brief intro displayed on your public booking page. Minimum 20 characters recommended.</span>
             )}
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Merchant &amp; Google Calendar host email</label>
+              <label className="form-label" htmlFor="settings-field-email">Merchant &amp; Google Calendar host email</label>
               <input
-                id="settings-field-email"
+                disabled={savingProfile} id="settings-field-email" aria-invalid={Boolean(profileErrors.email)} aria-describedby={profileErrors.email ? 'settings-error-email' : undefined}
                 className={`form-input${profileErrors.email ? ' form-input-error' : ''}`}
                 type="email"
                 value={email}
                 onChange={e => { setEmail(e.target.value); if (profileErrors.email) setProfileErrors(prev => ({ ...prev, email: '' })); }}
               />
-              {profileErrors.email && <div className="form-field-error">{profileErrors.email}</div>}
+              {profileErrors.email && <div id="settings-error-email" className="form-field-error" role="alert">{profileErrors.email}</div>}
               <span className="form-hint">
                 Connect this same Google account below. Changing it requires reconnecting Google Calendar.
               </span>
             </div>
             <div className="form-group">
-              <label className="form-label">Phone</label>
+              <label className="form-label" htmlFor="settings-field-phone">Phone</label>
               <input
-                id="settings-field-phone"
+                disabled={savingProfile} id="settings-field-phone" aria-invalid={Boolean(profileErrors.phone)} aria-describedby={profileErrors.phone ? 'settings-error-phone' : undefined}
                 className={`form-input${profileErrors.phone ? ' form-input-error' : ''}`}
                 type="tel"
                 value={phone}
                 onChange={e => { setPhone(e.target.value); if (profileErrors.phone) setProfileErrors(prev => ({ ...prev, phone: '' })); }}
               />
-              {profileErrors.phone && <div className="form-field-error">{profileErrors.phone}</div>}
+              {profileErrors.phone && <div id="settings-error-phone" className="form-field-error" role="alert">{profileErrors.phone}</div>}
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Business Address (Default Meeting Location)</label>
+            <label className="form-label" htmlFor="settings-field-address">Business Address (Default Meeting Location)</label>
             <input
-              id="settings-field-address"
+              disabled={savingProfile} id="settings-field-address"
               className="form-input"
               type="text"
               placeholder="e.g. 42 MG Road, Koramangala, Bengaluru, Karnataka"
@@ -608,9 +562,10 @@ export default function Settings() {
             <span className="form-hint">Default physical address used for in-person appointments across your services.</span>
           </div>
 
+            {profileSaveError && <p role="alert">{profileSaveError}</p>}
             <div style={{ marginTop: '8px' }}>
-              <PillButton variant="primary" size="sm" onClick={handleSaveProfile}>
-                Save Profile
+              <PillButton variant="primary" size="sm" onClick={handleSaveProfile} disabled={savingProfile}>
+                {savingProfile ? 'Saving...' : 'Save Profile'}
               </PillButton>
             </div>
           </div>
@@ -651,9 +606,9 @@ export default function Settings() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 560 }}>
           <div className="form-group">
-            <label className="form-label">UPI ID</label>
+            <label className="form-label" htmlFor="settings-field-upiId">UPI ID</label>
             <input
-              id="settings-field-upiId"
+              disabled={savingPayment || uploadingQr} id="settings-field-upiId" aria-invalid={Boolean(paymentErrors.upiId)} aria-describedby={paymentErrors.upiId ? 'settings-error-upiId' : undefined}
               className={`form-input${paymentErrors.upiId ? ' form-input-error' : ''}`}
               type="text"
               placeholder="e.g. yourname@upi"
@@ -661,14 +616,14 @@ export default function Settings() {
               onChange={e => { setUpiId(e.target.value); if (paymentErrors.upiId) setPaymentErrors(prev => ({ ...prev, upiId: '' })); }}
             />
             {paymentErrors.upiId ? (
-              <div className="form-field-error">{paymentErrors.upiId}</div>
+              <div id="settings-error-upiId" className="form-field-error" role="alert">{paymentErrors.upiId}</div>
             ) : (
               <span className="form-hint">Your UPI ID will be shown to customers on the booking confirmation page.</span>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Payment QR Code</label>
+            <span className="form-label">Payment QR Code</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
               {qrCodeUrl && (
                 <div style={{
@@ -685,7 +640,7 @@ export default function Settings() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <input
                   type="file"
-                  ref={qrInputRef}
+                  ref={qrInputRef} aria-label="Payment QR code file"
                   accept="image/png,image/jpeg,image/webp"
                   style={{ display: 'none' }}
                   onChange={handleQrCodeUpload}
@@ -702,17 +657,8 @@ export default function Settings() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={async () => {
-                      setQrCodeUrl(null);
-                      dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: { qrCodeUrl: null } });
-                      if (isSupabaseConfigured() && provider?.id) {
-                        try {
-                          await dbService.updateProviderProfile(provider.id, { qrCodeUrl: null });
-                        } catch (_) {}
-                      }
-                      addToast('QR code removed.');
-                    }}
-                    style={{ fontSize: '12px', color: '#EF4444' }}
+                    onClick={handleRemoveQr} disabled={uploadingQr || savingPayment}
+                    style={{ fontSize: '12px', color: 'var(--color-error-600)' }}
                   >Remove</button>
                 )}
                 <span style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)' }}>JPG, PNG, or WebP up to 5MB.</span>
@@ -720,8 +666,9 @@ export default function Settings() {
             </div>
           </div>
 
+          {paymentSaveError && <p role="alert">{paymentSaveError}</p>}
           <div style={{ marginTop: '8px' }}>
-            <PillButton variant="primary" size="sm" onClick={handleSavePaymentSettings} disabled={savingPayment}>
+            <PillButton variant="primary" size="sm" onClick={handleSavePaymentSettings} disabled={savingPayment || uploadingQr}>
               {savingPayment ? 'Saving...' : 'Save Payment Settings'}
             </PillButton>
           </div>
@@ -772,6 +719,7 @@ export default function Settings() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={handleDisconnectGcal}
+                disabled={isDisconnectingGcal}
                 style={{ borderRadius: 'var(--radius-pill)' }}
               >
                 Disconnect
@@ -817,7 +765,7 @@ export default function Settings() {
       <div className="card card-padding" style={{ marginBottom: 'var(--space-6)' }}>
         <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-2)' }}>WhatsApp Reminders</h4>
         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-5)' }}>
-          Send automated reminders and confirmation updates to your clients on WhatsApp (simulated in prototype).
+          Reminder preferences are not available yet. These controls do not schedule messages or change transactional booking updates.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -836,7 +784,7 @@ export default function Settings() {
                 <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: 2 }}>{r.desc}</div>
               </div>
               <label className="toggle">
-                <input type="checkbox" checked={reminders[r.key] || false} onChange={() => toggleReminder(r.key)} />
+                <input type="checkbox" checked={false} disabled aria-label={`${r.label} ? not available yet`} />
                 <span className="toggle-slider"></span>
               </label>
             </div>
@@ -848,7 +796,7 @@ export default function Settings() {
       <div className="card card-padding">
         <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>Account</h4>
         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-          {state.auth.isDemoMode ? 'You are using CalUp in Demo Mode. All actions run locally.' : 'Manage your account settings.'}
+          {state.auth.isDemoMode ? 'You are using Calup in Demo Mode. All actions run locally.' : 'Manage your account settings.'}
         </p>
         <form onSubmit={changePassword} style={{ maxWidth: 480, marginBottom: 'var(--space-5)' }} aria-busy={changingPassword}>
           <h5 style={{ marginBottom: 'var(--space-3)' }}>Change password</h5>
@@ -871,8 +819,8 @@ export default function Settings() {
           </div>
         </form>
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <button className="btn btn-secondary btn-sm" style={{ color: 'var(--color-error-600)' }} onClick={() => addToast('Account deletion disabled in demo.')}>
-            Delete Account
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/contact')}>
+            Contact Calup about account deletion
           </button>
         </div>
       </div>

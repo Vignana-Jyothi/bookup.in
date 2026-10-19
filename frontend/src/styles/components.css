@@ -2216,7 +2216,7 @@ dialog.accessible-modal::backdrop { background: transparent; }
   width: 100%;
   border-radius: var(--radius-pill);
   background: var(--color-lime);
-  transition: height var(--transition-slow);
+
 }
 
 .weekly-bar-tooltip {

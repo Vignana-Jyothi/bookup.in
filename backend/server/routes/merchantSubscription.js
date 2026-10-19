@@ -305,7 +305,14 @@ async function refreshOrder(req, res) {
     return errorResponse(res, 404, 'NOT_FOUND', 'Subscription order was not found.', reqId);
   }
   try {
-    return dataResponse(res, 200, await reconcileSubscriptionOrder(orderId), reqId);
+    const projection = await reconcileSubscriptionOrder(orderId);
+    const latest = await serviceRoleClient.rpc('get_subscription_reconciliation_context_v1', { p_subscription_order_id: orderId });
+    if (latest.error) throw latest.error;
+    const requested = rpcValue(latest.data);
+    if (!requested || requested.providerId !== req.providerId) throw new Error('Subscription order ownership unavailable');
+    return dataResponse(res, 200, { ...projection, requestedOrder: {
+      orderId, paymentStatus: requested.paymentStatus, applicationStatus: requested.applicationStatus,
+    } }, reqId);
   } catch (error) {
     console.error('[Subscription] Reconciliation failed', { requestId: reqId, orderId, error: error?.code || error?.message });
     return dataResponse(res, 202, { ...(await subscriptionProjection(req.providerId)), gatewayReconciling: true }, reqId);

@@ -1,0 +1,150 @@
+{
+  "results": [
+    {
+      "path": "/",
+      "width": 320,
+      "heading": "Share one link.\nGet booked and paid.",
+      "overflow": false
+    },
+    {
+      "path": "/subscriptions",
+      "width": 320,
+      "heading": "Your bookings,\nin one place.",
+      "overflow": false
+    },
+    {
+      "path": "/login",
+      "width": 320,
+      "heading": "Welcome back.",
+      "overflow": false
+    },
+    {
+      "path": "/signup",
+      "width": 320,
+      "heading": "A little hello.\nA whole lot of possibility.",
+      "overflow": false
+    },
+    {
+      "path": "/forgot-password",
+      "width": 320,
+      "heading": "Forgot your password?",
+      "overflow": false
+    },
+    {
+      "path": "/reset-password",
+      "width": 320,
+      "heading": "Set a new password.",
+      "overflow": false
+    },
+    {
+      "path": "/contact",
+      "width": 320,
+      "heading": "Contact and Grievances",
+      "overflow": false
+    },
+    {
+      "path": "/sandbox/booking",
+      "width": 320,
+      "heading": "Try booking a session",
+      "overflow": false
+    },
+    {
+      "path": "/",
+      "width": 390,
+      "heading": "Share one link.\nGet booked and paid.",
+      "overflow": false
+    },
+    {
+      "path": "/subscriptions",
+      "width": 390,
+      "heading": "Your bookings,\nin one place.",
+      "overflow": false
+    },
+    {
+      "path": "/login",
+      "width": 390,
+      "heading": "Welcome back.",
+      "overflow": false
+    },
+    {
+      "path": "/signup",
+      "width": 390,
+      "heading": "A little hello.\nA whole lot of possibility.",
+      "overflow": false
+    },
+    {
+      "path": "/forgot-password",
+      "width": 390,
+      "heading": "Forgot your password?",
+      "overflow": false
+    },
+    {
+      "path": "/reset-password",
+      "width": 390,
+      "heading": "Set a new password.",
+      "overflow": false
+    },
+    {
+      "path": "/contact",
+      "width": 390,
+      "heading": "Contact and Grievances",
+      "overflow": false
+    },
+    {
+      "path": "/sandbox/booking",
+      "width": 390,
+      "heading": "Try booking a session",
+      "overflow": false
+    },
+    {
+      "path": "/",
+      "width": 1440,
+      "heading": "Share one link.\nGet booked and paid.",
+      "overflow": false
+    },
+    {
+      "path": "/subscriptions",
+      "width": 1440,
+      "heading": "Your bookings,\nin one place.",
+      "overflow": false
+    },
+    {
+      "path": "/login",
+      "width": 1440,
+      "heading": "Welcome back.",
+      "overflow": false
+    },
+    {
+      "path": "/signup",
+      "width": 1440,
+      "heading": "A little hello.\nA whole lot of possibility.",
+      "overflow": false
+    },
+    {
+      "path": "/forgot-password",
+      "width": 1440,
+      "heading": "Forgot your password?",
+      "overflow": false
+    },
+    {
+      "path": "/reset-password",
+      "width": 1440,
+      "heading": "Set a new password.",
+      "overflow": false
+    },
+    {
+      "path": "/contact",
+      "width": 1440,
+      "heading": "Contact and Grievances",
+      "overflow": false
+    },
+    {
+      "path": "/sandbox/booking",
+      "width": 1440,
+      "heading": "Try booking a session",
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "externalWrites": "blocked"
+}
