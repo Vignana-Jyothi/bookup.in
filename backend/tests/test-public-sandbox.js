@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
-import { LANDING_CONTENT } from '../../frontend/src/data/landingContent.js';
+import { LANDING_CONTENT, DEMO_SLUG } from '../../frontend/src/data/landingContent.js';
 
 // Execute the production simulator with isolated local hooks. No backend or gateway.
 const source = await readFile(new URL('../../frontend/src/pages/SandboxBooking.jsx', import.meta.url), 'utf8');
@@ -64,8 +64,9 @@ click('Simulate successful payment');
 assert.match(html(), /Demo completed/);
 assert.match(html(), /No real booking, payment, calendar event, or meeting link was created/);
 
-assert.equal(LANDING_CONTENT.hero.demoUrl, '/sandbox/booking');
-assert.equal(LANDING_CONTENT.liveDemo.demoUrl, '/sandbox/booking');
+const demoPath = DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo';
+assert.equal(LANDING_CONTENT.hero.demoUrl, demoPath);
+assert.equal(LANDING_CONTENT.liveDemo.demoUrl, demoPath);
 assert.match(LANDING_CONTENT.hero.badges, /selected merchants.*299/i);
 assert.match(LANDING_CONTENT.faq.items.find(item => item.question === 'What does it cost?').answer, /selected merchants.*299.*tax/i);
 for (const name of ['LandingDesktop', 'LandingMobile']) {
@@ -79,4 +80,4 @@ assert.match(app, /path="\/sandbox\/booking"/);
 assert.match(app, /path="\/book\/:slug"/);
 const css = await readFile(new URL('../../frontend/src/pages/Landing.css', import.meta.url), 'utf8');
 assert.match(css, /\.reveal-on-scroll\s*\{\s*opacity: 1;/);
-console.log('PASS: isolated sandbox selection, failure, immediate retry, cancellation, reset and success; zero real service dependencies; fixed sandbox links, selected-access pricing, native FAQs and visible-default content.');
+console.log('PASS: isolated sandbox selection, failure, immediate retry, cancellation, reset and success; zero real service dependencies; restored configured demo links, selected-access pricing, native FAQs and visible-default content.');

@@ -30,8 +30,8 @@ export const LANDING_CONTENT = {
     headlineItalic: "Get booked and paid.",
     subline: "Calup is the booking page for coaches, consultants and tutors. Clients choose a time and pay through your enabled checkout. Manage bookings and payment updates in one place.",
     primaryCta: "Create account",
-    secondaryCta: "Try the sandbox",
-    demoUrl: '/sandbox/booking',
+    secondaryCta: "See a live booking page",
+    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
     badges: "Free early access for selected merchants. Otherwise ₹299 + applicable tax / 30 days.",
   },
 
@@ -143,10 +143,10 @@ export const LANDING_CONTENT = {
   },
 
   liveDemo: {
-    headline: "Explore a sandbox booking",
-    desc: "Choose an example slot and simulate payment. No money is collected and no real appointment is created.",
-    cta: "Try the sandbox",
-    demoUrl: '/sandbox/booking',
+    headline: "Try it as a client",
+    desc: "See how booking feels from your client's perspective.",
+    cta: "See a live booking page",
+    demoUrl: DEMO_SLUG ? `/book/${DEMO_SLUG}` : '/book/demo',
   },
 
   faq: {
