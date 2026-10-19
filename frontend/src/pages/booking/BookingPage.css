@@ -27,6 +27,22 @@
 }
 
 /* Header */
+.booking-checkout-recovery {
+  margin: 16px;
+  padding: 16px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-bg-card-subtle);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.booking-checkout-recovery p {
+  margin-block: 6px 12px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
 .booking-card-header {
   display: flex;
   align-items: center;

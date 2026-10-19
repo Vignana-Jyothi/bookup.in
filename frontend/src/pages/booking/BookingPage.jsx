@@ -20,6 +20,7 @@ import {
 import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { cashfreeCheckoutService, isCashfreeV1Enabled } from '../../services/payments/cashfreeCheckout';
+import { bookingPaymentIntent, shouldResetBookingPaymentIntent } from '../../services/payments/bookingPaymentIntent.js';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import {
@@ -174,6 +175,23 @@ export default function PublicBookingPage() {
   const provider = supabaseData?.provider || ((state.provider && state.provider.slug === slug)
     ? state.provider
     : null);
+  const [existingCheckout, setExistingCheckout] = useState(null);
+  useEffect(() => {
+    if (!isCashfreeV1Enabled() || !provider?.slug || isDemo) return undefined;
+    let cancelled = false;
+    cashfreeCheckoutService.getAttempt().then(current => {
+      if (cancelled) return;
+      const active = current?.providerSlug === provider.slug && (
+        current.attemptStatus === 'manual_review' || (
+          current.attemptStatus === 'hold_active'
+          && Date.parse(current.holdExpiresAt) > Date.now()
+          && ['created', 'creation_unknown', 'pending'].includes(current.paymentStatus)
+        )
+      );
+      setExistingCheckout(active ? current : null);
+    }).catch(() => { if (!cancelled) setExistingCheckout(null); });
+    return () => { cancelled = true; };
+  }, [provider?.slug, isDemo]);
 
   const availability = supabaseData?.availability || ((state.provider && state.provider.slug === slug)
     ? state.availability
@@ -552,22 +570,18 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
       : null;
 
     if (isCashfreeV1Enabled() && Number(service.price || 0) > 0 && provider?.id) {
-      const intentFingerprint = `${provider.id}:${service.id}:${selectedDate}:${selectedTime}:${customerInfo.phone.trim()}`;
-      if (cashfreeIntentRef.current?.fingerprint !== intentFingerprint) {
-        cashfreeIntentRef.current = { fingerprint: intentFingerprint, key: crypto.randomUUID() };
-      }
+      cashfreeIntentRef.current = bookingPaymentIntent(cashfreeIntentRef.current, {
+        providerId: provider.id,
+        serviceId: service.id,
+        customerName: customerInfo.name.trim(),
+        customerEmail: customerInfo.email?.trim() || '',
+        customerPhone: customerInfo.phone.trim(),
+        bookingDate: selectedDate,
+        startTime: selectedTime,
+        meetingType: resolvedMeetingType,
+      });
       try {
-        const attempt = await cashfreeCheckoutService.createBookingAttempt({
-          providerId: provider.id,
-          serviceId: service.id,
-          customerName: customerInfo.name.trim(),
-          customerEmail: customerInfo.email?.trim() || '',
-          customerPhone: customerInfo.phone.trim(),
-          bookingDate: selectedDate,
-          startTime: selectedTime,
-          meetingType: resolvedMeetingType,
-          policyAcceptedAt: new Date().toISOString(),
-        }, cashfreeIntentRef.current.key);
+        const attempt = await cashfreeCheckoutService.createBookingAttempt(cashfreeIntentRef.current.payload, cashfreeIntentRef.current.key);
 
         cashfreeCheckoutService.rememberRestartPath(
           attempt.attemptId,
@@ -612,9 +626,9 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
         return;
       } catch (err) {
         console.error('Cashfree booking error:', err);
-        // Definitive rejection must use a new idempotency key. Unknown gateway
-        // outcomes return 202 above and deliberately retain the original key.
-        cashfreeIntentRef.current = null;
+        // A lost response may already have created the hold. Replay exactly the
+        // same request/key until the server gives a definitive outcome.
+        if (shouldResetBookingPaymentIntent(err)) cashfreeIntentRef.current = null;
         setSubmittingBooking(false);
         if (err.code === 'ACTIVE_HOLD_EXISTS') {
           const remaining = Math.max(0, Number(err.details?.remainingSeconds) || 0);
@@ -624,8 +638,8 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
             ? `${minutes}:${String(seconds).padStart(2, '0')}`
             : 'a moment';
           const activeMessage = err.details?.canResume
-            ? `You already have a payment in progress with ${remainingLabel} remaining. Continue it or cancel it safely before restarting.`
-            : `This mobile number already has an active payment hold. Please try again after ${remainingLabel}.`;
+            ? `Your existing checkout has ${remainingLabel} left on its slot hold. Open it to continue or retry payment without creating another booking.`
+            : `This mobile number has an unfinished checkout with ${remainingLabel} left on its slot hold. Return to the browser where you started payment to retry it. If you were charged, contact the merchant before paying again.`;
           setBookingError(activeMessage);
           addToast(activeMessage, 'error');
           if (err.details?.attemptId) {
@@ -854,6 +868,13 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
             <BrandLogo iconOnly size="sm" to={null} />
           </div>
         </header>
+        {existingCheckout?.providerSlug === provider.slug && (
+          <section className="booking-checkout-recovery" aria-label="Existing checkout">
+            <strong>You have an unfinished checkout</strong>
+            <p>Open it to check the result, retry an unsuccessful payment, or close it safely before booking again.</p>
+            <PillButton variant="primary" size="sm" onClick={() => navigate('/payment-status')}>Open existing checkout</PillButton>
+          </section>
+        )}
         {currentStep===1&&<nav className="booking-commerce-links" aria-label="More from this merchant"><Link to={`/book/${encodeURIComponent(slug)}/marketplace`}>Marketplace</Link><Link to={`/book/${encodeURIComponent(slug)}/memberships`}>Memberships</Link></nav>}
 {/* Disabled navigation enhancement (user request):
 {bookingNavigation}

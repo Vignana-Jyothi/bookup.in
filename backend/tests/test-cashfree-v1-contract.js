@@ -57,7 +57,7 @@ for (const fragment of [
   assert(abandonmentSql.includes(fragment), `Checkout abandonment migration is missing: ${fragment}`);
 }
 assert(routeSource.includes("/booking-attempts/:id/checkout-ended"), 'Server must expose the checkout-ended transition');
-assert(routeSource.includes("if (order.order_status !== 'PAID') return context"), 'Reconciliation must preserve closed-unpaid state');
+assert(routeSource.includes("context.paymentStatus !== 'pending'"), 'Active gateway retry hints must not revive closed-unpaid local orders');
 assert(routeSource.includes('getActiveHoldDetails'), 'Active-hold conflicts must include safe remaining-time recovery details');
 assert(activeHoldSql.includes('get_active_hold_conflict_v1'), 'Active-hold recovery must use a server-only RPC');
 assert(activeHoldSql.includes("jsonb_build_object('attemptId', v_attempt.id)"), 'Same-browser active holds must be resumable');
@@ -65,7 +65,7 @@ assert(activeHoldSql.includes("revoke all on function public.get_active_hold_con
 assert(checkoutSource.includes('finishCheckoutReturn'), 'Frontend service must call the checkout-ended transition');
 assert(statusSource.includes("'Payment failed'"), 'Status page must render the failed outcome');
 assert(statusSource.includes('Restart booking'), 'Failed checkout must provide a restart action');
-assert(statusSource.includes('Cancel payment and restart'), 'Active checkout must offer safe cancellation before restart');
+assert(statusSource.includes('Close checkout and check status'), 'Active checkout must offer safe closure before restart');
 for (const fragment of [
   "v_order.payment_status = 'succeeded'",
   "v_order.fulfilment_status = 'fulfilled'",

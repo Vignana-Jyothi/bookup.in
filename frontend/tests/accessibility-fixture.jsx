@@ -52,6 +52,7 @@ export function Fixture() {
   };
   const entry = surface === 'booking' ? '/book/a11y-fixture' : surface === 'customer' ? '/booking-details' : '/dashboard';
   return <MemoryRouter initialEntries={[entry]}><Routes>
+    <Route path="/payment-status" element={<h1>Isolated payment recovery destination</h1>} />
     <Route element={<div className="janjiyuk-workspace-frame" style={{ minHeight: '100vh', padding: 16 }}><Outlet context={{ now: snapshotAt, bookingSync: { updatedAt: snapshotAt, loading: false, error: null } }} /></div>}>
       <Route path={surface === 'booking' ? '/book/:slug' : '*'} element={views[surface] || <p>Unknown fixture</p>} />
     </Route>

@@ -169,8 +169,8 @@ async function authorizeAttempt(req, res, reqId) {
   return withAppointmentMeeting(attempt);
 }
 
-export async function reconcileAttempt(attemptId) {
-  const { data: contextData, error: contextError } = await serviceRoleClient.rpc('get_cashfree_reconciliation_context_v1', {
+export async function reconcileAttempt(attemptId, { database = serviceRoleClient, client = cashfreeClient } = {}) {
+  const { data: contextData, error: contextError } = await database.rpc('get_cashfree_reconciliation_context_v1', {
     p_attempt_id: attemptId,
   });
   if (contextError || !contextData) throw contextError || new Error('Reconciliation context missing');
@@ -179,10 +179,10 @@ export async function reconcileAttempt(attemptId) {
 
   let order;
   try {
-    order = await cashfreeClient.getOrder(context.providerOrderId);
+    order = await client.getOrder(context.providerOrderId);
   } catch (error) {
     if (context.paymentStatus === 'creation_unknown' && error?.outcome === 'definitive' && error?.status === 404) {
-      await serviceRoleClient.rpc('mark_cashfree_order_creation_failed_v1', {
+      await database.rpc('mark_cashfree_order_creation_failed_v1', {
         p_payment_order_id: context.paymentOrderId,
         p_safe_error_code: 'ORDER_NOT_FOUND',
       });
@@ -191,7 +191,7 @@ export async function reconcileAttempt(attemptId) {
     throw error;
   }
   if (context.paymentStatus === 'creation_unknown' && order.payment_session_id) {
-    const { data: marked, error: markError } = await serviceRoleClient.rpc('mark_cashfree_order_created_v1', {
+    const { data: marked, error: markError } = await database.rpc('mark_cashfree_order_created_v1', {
       p_payment_order_id: context.paymentOrderId,
       p_provider_order_id: context.providerOrderId,
       p_payment_session_id: order.payment_session_id,
@@ -201,9 +201,22 @@ export async function reconcileAttempt(attemptId) {
   }
   // Preserve terminal local state. A closed-unpaid order must not look active
   // merely because Cashfree still reports its hosted order as ACTIVE.
-  if (order.order_status !== 'PAID') return context;
+  if (order.order_status !== 'PAID') {
+    // A failed transaction does not close an ACTIVE Cashfree order. Reuse that
+    // checkout for retry instead of creating a second order/15-minute hold.
+    if (order.order_status !== 'ACTIVE' || context.paymentStatus !== 'pending'
+      || context.attemptStatus !== 'hold_active' || Date.parse(context.holdExpiresAt) <= Date.now()
+      || !Number.isFinite(Date.parse(context.holdExpiresAt))) return context;
+    if (amountToPaise(order.order_amount) !== context.amountPaise || order.order_currency !== context.currency) {
+      throw new Error('Authoritative Cashfree amount or currency mismatch');
+    }
+    const payments = await client.getOrderPayments(context.providerOrderId);
+    const retryableFailure = payments.length > 0
+      && payments.every(payment => ['FAILED', 'USER_DROPPED'].includes(payment.payment_status));
+    return { ...context, retryableFailure };
+  }
 
-  const payments = await cashfreeClient.getOrderPayments(context.providerOrderId);
+  const payments = await client.getOrderPayments(context.providerOrderId);
   const payment = findSuccessfulPayment(payments);
   if (!payment) return context;
 
@@ -212,7 +225,7 @@ export async function reconcileAttempt(attemptId) {
     throw new Error('Authoritative Cashfree amount or currency mismatch');
   }
 
-  const { data, error } = await serviceRoleClient.rpc('finalize_verified_payment_v1', {
+  const { data, error } = await database.rpc('finalize_verified_payment_v1', {
     p_payment_order_id: context.paymentOrderId,
     p_provider_order_id: context.providerOrderId,
     p_provider_payment_id: String(payment.cf_payment_id),

@@ -31,10 +31,13 @@ export default function CashfreePaymentStatus() {
     setError('');
   }, [setError]);
 
-  const readAttempt = useCallback(async () => {
+  const readAttempt = useCallback(async (reconciled = null) => {
     try {
       const current = await cashfreeCheckoutService.getAttempt();
-      setAttempt(current);
+      setAttempt(current ? {
+        ...current,
+        retryableFailure: reconciled?.attemptId === current.attemptId && reconciled?.retryableFailure === true,
+      } : null);
       setStatusError(current ? null : 'unavailable');
       setNow(Date.now());
       return current;
@@ -50,8 +53,8 @@ export default function CashfreePaymentStatus() {
     setLoading(true);
     setError('');
     try {
-      await cashfreeCheckoutService.refreshPayment();
-      await readAttempt();
+      const reconciled = await cashfreeCheckoutService.refreshPayment();
+      await readAttempt(reconciled);
     } catch (refreshError) {
       if ([401, 403].includes(refreshError.status)) {
         handleStatusError(refreshError);
@@ -73,12 +76,10 @@ export default function CashfreePaymentStatus() {
     const load = async () => {
       setLoading(true);
       try {
-        if (location.state?.checkoutReturned) {
-          await cashfreeCheckoutService.finishCheckoutReturn();
-        } else {
-          await cashfreeCheckoutService.refreshPayment();
-        }
-        if (!cancelled) await readAttempt();
+        const reconciled = location.state?.checkoutReturned
+          ? await cashfreeCheckoutService.finishCheckoutReturn()
+          : await cashfreeCheckoutService.refreshPayment();
+        if (!cancelled) await readAttempt(reconciled);
       } catch (error) {
         if (!cancelled) {
           if ([401, 403].includes(error.status)) handleStatusError(error);
@@ -115,6 +116,7 @@ export default function CashfreePaymentStatus() {
     : `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
   const holdProtected = pending && attempt.attemptStatus === 'hold_active' && remainingSeconds > 0;
   const holdExpired = pending && (['released', 'expired'].includes(attempt.attemptStatus) || remainingSeconds === 0);
+  const retryableFailure = holdProtected && attempt.retryableFailure;
   const restartPath = /^[A-Za-z0-9._~-]+$/.test(attempt?.providerSlug || '')
     ? `/book/${attempt.providerSlug}`
     : cashfreeCheckoutService.getRestartPath();
@@ -193,7 +195,8 @@ export default function CashfreePaymentStatus() {
       : failed
         ? 'Payment failed'
         : unknown ? 'Payment outcome is unknown'
-          : holdExpired ? 'Your slot hold has expired' : 'Confirming your payment';
+          : holdExpired ? 'Your slot hold has expired'
+            : retryableFailure ? 'Your payment attempt was unsuccessful' : 'Confirming your payment';
 
   return (
     <main className={`payment-status-page ${fulfilled ? 'payment-status-page--receipt' : ''}`}>
@@ -212,7 +215,8 @@ export default function CashfreePaymentStatus() {
             {unknown && 'We could not determine the payment outcome from the available details. Check again or contact your merchant with your payment reference before paying again.'}
             {unavailable && 'We cannot confirm your payment or appointment reservation from this browser. Return to the browser where you started checkout and try again. If you were charged, contact your merchant with your payment reference before paying again.'}
             {!attempt && !unavailable && 'Loading the latest available payment details. Your payment and appointment reservation are not confirmed yet.'}
-            {pending && (holdProtected
+            {retryableFailure && 'You can retry payment now using the same checkout. Your slot hold is not a retry waiting period; it lasts only until the deadline below. Your appointment is not confirmed yet.'}
+            {pending && !retryableFailure && (holdProtected
               ? 'Payment is not confirmed. Your slot is temporarily protected until the hold deadline shown below. This page checks for updates automatically.'
               : 'Your appointment reservation is not confirmed. No active slot hold is confirmed. We will check for payment updates automatically. If you were charged, contact your merchant before paying again.')}
           </p>
@@ -239,7 +243,7 @@ export default function CashfreePaymentStatus() {
             {unavailable && <Link className="payment-status-button" to="/booking-status">Find your booking</Link>}
             {pending && holdProtected && attempt?.paymentSessionId && (
               <button className="payment-status-button payment-status-button--primary" type="button" onClick={continuePayment} disabled={openingCheckout || loading}>
-                {openingCheckout ? 'Opening…' : 'Continue payment'}
+                {openingCheckout ? 'Opening…' : retryableFailure ? 'Retry payment' : 'Continue payment'}
               </button>
             )}
             {pending && <button className="payment-status-button" type="button" onClick={cancelAndRestart} disabled={loading || openingCheckout}>{loading ? 'Checking…' : 'Close checkout and check status'}</button>}

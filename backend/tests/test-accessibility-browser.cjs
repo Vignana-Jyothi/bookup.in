@@ -64,6 +64,9 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
       if (scenario === 'dispute') Object.assign(item, { status: 'no-show', customerNoShowAt: new Date().toISOString() });
     }
     globalThis.__CALUP_A11Y_FIXTURE__ = { state, data };
+    if (scenario === 'checkout-retry') {
+      for (const service of [...data.services, ...state.services, data.service]) service.price = 500;
+    }
     if (scenario === 'operations') {
       state.services.push({ ...data.service, id: 'other-service', name: 'Other consultation' });
       state.bookings = Array.from({ length: 15 }, (_, index) => ({ ...data.booking, id: 'operation-' + index, bookingId: 'M' + String(123456780 + index), customerName: 'Client ' + String(index).padStart(2, '0') }));
@@ -85,6 +88,21 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
     if (modulePath.endsWith('/services/supabase/supabaseClient')) return js(`export const isSupabaseConfigured=()=>true; export const supabase={auth:{getUser:async()=>({data:{user:{id:'fixture-user'}}}),getSession:async()=>({data:{session:null}})}};`);
     if (modulePath.endsWith('/components/support/SupportWidget')) return js('export default function SupportStub(){return null;}');
     if (modulePath.endsWith('/services/payments/subscriptionService')) return js('export const subscriptionService={get:async()=>({})};');
+    if (modulePath.endsWith('/services/payments/cashfreeCheckout')) return js(`
+      export const isCashfreeV1Enabled=()=>true;
+      const fixture=globalThis.__CALUP_A11Y_FIXTURE__;
+      export const cashfreeCheckoutService={
+        getAttempt:async()=>new URLSearchParams(location.search).get('scenario')==='existing-checkout'
+          ? {attemptId:'fixture-attempt',providerSlug:'a11y-fixture',attemptStatus:'hold_active',paymentStatus:'pending',holdExpiresAt:new Date(Date.now()+60000).toISOString()}:null,
+        createBookingAttempt:async(input,key)=>{
+          fixture.checkoutCalls ||= []; fixture.checkoutCalls.push({input,key});
+          if(fixture.checkoutCalls.length===1)throw new TypeError('Network response lost');
+          return {attemptId:'fixture-attempt',paymentSessionId:'fixture-session'};
+        },
+        rememberRestartPath:()=>{},
+        openHostedPopup:async()=>{fixture.openedCheckout=true;return {redirect:true};}
+      };
+    `);
     if (modulePath.endsWith('/services/merchant/merchantSchedulingService')) return js(`export const merchantSchedulingService={load:async()=>({instructors:globalThis.__CALUP_A11Y_FIXTURE__.data.instructors})};`);
     if (modulePath.endsWith('/services/booking/customerBookingService')) return js(`export const customerBookingService={getBooking:async()=>globalThis.__CALUP_A11Y_FIXTURE__.data,getTrackingStatus:async()=>globalThis.__CALUP_A11Y_FIXTURE__.data};`);
     if (modulePath.endsWith('/services/calendar/RealGoogleCalendarProvider')) return js(`export const realGoogleCalendarService={getBusyTimes:async()=>[]};`);
@@ -259,6 +277,33 @@ export const dbService = new Proxy({}, { get: (_, name) => async () => {
     assert(await page.locator(`#${errorId}`).isVisible());
     await page.screenshot({ path: path.join(output, 'booking-form-desktop.png') });
     await pass('Real customer booking: service/date/time selection, associated labels and inline error description');
+
+    await open('booking', 390, 'existing-checkout');
+    const recovery = page.getByRole('region', { name: 'Existing checkout', exact: true });
+    assert(await recovery.isVisible(), 'An owned unfinished checkout is recoverable before choosing another slot');
+    await page.screenshot({ path: path.join(output, 'existing-checkout-recovery-390.png') });
+    await recovery.getByRole('button', { name: 'Open existing checkout', exact: true }).click();
+    await page.getByRole('heading', { name: 'Isolated payment recovery destination', exact: true }).waitFor();
+    await pass('New booking: owned unfinished checkout has a recovery action before slot selection');
+
+    await open('booking', 1366, 'checkout-retry');
+    await page.getByRole('button', { name: /Test consultation/ }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.locator('.cal-strip-day-btn:not([disabled])').filter({ hasText: String(date.getDate()) }).first().click();
+    await page.locator('.timeslot-row:not([disabled])').first().click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByLabel('Full Name *', { exact: true }).fill('Test Customer');
+    await page.getByLabel('WhatsApp / Phone *', { exact: true }).fill('9876543210');
+    await page.getByRole('checkbox', { name: 'I agree to the cancellation and refund policy *', exact: true }).check();
+    await page.getByRole('button', { name: /Confirm Booking/ }).click();
+    await page.waitForFunction(() => globalThis.__CALUP_A11Y_FIXTURE__.checkoutCalls?.length === 1);
+    await page.getByRole('button', { name: /Confirm Booking/ }).click();
+    await page.getByRole('heading', { name: 'Isolated payment recovery destination', exact: true }).waitFor();
+    const retried = await page.evaluate(() => ({ calls: globalThis.__CALUP_A11Y_FIXTURE__.checkoutCalls, opened: globalThis.__CALUP_A11Y_FIXTURE__.openedCheckout }));
+    assert.equal(retried.calls.length, 2);
+    assert.deepEqual(retried.calls[0], retried.calls[1], 'Lost-response retry sends identical payload, consent timestamp and key');
+    assert(retried.opened, 'Retry recovers the existing checkout');
+    await pass('New booking after lost response: same key/request retries successfully without a second reservation');
 
     await open('customer');
     const reschedule = page.getByRole('button', { name: 'Reschedule Appointment', exact: true });

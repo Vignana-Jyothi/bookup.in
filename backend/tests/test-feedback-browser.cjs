@@ -15,8 +15,9 @@ async function main() {
   const errors = [];
   try {
     await context.addInitScript(() => {
-      window.feedback = { mode: 'fail', toasts: [], refreshes: 0, writes: 0 };
+      window.feedback = { mode: 'fail', toasts: [], refreshes: 0, writes: 0, openedSessions: [] };
       window.attempt = { attemptId: 'fixture', paymentStatus: 'pending', attemptStatus: 'hold_active', holdExpiresAt: new Date(Date.now() + 60000).toISOString(), paymentSessionId: 'fixture' };
+      window.attempt.retryableFailure = new URLSearchParams(location.search).get('scenario') === 'failed-payment';
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
         writeText: async () => {
           window.feedback.writes++;
@@ -53,7 +54,7 @@ async function main() {
       if (pathname.endsWith('/services/supabase/supabaseClient')) return js('export const isSupabaseConfigured=()=>true;');
       if (pathname.endsWith('/services/supabase/dbService')) return js(`export const dbService={saveAvailability:async()=>{await new Promise(r=>setTimeout(r,100));if(window.feedback.mode==='fail')throw new Error('Offline');return true;}};`);
       if (pathname.endsWith('/services/booking/merchantSchedulingService')) return js('export const merchantSchedulingService={load:async()=>({instructors:[]})};');
-      if (pathname.endsWith('/services/payments/cashfreeCheckout')) return js(`export const cashfreeCheckoutService={refreshPayment:async()=>{window.feedback.refreshes++},getAttempt:async()=>window.attempt,getRestartPath:()=>'/'};`);
+      if (pathname.endsWith('/services/payments/cashfreeCheckout')) return js(`export const cashfreeCheckoutService={refreshPayment:async()=>{window.feedback.refreshes++;return window.attempt},getAttempt:async()=>window.attempt,getRestartPath:()=>'/book/fixture',getCheckoutSession:async()=>window.attempt,openHostedPopup:async session=>{window.feedback.openedSessions.push(session.paymentSessionId);return {redirect:true}}};`);
       if (pathname.endsWith('/hooks/usePopupFeedback')) return js(`const clear=()=>{}; export const usePopupFeedback=()=>['',clear];`);
       if (['/components/dashboard/CommerceManager','/components/support/TicketPanel','/components/ui/receipt-printer/BookingReceipt'].some(s=>pathname.endsWith(s))) return js('export default function Stub(){return null;}');
       if (pathname.startsWith('/api/')) throw new Error('Unexpected API request in isolated test');
@@ -62,8 +63,8 @@ async function main() {
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
     page.on('pageerror', error => errors.push(error.message));
-    const open = async surface => {
-      await page.goto(`${origin}/tests/feedback-harness?surface=${surface}`, { waitUntil: 'networkidle' });
+    const open = async (surface, scenario = '') => {
+      await page.goto(`${origin}/tests/feedback-harness?surface=${surface}&scenario=${scenario}`, { waitUntil: 'networkidle' });
       assert.deepEqual(errors, [], 'Fixture modules load without errors');
     };
     await open('availability');
@@ -92,6 +93,14 @@ async function main() {
       assert.equal(await page.getByRole('alert').count(), 0);
     }
     console.log('PASS browser: both clipboard failures select the link; retries show one success.');
+
+    await open('payment', 'failed-payment');
+    await page.getByRole('heading', { name: 'Your payment attempt was unsuccessful', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Retry payment', exact: true }).click();
+    await page.waitForFunction(() => feedback.openedSessions.length === 1);
+    assert.deepEqual(await page.evaluate(() => feedback.openedSessions), ['fixture']);
+    assert.equal(await page.getByRole('link', { name: 'Restart booking', exact: true }).count(), 0);
+    console.log('PASS browser: unsuccessful payment retries immediately through the existing session without another booking/hold.');
 
     await page.clock.install();
     await open('payment');

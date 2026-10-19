@@ -25,6 +25,7 @@ function pageHarness() {
   let result = accessError;
   const timers = new Map();
   let refreshes = 0;
+  const openedSessions = [];
   const respond = async () => { if (result instanceof Error) throw result; return result; };
   const env = {
     ...runtime,
@@ -44,6 +45,7 @@ function pageHarness() {
     cashfreeCheckoutService: {
       refreshPayment: async () => { refreshes++; return respond(); }, getAttempt: respond, finishCheckoutReturn: respond,
       getCheckoutSession: respond, getRestartPath: () => '/',
+      openHostedPopup: async session => { openedSessions.push(session.paymentSessionId); return {}; },
     },
     BrandLogo: () => null, TicketPanel: () => null, BookingReceipt: () => null,
     Link: ({ children }) => React.createElement('a', null, children),
@@ -57,7 +59,7 @@ function pageHarness() {
     return React.Children.toArray(node.props?.children).map(child => button(label, child)).find(Boolean);
   };
   return {
-    text, notifications, accessError,
+    text, notifications, accessError, openedSessions,
     setResult(value) { result = value; },
     get refreshes() { return refreshes; },
     startPoll() { render(); return effects.at(-1)(); },
@@ -150,4 +152,15 @@ assert.equal(pollingPage.refreshes, before + 1, 'Timer reconciles on the server'
 assert.match(pollingPage.text(), /Your appointment is confirmed/);
 stopPoll();
 assert.equal(pollingPage.startPoll(), undefined, 'Final state stops polling');
+const retryPage = pageHarness();
+retryPage.setResult({ ...pending, retryableFailure: true });
+await retryPage.load();
+assert.match(retryPage.text(), /Your payment attempt was unsuccessful/);
+assert.match(retryPage.text(), /retry payment now using the same checkout/);
+assert.doesNotMatch(retryPage.text(), /Restart booking/);
+await retryPage.click('Retry payment');
+assert.deepEqual(retryPage.openedSessions, ['test-session'], 'Retry opens the existing checkout session');
+retryPage.setResult({ ...pending, retryableFailure: false });
+await retryPage.click('Check again');
+assert.doesNotMatch(retryPage.text(), /Retry payment|attempt was unsuccessful/);
 console.log('PASS: payment session recovery, retry, lost access, unavailable data, hold deadlines and terminal states.');
