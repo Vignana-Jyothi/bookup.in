@@ -20,14 +20,28 @@ export default function CashfreePaymentStatus() {
   const [attempt, setAttempt] = useState(null);
   const [, setError] = usePopupFeedback();
   const [loading, setLoading] = useState(true);
+  const [statusError, setStatusError] = useState(null);
   const [openingCheckout, setOpeningCheckout] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
+  const handleStatusError = useCallback(error => {
+    setAttempt(null);
+    setStatusError([401, 403].includes(error?.status) ? 'access' : 'unavailable');
+    setError('');
+  }, [setError]);
+
   const readAttempt = useCallback(async () => {
-    const current = await cashfreeCheckoutService.getAttempt();
-    setAttempt(current);
-    return current;
-  }, []);
+    try {
+      const current = await cashfreeCheckoutService.getAttempt();
+      setAttempt(current);
+      setStatusError(current ? null : 'unavailable');
+      setNow(Date.now());
+      return current;
+    } catch (error) {
+      handleStatusError(error);
+      throw error;
+    }
+  }, [handleStatusError]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -36,15 +50,19 @@ export default function CashfreePaymentStatus() {
       await cashfreeCheckoutService.refreshPayment();
       await readAttempt();
     } catch (refreshError) {
+      if ([401, 403].includes(refreshError.status)) {
+        handleStatusError(refreshError);
+        return;
+      }
       try {
         await readAttempt();
-      } catch {
-        setError(refreshError.message || 'Payment status is temporarily unavailable.');
+      } catch (readError) {
+        handleStatusError(readError);
       }
     } finally {
       setLoading(false);
     }
-  }, [readAttempt, setError]);
+  }, [readAttempt, setError, handleStatusError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,15 +75,18 @@ export default function CashfreePaymentStatus() {
           await cashfreeCheckoutService.refreshPayment();
         }
         if (!cancelled) await readAttempt();
-      } catch {
-        if (!cancelled) await refresh();
+      } catch (error) {
+        if (!cancelled) {
+          if ([401, 403].includes(error.status)) handleStatusError(error);
+          else await refresh();
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [location.state?.checkoutReturned, readAttempt, refresh]);
+  }, [location.state?.checkoutReturned, readAttempt, refresh, handleStatusError]);
 
   const fulfilled = attempt?.paymentStatus === 'succeeded' && attempt?.fulfilmentStatus === 'fulfilled';
   const unfulfilled = attempt?.paymentStatus === 'succeeded' && attempt?.fulfilmentStatus === 'unfulfilled';
@@ -73,7 +94,8 @@ export default function CashfreePaymentStatus() {
     ['creation_failed', 'closed_unpaid'].includes(attempt?.paymentStatus) ||
     ['released', 'expired'].includes(attempt?.attemptStatus)
   );
-  const pending = !fulfilled && !unfulfilled && !failed;
+  const pending = Boolean(attempt) && !statusError && !fulfilled && !unfulfilled && !failed;
+  const unavailable = Boolean(statusError) || (!loading && !attempt);
   const noticeShown = useRef(null);
   useEffect(() => {
     if (pending && location.state?.notice && noticeShown.current !== location.key) {
@@ -87,6 +109,7 @@ export default function CashfreePaymentStatus() {
   const remainingLabel = remainingSeconds === null
     ? null
     : `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+  const holdProtected = pending && attempt.attemptStatus === 'hold_active' && remainingSeconds > 0;
   const restartPath = /^[A-Za-z0-9._~-]+$/.test(attempt?.providerSlug || '')
     ? `/book/${attempt.providerSlug}`
     : cashfreeCheckoutService.getRestartPath();
@@ -114,7 +137,8 @@ export default function CashfreePaymentStatus() {
       else await cashfreeCheckoutService.finishCheckoutReturn();
       await readAttempt();
     } catch (checkoutError) {
-      setError(checkoutError.message || 'Checkout could not be finalized.');
+      if ([401, 403].includes(checkoutError.status)) handleStatusError(checkoutError);
+      else setError(checkoutError.message || 'Checkout could not be finalized.');
     } finally {
       setOpeningCheckout(false);
     }
@@ -130,7 +154,8 @@ export default function CashfreePaymentStatus() {
         setError('Calup could not safely close this payment yet because Cashfree verification is still in progress. Please check again shortly.');
       }
     } catch (cancelError) {
-      setError(cancelError.message || 'The payment could not be safely cancelled yet.');
+      if ([401, 403].includes(cancelError.status)) handleStatusError(cancelError);
+      else setError(cancelError.message || 'The payment could not be safely cancelled yet.');
     } finally {
       setLoading(false);
     }
@@ -142,7 +167,11 @@ export default function CashfreePaymentStatus() {
     return () => window.clearInterval(timer);
   }, [pending]);
 
-  const title = fulfilled
+  const title = unavailable
+    ? statusError === 'access' ? 'We couldn’t access your payment session' : 'Payment status is unavailable'
+    : !attempt
+      ? 'Loading your payment session'
+      : fulfilled
     ? 'Your appointment is confirmed'
     : unfulfilled
       ? 'Payment received — review started'
@@ -155,15 +184,19 @@ export default function CashfreePaymentStatus() {
       <section className="payment-status-card" aria-labelledby="payment-status-title">
         <div className="payment-status-summary">
           <BrandLogo />
-          <div className={`payment-status-icon ${fulfilled ? 'is-success' : failed ? 'is-failed' : 'is-pending'}`} aria-hidden="true">
-            {fulfilled ? '✓' : failed ? '×' : '…'}
+          <div className={`payment-status-icon ${fulfilled ? 'is-success' : failed || unavailable ? 'is-failed' : 'is-pending'}`} aria-hidden="true">
+            {fulfilled ? '✓' : unavailable ? '?' : failed ? '×' : '…'}
           </div>
           <h1 id="payment-status-title">{title}</h1>
           <p className="payment-status-copy">
             {fulfilled && 'Your payment is verified and the appointment is reserved. Keep the booking ID below for support.'}
             {unfulfilled && 'The slot was no longer available when payment was confirmed. Calup has opened a resolution case for review and refund.'}
             {failed && 'The payment was not completed. Your temporary slot hold has been released. Restart the booking process to try again.'}
-            {pending && 'We are checking Cashfree directly. Your slot remains protected while verification is in progress.'}
+            {unavailable && 'We cannot confirm your payment or appointment reservation from this browser. Return to the browser where you started checkout and try again. If you were charged, contact your merchant with your payment reference before paying again.'}
+            {!attempt && !unavailable && 'Loading the latest available payment details. Your payment and appointment reservation are not confirmed yet.'}
+            {pending && (holdProtected
+              ? 'We are checking Cashfree directly. Your slot is temporarily protected until the hold deadline shown below.'
+              : 'We are checking Cashfree directly. Your appointment reservation is not confirmed. No active slot hold is confirmed.')}
           </p>
 
           {fulfilled && attempt?.receipt?.bookingId && (
@@ -172,7 +205,7 @@ export default function CashfreePaymentStatus() {
               <strong>{attempt.receipt.bookingId}</strong>
             </div>
           )}
-          {attempt?.holdExpiresAt && pending && (
+          {holdProtected && (
             <dl className="payment-status-meta">
               <div><dt>Time remaining</dt><dd>{remainingLabel}</dd></div>
               <div><dt>Hold deadline</dt><dd>{new Date(attempt.holdExpiresAt).toLocaleString()}</dd></div>
@@ -184,6 +217,8 @@ export default function CashfreePaymentStatus() {
           )}
 
           <div className="payment-status-actions">
+            {unavailable && <button className="payment-status-button payment-status-button--primary" type="button" onClick={refresh} disabled={loading}>{loading ? 'Checking…' : 'Try again'}</button>}
+            {unavailable && <Link className="payment-status-button" to="/booking-status">Find your booking</Link>}
             {pending && attempt?.paymentSessionId && (
               <button className="payment-status-button payment-status-button--primary" type="button" onClick={continuePayment} disabled={openingCheckout}>
                 {openingCheckout ? 'Opening…' : 'Continue payment'}

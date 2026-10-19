@@ -30,6 +30,7 @@ const testFiles = [
   'backend/tests/test-subscription-v1-contract.js',
   'backend/tests/test-cashfree-client.js',
   'backend/tests/test-cashfree-checkout-sdk.js',
+  'backend/tests/test-payment-status-recovery.js',
   'backend/tests/test-cashfree-booking-session.js',
   'backend/tests/test-cashfree-v1-contract.js',
   'backend/tests/test-cashfree-public-availability.js',
