@@ -44,11 +44,20 @@ backend/server/data/tokens.json
 
 # Local Python tooling environment
 .venv/
+__pycache__/
+*.py[cod]
+
+# Local deployment/design tool state and generated test reports
+.vercel/
+.impeccable/
+coverage/
+playwright-report/
+test-results/
 
 #additional files for reference 
 guides
 tasks
-.npm-cache-fresh
+.npm-cache*/
 AGENTS.md
 # trial-ui-components
 
@@ -56,5 +65,9 @@ AGENTS.md
 product.md
 deply_plan.pdf
 
-# Generated college migration source exports and verification snapshots
-/artifacts/college-migration/
+# Generated screenshots, reports and migration exports stay local.
+# Preserve the reusable legacy manual QA scripts, not their output.
+/artifacts/*
+!/artifacts/responsiveness-20261019/
+/artifacts/responsiveness-20261019/*
+!/artifacts/responsiveness-20261019/*.cjs

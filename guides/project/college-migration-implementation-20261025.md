@@ -50,4 +50,8 @@ The export uses existing installed dependencies resolved through parent director
 
 ## Next execution
 
+### Generated-file cleanup
+
+The follow-up cleanup untracks 103 generated/tool/local-reference files (10,141,268 bytes) while preserving every local file and checksum. Seven responsiveness QA scripts stay versioned. Ignore rules now cover artifact outputs, Vercel/design metadata, Python bytecode and test/cache folders; existing `.env.example`, source, tests and deployment configuration stay tracked. Build, 12 isolated suites, Compose configuration, guide checks and whitespace checks pass after the generated-file cleanup. The two local-reference files were also checked for absent runtime/build references. Previous source-export inventories above describe their named historical revisions. Network, engine, server and database verification limits are unchanged.
+
 From a terminal with GitHub access, push `migration/college-docker` to the source repository to run hosted validation. Fetch college main and review/reconcile the migration branch against it. With the engine/server/configuration checks complete and CI passing, promote the reviewed release to college main and verify the deployed revision at calup.app. Keep Vercel and Render enabled. The local branch is prepared; production migration is not complete.
