@@ -5,6 +5,7 @@
  */
 
 import crypto from 'crypto';
+import { boundedFetch } from '../utils/boundedFetch.js';
 import { config } from '../config.js';
 import { tokenStore } from './tokenStore.js';
 import { generateOAuthState, verifyOAuthState } from '../utils/crypto.js';
@@ -28,7 +29,7 @@ const normalizeEmail = value => String(value || '').trim().toLowerCase();
 
 async function revokeIssuedToken(token) {
   if (!token) return;
-  await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => null);
+  await boundedFetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => null);
 }
 
 async function getProviderEmail(providerId) {
@@ -47,7 +48,7 @@ async function calendarEventResult(eventData, accessToken, requireMeet = true) {
   let videoEntry = current?.conferenceData?.entryPoints?.find?.(entry => entry.entryPointType === 'video');
   for (let lookup = 0; requireMeet && !videoEntry?.uri && !current?.hangoutLink && lookup < 3; lookup += 1) {
     await new Promise(resolve => setTimeout(resolve, 250 * (lookup + 1)));
-    const response = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(current.id)}`, {
+    const response = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(current.id)}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) break;
@@ -126,7 +127,7 @@ export const googleCalendarService = {
     }
 
     // Exchange authorization code for tokens
-    const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
+    const tokenRes = await boundedFetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -149,7 +150,7 @@ export const googleCalendarService = {
 
     // The selected Google identity becomes the organizer and Meet host. It must
     // match the merchant email saved during onboarding/settings.
-    const userRes = await fetch(GOOGLE_USERINFO_URL, {
+    const userRes = await boundedFetch(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${access_token}` },
     });
     if (!userRes.ok) {
@@ -198,7 +199,7 @@ export const googleCalendarService = {
     }
 
     const accessToken = tokenDetails.accessToken;
-    const identityResponse = await fetch(GOOGLE_USERINFO_URL, {
+    const identityResponse = await boundedFetch(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!identityResponse.ok) {
@@ -214,7 +215,7 @@ export const googleCalendarService = {
 
     const now = new Date();
     const timeMax = new Date(now.getTime() + 60 * 1000);
-    const calendarResponse = await fetch(`${CALENDAR_API_BASE}/freeBusy`, {
+    const calendarResponse = await boundedFetch(`${CALENDAR_API_BASE}/freeBusy`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -306,7 +307,7 @@ export const googleCalendarService = {
     }
 
     try {
-      const refreshRes = await fetch(GOOGLE_TOKEN_URL, {
+      const refreshRes = await boundedFetch(GOOGLE_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -383,7 +384,7 @@ export const googleCalendarService = {
     const timeMax = `${dateStr}T23:59:59${offset}`;
 
     try {
-      const freeBusyRes = await fetch(`${CALENDAR_API_BASE}/freeBusy`, {
+      const freeBusyRes = await boundedFetch(`${CALENDAR_API_BASE}/freeBusy`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -517,7 +518,7 @@ export const googleCalendarService = {
           },
         };
       }
-      const res = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events?${query.toString()}`, {
+      const res = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events?${query.toString()}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -527,7 +528,7 @@ export const googleCalendarService = {
       });
 
       if (res.status === 409) {
-        const existing = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events/${deterministicEventId}`, {
+        const existing = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events/${deterministicEventId}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (existing.ok) return calendarEventResult(await existing.json(), accessToken, isOnline);
@@ -562,7 +563,7 @@ export const googleCalendarService = {
     const endDateTime = `${booking.date}T${booking.endTime}:00${offset}`;
 
     try {
-      const res = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      const res = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -599,7 +600,7 @@ export const googleCalendarService = {
     const accessToken = tokenDetails.accessToken;
 
     try {
-      const res = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      const res = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -629,7 +630,7 @@ export const googleCalendarService = {
     const tokens = await tokenStore.getDecryptedTokens(providerId);
     if (tokens?.accessToken) {
       try {
-        await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(tokens.accessToken)}`, {
+        await boundedFetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(tokens.accessToken)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });

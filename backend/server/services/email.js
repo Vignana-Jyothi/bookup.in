@@ -20,6 +20,7 @@ export class EmailService {
     this._apiKey = options.apiKey !== undefined ? options.apiKey : null;
     this._fromEmail = options.fromEmail !== undefined ? options.fromEmail : null;
     this._client = options.client || null;
+    this.timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 10000;
   }
 
   get apiKey() {
@@ -46,6 +47,24 @@ export class EmailService {
     }
 
     return new Resend(this.apiKey.trim());
+  }
+
+  /** One SDK send; deadline covers its fetch and body parsing without retrying delivery. */
+  async sendEmail(client, payload) {
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new DOMException('Email request timed out', 'TimeoutError');
+        reject(error);
+        controller.abort(error);
+      }, this.timeoutMs);
+    });
+    try {
+      return await Promise.race([client.emails.send(payload, { signal: controller.signal }), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -171,7 +190,7 @@ ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
 A calendar invite (.ics) has been attached to this email.
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -313,7 +332,7 @@ Hi ${providerName || 'Coach'}, your appointment with ${customerName} has been co
 ${meetLink ? `- Google Meet Link: ${meetLink}` : '- Google Calendar is not connected. Please share your meeting link directly with the client.'}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -456,7 +475,7 @@ Hi ${providerName || 'Coach'}, you have a new booking from ${customerName} await
 ${amount ? `- Amount: ₹${amount}\n` : ''}${screenshotUrl ? `- Payment Screenshot: ${screenshotUrl}\n` : ''}${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}\n` : ''}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -574,7 +593,7 @@ Hi ${customerName || 'there'}, your slot is booked — waiting for payment confi
 Once your coach verifies and confirms your payment, you will receive your Google Meet link and session confirmation.
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -699,7 +718,7 @@ Time: ${startTime} (${duration} mins)
 ${meetLink ? `Google Meet Link: ${meetLink}` : ''}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -837,7 +856,7 @@ ${meetLink ? `- Google Meet Link: ${meetLink}` : ''}
 ${managementUrl ? `- Manage Appointment: ${managementUrl}` : ''}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -989,7 +1008,7 @@ Hi ${providerName || 'Coach'}, ${customerName} has submitted payment details:
 ${screenshotUrl ? `- Screenshot: ${screenshotUrl}\n` : ''}${dashboardUrl ? `- Review in Dashboard: ${dashboardUrl}\n` : ''}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -1102,7 +1121,7 @@ Please contact ${providerName} directly:
 - Phone: ${providerPhone || 'N/A'}
       `.trim();
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -1187,7 +1206,7 @@ Please contact ${providerName} directly:
 
       const text = `Appointment ${statusLabel}\n\nHi ${recipientName || 'there'},\n\nService: ${serviceName}\nDate: ${bookingDate}\nTime: ${startTime} (${duration} mins)\nStatus: ${statusLabel}\n${isLate ? '\n⚠️ Late cancellation — fees may apply.' : ''}`;
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -1278,7 +1297,7 @@ Please contact ${providerName} directly:
 
       const text = `Appointment Rescheduled\n\nHi ${recipientName || 'there'},\n\nService: ${serviceName}\n\nPrevious: ${oldDate} at ${oldTime}\nNew: ${newDate} at ${newTime} (${duration} mins)`;
 
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
@@ -1318,7 +1337,7 @@ Please contact ${providerName} directly:
 
     try {
       const client = this.getClient();
-      const { data, error } = await client.emails.send({
+      const { data, error } = await this.sendEmail(client, {
         from: this.fromEmail,
         to: [to.trim()],
         subject,
