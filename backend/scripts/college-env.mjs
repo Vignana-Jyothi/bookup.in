@@ -24,6 +24,12 @@ const privateNames = [
   'CASHFREE_CUSTOMER_MEMBERSHIPS_CLIENT_SECRET',
 ];
 
+// The workflow exposes named settings only; unrelated runner/GitHub tokens stay out.
+export function readCollegeEnvironment(source = process.env) {
+  const names = [...publicNames, ...privateNames, 'NEXT_PUBLIC_SUPABASE_URL'];
+  return Object.fromEntries(names.filter(name => source[name] !== undefined).map(name => [name, source[name]]));
+}
+
 function httpsUrl(value, name, originOnly = false) {
   let url;
   try { url = new URL(value); } catch { throw new Error(`Invalid ${name}`); }
@@ -133,16 +139,18 @@ export async function writeCollegeEnvironment(settings, directory = '.') {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const fixture = process.argv.includes('--fixture');
+    const fromEnv = process.argv.includes('--from-env');
+    if (fixture && fromEnv) throw new Error('Choose either --fixture or --from-env');
     if (fixture) {
       for (const name of ['.env', '.env.backend']) {
         const exists = await access(name).then(() => true, () => false);
         if (exists) throw new Error(`Fixture writer requires a clean checkout; refusing to replace ${name}`);
       }
     }
-    if (!fixture && !process.env.CALUP_DEPLOY_SECRETS) throw new Error('CALUP_DEPLOY_SECRETS is required; local .env is not imported');
+    if (!fixture && !fromEnv && !process.env.CALUP_DEPLOY_SECRETS) throw new Error('Use --from-env or provide CALUP_DEPLOY_SECRETS JSON; local .env is not imported');
     const settings = prepareCollegeEnvironment({
-      secrets: fixture ? fixtureSettings : JSON.parse(process.env.CALUP_DEPLOY_SECRETS),
-      variables: JSON.parse(process.env.CALUP_DEPLOY_VARIABLES || '{}'), fixture,
+      secrets: fixture ? fixtureSettings : fromEnv ? readCollegeEnvironment() : JSON.parse(process.env.CALUP_DEPLOY_SECRETS),
+      variables: fromEnv ? {} : JSON.parse(process.env.CALUP_DEPLOY_VARIABLES || '{}'), fixture,
     });
     await writeCollegeEnvironment(settings);
     console.log('Validated public build settings and backend-only runtime settings written.');

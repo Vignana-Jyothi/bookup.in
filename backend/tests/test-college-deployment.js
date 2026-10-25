@@ -2,7 +2,22 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { prepareCollegeEnvironment, writeCollegeEnvironment, fixtureSettings } from '../scripts/college-env.mjs';
+import { prepareCollegeEnvironment, readCollegeEnvironment, writeCollegeEnvironment, fixtureSettings } from '../scripts/college-env.mjs';
+
+const namedInput = readCollegeEnvironment({
+  ...fixtureSettings, GOOGLE_CLIENT_ID: 'fixture-google-id', GOOGLE_CLIENT_SECRET: 'fixture-google-secret',
+  NEXT_PUBLIC_SUPABASE_URL: fixtureSettings.VITE_SUPABASE_URL,
+  GITHUB_TOKEN: 'unrelated-github-token', VERCEL_TOKEN: 'unrelated-vercel-token',
+  UNRELATED_SECRET: 'unrelated-secret', VITE_UNDECLARED_KEY: 'unlisted-public-setting',
+});
+assert.equal(namedInput.GOOGLE_CLIENT_SECRET, 'fixture-google-secret');
+assert.equal(namedInput.NEXT_PUBLIC_SUPABASE_URL, fixtureSettings.VITE_SUPABASE_URL);
+for (const name of ['GITHUB_TOKEN', 'VERCEL_TOKEN', 'UNRELATED_SECRET', 'VITE_UNDECLARED_KEY']) {
+  assert(!(name in namedInput), `${name} must not enter deployment configuration`);
+}
+assert.equal(prepareCollegeEnvironment({ secrets: namedInput, fixture: true }).backend.GOOGLE_CLIENT_ID, 'fixture-google-id');
+const deploymentWorkflow = await readFile('.github/workflows/deploy-main.yml', 'utf8');
+assert(!/toJSON\s*\(\s*(secrets|vars)\s*\)/.test(deploymentWorkflow), 'Workflow must not serialize entire repository contexts');
 
 const fixture = variables => prepareCollegeEnvironment({ secrets: fixtureSettings, variables, fixture: true });
 const prepared = fixture({ VERCEL_TOKEN: 'not-an-application-setting', VITE_API_URL: 'https://obsolete-api.example' });
