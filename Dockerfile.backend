@@ -11,6 +11,7 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node backend/server/ ./backend/server/
 USER node
 EXPOSE 5252
+# Probe this container directly; public-domain/TLS checks belong to release verification.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:5252/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["node", "backend/server/index.js"]

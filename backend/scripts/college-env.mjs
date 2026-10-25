@@ -66,6 +66,15 @@ export function prepareCollegeEnvironment({ secrets = {}, variables = {}, fixtur
   for (const name of ['SUPABASE_URL', 'VITE_SUPABASE_URL', 'VITE_APP_URL', 'FRONTEND_URL', 'BACKEND_PUBLIC_URL']) {
     httpsUrl(values[name], name, true);
   }
+  // This writer is specifically for the college main deployment, not Render/Vercel.
+  // Reject stale hosted secrets instead of silently generating off-site links/webhooks.
+  for (const name of ['VITE_APP_URL', 'FRONTEND_URL', 'BACKEND_PUBLIC_URL']) {
+    if (new URL(values[name]).origin !== 'https://calup.app') throw new Error(`${name} must be https://calup.app for the college deployment`);
+    values[name] = 'https://calup.app';
+  }
+  const googleCallback = `${values.BACKEND_PUBLIC_URL}/api/auth/google/callback`;
+  values.GOOGLE_REDIRECT_URI ||= googleCallback;
+  if (values.GOOGLE_REDIRECT_URI !== googleCallback) throw new Error(`GOOGLE_REDIRECT_URI must be ${googleCallback}`);
   if (new URL(values.SUPABASE_URL).origin !== new URL(values.VITE_SUPABASE_URL).origin) throw new Error('Frontend and backend Supabase projects differ');
   if (new URL(values.VITE_APP_URL).origin !== new URL(values.FRONTEND_URL).origin) throw new Error('Frontend origins differ');
   if (!/^\d+$/.test(values.TRUST_PROXY)) throw new Error('Invalid TRUST_PROXY');

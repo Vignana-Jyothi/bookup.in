@@ -8,6 +8,19 @@ const fixture = variables => prepareCollegeEnvironment({ secrets: fixtureSetting
 const prepared = fixture({ VERCEL_TOKEN: 'not-an-application-setting', VITE_API_URL: 'https://obsolete-api.example' });
 assert.equal(prepared.frontend.VITE_API_URL, '/api');
 assert.equal(prepared.backend.BACKGROUND_WORKERS_ENABLED, 'false');
+assert.equal(prepared.backend.FRONTEND_URL, 'https://calup.app');
+assert.equal(prepared.backend.BACKEND_PUBLIC_URL, 'https://calup.app');
+assert.equal(prepared.backend.GOOGLE_REDIRECT_URI, 'https://calup.app/api/auth/google/callback');
+const google = fixture({ GOOGLE_CLIENT_ID: 'fixture-google-id', GOOGLE_CLIENT_SECRET: 'fixture-google-secret' });
+assert.equal(google.backend.GOOGLE_REDIRECT_URI, 'https://calup.app/api/auth/google/callback');
+assert.equal(fixture({ VITE_APP_URL: 'https://calup.app/' }).frontend.VITE_APP_URL, 'https://calup.app');
+for (const name of ['VITE_APP_URL', 'FRONTEND_URL', 'BACKEND_PUBLIC_URL']) {
+  assert.throws(() => fixture({ [name]: 'https://old-testing-host.example' }), /must be https:\/\/calup\.app/);
+  assert.throws(() => fixture({ [name]: 'http://localhost:5173' }), /Invalid/);
+}
+for (const callback of ['https://old-api.example/api/auth/google/callback', 'http://localhost:5173/api/auth/google/callback', 'https://calup.app/wrong-callback']) {
+  assert.throws(() => fixture({ GOOGLE_REDIRECT_URI: callback }), /GOOGLE_REDIRECT_URI must be/);
+}
 assert(!JSON.stringify(prepared.frontend).includes(fixtureSettings.SUPABASE_SERVICE_ROLE_KEY));
 assert(!('VERCEL_TOKEN' in prepared.backend));
 assert.throws(() => fixture({ SUPABASE_URL: 'https://different.supabase.co' }), /projects differ/);

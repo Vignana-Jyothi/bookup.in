@@ -31,6 +31,26 @@ Required:
 
 Defaults are `VITE_APP_URL`, `FRONTEND_URL` and `BACKEND_PUBLIC_URL` = `https://calup.app`, `VITE_API_URL=/api`, support email `support@calup.app`, `TRUST_PROXY=1`. Explicitly set the relevant public demo, support and legal fields to the intended deployment values. Public Vite changes require an image rebuild.
 
+The three public application origins are now enforced for this college deployment, not merely defaulted. Remove or update stale college URL secrets pointing at Vercel/Render; a secret overrides a repository variable. The Google callback defaults to `https://calup.app/api/auth/google/callback`; an explicitly supplied value must match exactly. The generic local `.env.example` intentionally retains localhost settings for local development.
+
+## Public integration URLs
+
+| Configuration location | College setting |
+|---|---|
+| College GitHub secrets/variables | VITE_APP_URL, FRONTEND_URL, BACKEND_PUBLIC_URL = https://calup.app; VITE_API_URL is fixed to /api |
+| Google Cloud OAuth client authorized redirect URI | https://calup.app/api/auth/google/callback |
+| Google Cloud authorized JavaScript origin (if used by the client) | https://calup.app |
+| Supabase Auth Site URL | https://calup.app |
+| Supabase Auth allowed signup/recovery redirects | https://calup.app/login and https://calup.app/reset-password |
+| Cashfree checkout domain allowlist, where required | https://calup.app |
+| Cashfree payment webhook | https://calup.app/api/v1/webhooks/cashfree/payments |
+| Cashfree refund webhook | https://calup.app/api/v1/webhooks/cashfree/refunds |
+| Enabled commerce sandbox webhook destinations | https://calup.app/api/v1/webhooks/cashfree/commerce/marketplace and /customer_membership |
+
+Keep localhost and the actual Vercel/Render test callback entries alongside production entries where those test integrations are still in use; do not redirect test environments into production. Google Calendar callbacks use the application API, not Supabase's OAuth callback. Signup/resend and password recovery already derive their redirect from the browser origin; changing provider allowlists is still required. Current Cashfree checkout uses the existing hosted popup flow; this migration adds no new return route. API order payloads derive payment/commerce notify URLs from BACKEND_PUBLIC_URL. No provider dashboard setting is changed by editing these source files.
+
+Container health URLs deliberately remain loopback. The college server's HTTPS ingress routes public calup.app requests to Nginx 4242, then `/api` to backend:5252; there is no public localhost callback in that path.
+
 Other supported settings follow `.env.example`: Google OAuth, Resend, 2Factor, Cashfree v1/refunds/commerce credentials and flags, Meta WhatsApp, legacy RichAutomate templates, CORS and internal cron. Enabled integrations require their credentials. Retain actual approved feature flags; do not copy template placeholder credentials. Google redirect and Supabase login/recovery allowlists must include the chosen origin; Cashfree callbacks/webhooks must target this API, with matching sandbox/production settings. Domain changes alone do not perform these provider updates.
 
 The writer recreates two private files with restrictive permissions: root `.env` contains public Compose/build settings and the worker switch; `.env.backend` contains runtime settings in Compose `env_file: format: raw`. Raw format prevents `$`, `#` and quotes inside credentials from being reinterpreted. This requires **Docker Compose 2.30+**. Both files remain ignored and excluded from images. `ENABLE_TEST_ROUTES` and `DEBUG_ROUTES` are forced false in Docker. Do not print `docker compose config` without `--quiet` on the server, because it expands environment values.
