@@ -40,10 +40,18 @@ jobs:
         env:
           FRONTEND_PORT: '14242'
           FRONTEND_BIND_ADDRESS: 127.0.0.1
+          BACKEND_PORT: '15252'
+          BACKEND_BIND_ADDRESS: 127.0.0.1
       - run: node backend/scripts/verify-docker.mjs http://127.0.0.1:14242
+      - name: Verify API through both ingress paths
+        run: |
+          node backend/scripts/verify-public-api.mjs http://127.0.0.1:15252
+          node backend/scripts/verify-public-api.mjs http://127.0.0.1:14242
       - name: Remove only CI fixture containers
         if: always() && steps.docker_fixtures.outcome == 'success'
         run: docker compose -p calup-ci -f docker-compose.yml down --remove-orphans
         env:
           FRONTEND_PORT: '14242'
           FRONTEND_BIND_ADDRESS: 127.0.0.1
+          BACKEND_PORT: '15252'
+          BACKEND_BIND_ADDRESS: 127.0.0.1

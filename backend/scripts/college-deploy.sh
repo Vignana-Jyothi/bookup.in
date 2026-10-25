@@ -43,6 +43,8 @@ trap rollback ERR
 docker compose -f docker-compose.yml build
 docker compose -f docker-compose.yml up -d --no-build --wait --wait-timeout 180
 node backend/scripts/verify-docker.mjs "http://127.0.0.1:${FRONTEND_PORT:-4242}"
+# A healthy frontend does not prove the college's separate /api ingress works.
+node backend/scripts/verify-public-api.mjs https://calup.app
 printf '%s\n' "$release" > "$state/deployed-revision"
 echo "Calup containers passed delivery checks for revision $release"
 echo "Previous-image tags retained; private rollback state: $state"
