@@ -39,6 +39,7 @@ import { createBookingRefundRequestsRouter } from './routes/bookingRefundRequest
 import { createMerchantCommerceRouter } from './routes/merchantCommerce.js';
 import { createPublicCommerceRouter, createCommerceWebhookRouter } from './routes/publicCommerce.js';
 import { startCommercePaymentWorker } from './services/commerceOrderPayments.js';
+import { startPaymentNotificationWorker } from './services/paymentNotifications.js';
 
 // Validate required environment variables at startup (fails loudly if missing)
 validateConfig();
@@ -168,6 +169,7 @@ if (process.env.BACKGROUND_WORKERS_ENABLED !== 'false') {
   startAppointmentWhatsAppWorker();
   startBookingRefundWorker();
   startCommercePaymentWorker();
+  startPaymentNotificationWorker();
 }
 
 export default app;

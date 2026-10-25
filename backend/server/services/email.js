@@ -82,6 +82,8 @@ export class EmailService {
     managementUrl = '',
     bookingId = '',
     timeZone = 'Asia/Kolkata',
+    issuedAt = '',
+    calendarDomain = '',
   }) {
     if (!to || !to.includes('@')) {
       return { success: false, skipped: true, error: 'Missing or invalid customer email address' };
@@ -104,6 +106,8 @@ export class EmailService {
         managementUrl,
         bookingId,
         timeZone,
+        issuedAt,
+        calendarDomain,
       });
 
       const subject = `Your payment is confirmed: ${serviceName} with ${providerName}`;

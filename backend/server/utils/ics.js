@@ -5,6 +5,7 @@
  */
 
 import crypto from 'crypto';
+import { bookingStartMillis } from './bookingTime.js';
 
 /**
  * Escapes text according to RFC 5545 Section 3.3.11
@@ -25,40 +26,23 @@ function formatUtcIcs(date) {
 }
 
 /**
- * Determines timezone offset string (e.g. +05:30) for a given timezone
- */
-function getTimezoneOffsetString(dateStr, timeZone = 'Asia/Kolkata') {
-  try {
-    const d = new Date(`${dateStr}T12:00:00Z`);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      timeZoneName: 'longOffset',
-    }).formatToParts(d);
-    const tzPart = parts.find(p => p.type === 'timeZoneName');
-    if (tzPart?.value) {
-      const match = tzPart.value.match(/GMT([+-]\d{2}:\d{2})/);
-      if (match) return match[1];
-      if (tzPart.value === 'GMT') return '+00:00';
-    }
-  } catch (_e) {}
-  return '+05:30';
-}
-
-/**
  * Folds lines to max 75 octets according to RFC 5545 Section 3.1
  */
 function foldLine(line) {
-  if (line.length <= 75) return line;
   const chunks = [];
-  chunks.push(line.slice(0, 75));
-  let remaining = line.slice(75);
-  while (remaining.length > 74) {
-    chunks.push(' ' + remaining.slice(0, 74));
-    remaining = remaining.slice(74);
+  let current = '';
+  let bytes = 0;
+  for (const character of line) {
+    const size = Buffer.byteLength(character, 'utf8');
+    if (bytes + size > 75) {
+      chunks.push(current);
+      current = ' ';
+      bytes = 1;
+    }
+    current += character;
+    bytes += size;
   }
-  if (remaining.length > 0) {
-    chunks.push(' ' + remaining);
-  }
+  chunks.push(current);
   return chunks.join('\r\n');
 }
 
@@ -87,16 +71,17 @@ export function generateIcsCalendar({
   managementUrl = '',
   bookingId = '',
   timeZone = 'Asia/Kolkata',
+  issuedAt = '',
+  calendarDomain = '',
 }) {
-  const cleanStartTime = startTime.length === 5 ? startTime : startTime.slice(0, 5);
-  const offset = getTimezoneOffsetString(bookingDate, timeZone);
-  const startIso = `${bookingDate}T${cleanStartTime}:00${offset}`;
-  const startDate = new Date(startIso);
+  const startMillis = bookingStartMillis({ booking_date: bookingDate, start_time: startTime }, timeZone);
+  if (!Number.isFinite(startMillis)) throw new TypeError('Invalid calendar invite time or timezone');
+  const startDate = new Date(startMillis);
 
   const durationMinutes = Number(duration) || 60;
   const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
 
-  const now = new Date();
+  const now = issuedAt ? new Date(issuedAt) : new Date();
   const dtStamp = formatUtcIcs(now);
   const dtStart = formatUtcIcs(startDate);
   const dtEnd = formatUtcIcs(endDate);
@@ -114,7 +99,7 @@ export function generateIcsCalendar({
     return 'localhost';
   }
 
-  const icsDomain = resolveIcsDomain();
+  const icsDomain = resolveIcsDomain(calendarDomain);
   const uid = bookingId ? `${bookingId}@${icsDomain}` : `${crypto.randomUUID()}@${icsDomain}`;
   const summary = `${serviceName} with ${providerName}`;
 
