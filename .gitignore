@@ -65,9 +65,5 @@ AGENTS.md
 product.md
 deply_plan.pdf
 
-# Generated screenshots, reports and migration exports stay local.
-# Preserve the reusable legacy manual QA scripts, not their output.
-/artifacts/*
-!/artifacts/responsiveness-20261019/
-/artifacts/responsiveness-20261019/*
-!/artifacts/responsiveness-20261019/*.cjs
+# All local verification artifacts, reports, exports and manual QA helpers stay local.
+/artifacts/
