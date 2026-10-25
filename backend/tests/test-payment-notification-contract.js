@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const sql = readFileSync(new URL('../supabase/20261025_zzz_payment_notifications.sql', import.meta.url), 'utf8');
+assert.match(sql, /'payment_confirmation_email'.*'customer'/);
+assert.match(sql, /'payment_confirmation_email'.*'merchant'/);
+assert.match(sql, /'payment_unfulfilled_email'.*'support'/);
+assert.match(sql, /on conflict do nothing/);
+assert.match(sql, /lease_owner=p_owner and lease_generation=p_generation and lease_expires_at>clock_timestamp\(\)/);
+assert.match(sql, /o\.payment_status='succeeded' and o\.fulfilment_status='fulfilled'/);
+assert.match(sql, /a\.status='confirmed'/);
+assert.match(sql, /environment=p_environment[\s\S]*gateway_account=p_gateway_account/);
+assert.match(sql, /from public,anon,authenticated/);
+assert.match(sql, /notification_snapshot=result,notification_snapshot_at=clock_timestamp\(\)/);
+assert.match(sql, /interval '23 hours'/);
+assert.match(sql, /'configurationPending',true/);
+assert.doesNotMatch(sql, /insert into finance\.refunds/i, 'Notifications never execute refunds');
+console.log('Payment notification SQL fanout, eligible state, scoped completion and private access contract passed.');

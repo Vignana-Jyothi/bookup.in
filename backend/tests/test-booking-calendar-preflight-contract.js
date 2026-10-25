@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const sql = readFileSync(new URL('../supabase/20261025_zza_booking_calendar_preflight.sql', import.meta.url), 'utf8');
+assert.match(sql, /language plpgsql stable security definer set search_path = ''/i);
+assert.match(sql, /ba\.provider_id = p_provider_id and ba\.idempotency_key = p_idempotency_key/);
+assert.match(sql, /v_request_hash is distinct from p_request_hash/);
+assert.match(sql, /raise exception 'IDEMPOTENCY_CONFLICT'/);
+const existingReturn = sql.indexOf("return pg_catalog.jsonb_build_object('existingAttempt', true)");
+assert.ok(existingReturn > 0 && existingReturn < sql.indexOf('from public.services'), 'Existing attempts bypass current service and Calendar readiness');
+assert.match(sql, /s\.id = p_service_id and s\.provider_id = p_provider_id and s\.active = true/);
+assert.match(sql, /from public.providers p where p\.id = p_provider_id/);
+assert.match(sql, /'existingAttempt', false/);
+assert.match(sql, /'instructor_id', v_instructor_id, 'duration', v_duration/);
+assert.match(sql, /'provider', pg_catalog.jsonb_build_object\('timezone'/);
+assert.doesNotMatch(sql, /\b(insert into|update|delete from|for update|customer_name|customer_email|customer_phone|attempt_token_hash)\b/i);
+assert.match(sql, /revoke all on function public\.get_booking_calendar_preflight_v1\(uuid, uuid, text, text\) from public, anon, authenticated/);
+assert.match(sql, /grant execute on function public\.get_booking_calendar_preflight_v1\(uuid, uuid, text, text\) to service_role/);
+console.log('PASS: Booking Calendar preflight source is stable, read-only, service-only, provider-scoped and checks idempotency before current service context.');
