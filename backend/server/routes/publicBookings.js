@@ -31,6 +31,9 @@ import { refundService } from '../services/refundService.js';
 import { mergeBusySlots } from '../services/busySlots.js';
 import { tokenRouteLimiter, bookingCreateLimiter } from '../middleware/rateLimiter.js';
 import { customerRequestIsTrusted, getManagementToken, setCustomerAccessCookie } from '../utils/customerAccess.js';
+import { withKeyedLock } from '../utils/keyedLock.js';
+import { bookingStartMillis } from '../utils/bookingTime.js';
+import { boundedFetch } from '../utils/boundedFetch.js';
 
 const router = Router();
 
@@ -44,6 +47,7 @@ function getSupabaseClient() {
   }
   if (!config.supabaseUrl) return null;
   return createClient(config.supabaseUrl, key, {
+    global: { fetch: boundedFetch },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -65,19 +69,7 @@ async function generatedSlotIsValid(supabase, providerId, serviceId, bookingDate
 // In-memory concurrency lock per provider to serialize simultaneous slot bookings and eliminate TOCTOU races
 const providerLocks = new Map();
 async function withProviderLock(providerId, fn) {
-  const currentLock = providerLocks.get(providerId) || Promise.resolve();
-  let release;
-  const newLock = new Promise(resolve => { release = resolve; });
-  providerLocks.set(providerId, currentLock.then(() => newLock));
-  await currentLock;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (providerLocks.get(providerId) === newLock) {
-      providerLocks.delete(providerId);
-    }
-  }
+  return withKeyedLock(providerLocks, providerId, fn);
 }
 
 /**
@@ -149,7 +141,14 @@ export async function handleCreateBooking(req, res) {
     meetingType: requestedMeetingType,
     locationAddress: requestedLocationAddress,
     mapsLink: requestedMapsLink,
-  } = req.body;
+  } = req.body || {};
+
+  const requiredText = [providerId, serviceId, customerName, customerPhone, bookingDate, startTime];
+  const optionalText = [customerEmail, customerWhatsApp, notes, requestedLocationAddress, requestedMapsLink];
+  if (requiredText.some(value => typeof value !== 'string' || !value.trim())
+    || optionalText.some(value => value != null && typeof value !== 'string')) {
+    return res.status(400).json({ success: false, error: 'Booking fields must contain valid text values.' });
+  }
 
   if (!providerId || !serviceId || !customerName || !customerPhone || !bookingDate || !startTime) {
     return res.status(400).json({
@@ -323,150 +322,8 @@ export async function handleCreateBooking(req, res) {
           newBooking = { id: result.bookingId };
           rpcEndTime = result.endTime || endTime;
         } else {
-          // Fallback: If RPC encounters function compilation, overload, or locking conflict (e.g. 0A000)
-          console.warn(`[PublicBookings] Atomic RPC error (${rpcError.code}: ${rpcError.message}) - executing resilient direct conflict check & insertion fallback`);
-
-          // 1. Conflict check
-          // TODO(hardcoded): 30-minute slot reservation expiry window for unpaid bookings awaiting payment screenshot
-          const PAYMENT_RESERVATION_EXPIRY_MS = 30 * 60 * 1000;
-
-          const { data: existingBookings, error: checkErr } = await supabase
-            .from('bookings')
-            .select('id, start_time, end_time, actual_end_time, payment_status, created_at')
-            .eq('provider_id', providerId)
-            .eq('booking_date', bookingDate)
-            .in('status', ['confirmed', 'completed', 'pending_payment'])
-            .neq('payment_status', 'rejected');
-
-          if (!checkErr && existingBookings) {
-            const buffer = provider.buffer_time || 15;
-            const [sh, sm] = startTime.split(':').map(Number);
-            const candStart = (sh * 60) + sm;
-            const candEnd = candStart + service.duration + buffer;
-            const nowTime = Date.now();
-
-            const hasConflict = existingBookings.some(b => {
-              // TODO(hardcoded): Release slot back to available if unpaid booking has no screenshot after 30 minutes
-              if (b.payment_status === 'awaiting_payment' && b.created_at) {
-                const bookingAge = nowTime - new Date(b.created_at).getTime();
-                if (bookingAge > PAYMENT_RESERVATION_EXPIRY_MS) {
-                  return false; // Expired reservation, does not block slot
-                }
-              }
-
-              const [bsh, bsm] = (b.start_time || '00:00').split(':').map(Number);
-              const bStart = (bsh * 60) + bsm;
-              const endTimeStr = b.actual_end_time || b.end_time || '00:00';
-              const [beh, bem] = endTimeStr.split(':').map(Number);
-              const bEnd = (beh * 60) + bem + buffer;
-              return candStart < bEnd && candEnd > bStart;
-            });
-
-            if (hasConflict) {
-              return res.status(409).json({ success: false, error: 'This slot is no longer available. Please select another time.' });
-            }
-          }
-
-          // 2. Upsert customer
-          let customerId = null;
-          const { data: existingCust } = await supabase.from('customers').select('id').eq('phone', customerPhone.trim()).limit(1).maybeSingle();
-          if (existingCust?.id) {
-            customerId = existingCust.id;
-          } else {
-            const { data: newCust } = await supabase.from('customers').insert({
-              name: customerName.trim(),
-              email: customerEmail?.trim() || null,
-              phone: customerPhone.trim(),
-              whatsapp: (customerWhatsApp || customerPhone).trim(),
-            }).select('id').single();
-            customerId = newCust?.id;
-          }
-
-          // 3. Fetch coach policy snapshot
-          let policySnapshot = DEFAULT_POLICY;
-          try {
-            const { data: pData } = await supabase
-              .from('cancellation_policies')
-              .select('*')
-              .eq('provider_id', providerId)
-              .maybeSingle();
-            if (pData) {
-              policySnapshot = { ...DEFAULT_POLICY, ...pData };
-            }
-          } catch (_) {}
-
-          // 4. Insert booking
-          const [sh, sm] = startTime.split(':').map(Number);
-          const endTotalMin = (sh * 60) + sm + service.duration;
-          const endH = String(Math.floor(endTotalMin / 60)).padStart(2, '0');
-          const endM = String(endTotalMin % 60).padStart(2, '0');
-          const calculatedEndTime = `${endH}:${endM}`;
-
-          const policyAcceptedAt = req.body.policyAcceptedAt || (req.body.policyAccepted !== false ? new Date().toISOString() : null);
-
-          const insertPayload = {
-            provider_id: providerId,
-            service_id: serviceId,
-            customer_id: customerId,
-            customer_name: customerName.trim(),
-            customer_email: customerEmail?.trim() || '',
-            customer_phone: customerPhone.trim(),
-            customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
-            booking_date: bookingDate,
-            start_time: startTime,
-            end_time: calculatedEndTime,
-            status: isPaid ? 'pending_payment' : 'confirmed',
-            notes: encodedNotes,
-            management_token_hash: tokenHash,
-            management_token_encrypted: tokenEncrypted,
-            meeting_type: resolvedMeetingType,
-            location_address_snapshot: resolvedLocation,
-            maps_link_snapshot: resolvedMapsLink,
-            payment_status: isPaid ? 'awaiting_payment' : 'not_required',
-            policy_snapshot: policySnapshot,
-            policy_accepted_at: policyAcceptedAt,
-            reschedule_count: 0,
-            refund_amount: 0,
-            refund_status: 'none',
-          };
-
-          const { data: inserted, error: insertErr } = await supabase.from('bookings').insert(insertPayload).select('id').single();
-          if (insertErr) {
-            // If columns pending migration, retry without snapshot columns
-            const fallbackPayload = {
-              provider_id: providerId,
-              service_id: serviceId,
-              customer_id: customerId,
-              customer_name: customerName.trim(),
-              customer_email: customerEmail?.trim() || '',
-              customer_phone: customerPhone.trim(),
-              customer_whatsapp: (customerWhatsApp || customerPhone).trim(),
-              booking_date: bookingDate,
-              start_time: startTime,
-              end_time: calculatedEndTime,
-              status: isPaid ? 'pending_payment' : 'confirmed',
-              notes: encodedNotes,
-            };
-            const { data: fallbackInserted, error: fbErr } = await supabase.from('bookings').insert(fallbackPayload).select('id').single();
-            if (fbErr) throw fbErr;
-            newBooking = { id: fallbackInserted.id };
-          } else {
-            newBooking = { id: inserted.id };
-          }
-
-          // Audit log policy agreement & booking creation
-          refundService.logAudit(supabase, {
-            bookingId: newBooking.id,
-            providerId,
-            entityType: 'booking',
-            entityId: newBooking.id,
-            action: 'policy_accepted',
-            actorType: 'customer',
-            actorId: customerName.trim(),
-            newState: { policy_snapshot: policySnapshot, policy_accepted_at: policyAcceptedAt },
-            details: 'Customer agreed to cancellation and refund policy upon booking.',
-          }).catch(() => {});
-          rpcEndTime = calculatedEndTime;
+          // Atomic reservation is mandatory across all server instances.
+          return res.status(503).json({ success: false, error: 'Booking creation is temporarily unavailable. Please try again later.' });
         }
       } catch (rpcErr) {
         console.error('[PublicBookings] Atomic RPC failed:', rpcErr);
@@ -485,17 +342,14 @@ export async function handleCreateBooking(req, res) {
       newBooking.booking_reference = referenceRow?.booking_reference || null;
     }
 
-    // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status & pending status (non-blocking)
+    // 6a. Optional metadata only; payment and booking state belong to the atomic RPC.
     try {
-      const paymentStatus = isPaid ? 'awaiting_payment' : 'not_required';
       const postInsertPayload = {
         management_token_encrypted: tokenEncrypted,
         management_token_hash: tokenHash,
         meeting_type: resolvedMeetingType,
         location_address_snapshot: resolvedLocation,
         maps_link_snapshot: resolvedMapsLink,
-        payment_status: paymentStatus,
-        status: isPaid ? 'pending_payment' : 'confirmed',
       };
       await supabase.from('bookings').update(postInsertPayload).eq('id', newBooking.id);
     } catch (_postErr) {
@@ -583,7 +437,7 @@ export async function handleCreateBooking(req, res) {
     try {
       const [customerEmailSend, providerEmailSend] = await Promise.allSettled([
         insertPayload.customer_email
-          ? emailService.sendCustomerBookingPendingEmail({
+          ? emailService[isPaid ? 'sendCustomerBookingPendingEmail' : 'sendCustomerConfirmationEmail']({
               to: insertPayload.customer_email,
               customerName: insertPayload.customer_name,
               serviceName: service.name,
@@ -592,10 +446,14 @@ export async function handleCreateBooking(req, res) {
               startTime,
               duration,
               bookingReference: newBooking.booking_reference,
+              bookingId: newBooking.booking_reference || newBooking.id,
+              meetLink,
+              managementUrl,
+              timeZone: provider.timezone || 'Asia/Kolkata',
             })
           : Promise.resolve({ success: false, skipped: true, error: 'Customer email not provided' }),
         provider.email
-          ? emailService.sendCoachBookingAwaitingPaymentEmail({
+          ? emailService[isPaid ? 'sendCoachBookingAwaitingPaymentEmail' : 'sendCoachBookingConfirmedEmail']({
               to: provider.email,
               providerName: provider.name || provider.business_name || 'Coach',
               customerName: insertPayload.customer_name,
@@ -608,6 +466,7 @@ export async function handleCreateBooking(req, res) {
               amount: insertPayload.price || 0,
               screenshotUrl: insertPayload.payment_screenshot_url || null,
               dashboardUrl: `${frontendBase}/dashboard/appointments`,
+              meetLink,
             })
           : Promise.resolve({ success: false, skipped: true, error: 'Provider email not configured' }),
       ]);
@@ -1076,10 +935,10 @@ router.get(['/current', '/:token'], tokenRouteLimiter, async (req, res) => {
  * Reschedules appointment after authoritative server-side slot and conflict verification.
  * Automatically resets reminder state so the 2-hour reminder will fire relative to NEW time.
  */
-router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
+export async function handleRescheduleBooking(req, res) {
   if (!req.params.token && !customerRequestIsTrusted(req)) return res.status(403).json({ success: false, error: 'Request origin is not allowed.' });
   const token = getManagementToken(req);
-  const { newDate, newTime } = req.body;
+  const { newDate, newTime } = req.body || {};
 
   if (!token) {
     return res.status(400).json({ success: false, error: 'Invalid management token' });
@@ -1133,8 +992,12 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
       });
     }
 
-    try {
-      const aptTime = new Date(`${booking.booking_date}T${booking.start_time}:00`).getTime();
+
+    {
+      const aptTime = bookingStartMillis(booking, provider.timezone || 'Asia/Kolkata');
+      if (!Number.isFinite(aptTime)) {
+        return res.status(409).json({ success: false, error: 'The appointment time could not be verified. Please contact the merchant.' });
+      }
       const hoursNotice = (aptTime - Date.now()) / (1000 * 60 * 60);
       if (hoursNotice < rescheduleMinHoursBefore) {
         return res.status(400).json({
@@ -1144,8 +1007,6 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
           rescheduleMinHoursBefore,
         });
       }
-    } catch (_e) {
-      // If date parsing fails, allow reschedule (fail-open for data issues)
     }
 
     // Save old date/time for notification emails
@@ -1159,8 +1020,8 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
     const newEndTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 
     // Validate rescheduled appointment is strictly in the future
-    const newDateTime = new Date(`${newDate}T${newTime}:00`);
-    if (isNaN(newDateTime.getTime()) || newDateTime.getTime() <= Date.now()) {
+    const newDateTime = bookingStartMillis({ booking_date: newDate, start_time: newTime }, provider.timezone || 'Asia/Kolkata');
+    if (!Number.isFinite(newDateTime) || newDateTime <= Date.now()) {
       return res.status(400).json({ success: false, error: 'Rescheduled appointment must be in the future.' });
     }
 
@@ -1168,12 +1029,14 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
     const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const targetDay = DAYS[new Date(`${newDate}T00:00:00`).getDay()];
 
-    const { data: availRow } = await supabase
+    const { data: availRow, error: availabilityError } = await supabase
       .from('availability')
       .select('active, start_time, end_time')
       .eq('provider_id', providerId)
       .eq('day_of_week', targetDay)
       .maybeSingle();
+
+    if (availabilityError) return res.status(503).json({ success: false, error: 'Working hours could not be checked. Please try again later.' });
 
     if (!availRow && targetDay === 'sunday') {
       return res.status(400).json({ success: false, error: 'Coach has no working hours on this day.' });
@@ -1230,83 +1093,26 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
       // Non-blocking fallback
     }
 
-    // 2. ATOMIC RESCHEDULE via PL/pgSQL RPC (eliminates TOCTOU race)
-    let rpcHandled = false;
-    try {
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('reschedule_booking_atomic', {
-        p_booking_id: booking.id,
-        p_new_date: newDate,
-        p_new_time: newTime,
-      });
-
-      if (!rpcError) {
-        const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
-
-        if (!result?.success) {
-          if (result?.error?.includes('no longer available') || result?.error?.includes('slot')) {
-            return res.status(409).json({ success: false, error: result.error });
-          }
-          return res.status(400).json({ success: false, error: result.error || 'Reschedule failed' });
-        }
-        rpcHandled = true;
-      } else {
-        console.warn(`[PublicBookings] Atomic reschedule RPC failed (${rpcError.code}: ${rpcError.message}) - using resilient conflict check fallback`);
-      }
-    } catch (rpcErr) {
-      console.warn('[PublicBookings] Atomic reschedule RPC caught error - using resilient conflict check fallback:', rpcErr.message);
+    // Rescheduling requires the transactional database operation. A query/update
+    // compatibility fallback cannot serialize competing application instances.
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('reschedule_booking_atomic', {
+      p_booking_id: booking.id,
+      p_new_date: newDate,
+      p_new_time: newTime,
+    });
+    if (rpcError) {
+      console.error('[PublicBookings] Atomic reschedule failed:', rpcError.code);
+      return res.status(503).json({ success: false, error: 'Rescheduling is temporarily unavailable. Please try again later.' });
     }
-
-    if (!rpcHandled) {
-      // Fallback if reschedule_booking_atomic is pending migration in DB
-      const buffer = provider.buffer_time ?? 15;
-      const candStart = startMin;
-      const candEnd = endMin + buffer;
-
-      const { data: ebData } = await supabase
-        .from('bookings')
-        .select('id, start_time, end_time, actual_end_time, status, payment_status')
-        .eq('provider_id', providerId)
-        .eq('booking_date', newDate)
-        .neq('id', booking.id)
-        .in('status', ['pending', 'pending_payment', 'confirmed', 'completed']);
-
-      const hasConflict = (ebData || [])
-        .filter(b => b.payment_status !== 'rejected')
-        .some(eb => {
-          const ebStart = eb.start_time ? Number(eb.start_time.split(':')[0]) * 60 + Number(eb.start_time.split(':')[1]) : 0;
-          const ebEndRaw = eb.actual_end_time || eb.end_time;
-          const ebEnd = ebEndRaw ? Number(ebEndRaw.split(':')[0]) * 60 + Number(ebEndRaw.split(':')[1]) : ebStart + 60;
-          const ebEndWithBuf = ebEnd + buffer;
-          return candStart < ebEndWithBuf && candEnd > ebStart;
-        });
-
-      if (hasConflict) {
-        return res.status(409).json({ success: false, error: 'Selected time slot is no longer available. Please select another slot.' });
-      }
-
-      const updatePayload = {
-        booking_date: newDate,
-        start_time: newTime,
-        end_time: newEndTime,
-        reschedule_count: currentRescheduleCount + 1,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: baseUpdateErr } = await supabase
-        .from('bookings')
-        .update(updatePayload)
-        .eq('id', booking.id);
-
-      if (baseUpdateErr) throw baseUpdateErr;
-    } else {
-      await supabase
-        .from('bookings')
-        .update({
-          reschedule_count: currentRescheduleCount + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', booking.id);
+    const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
+    if (!result?.success) {
+      const conflict = result?.error?.includes('no longer available') || result?.error?.includes('slot');
+      return res.status(conflict ? 409 : 400).json({ success: false, error: result?.error || 'Reschedule failed' });
     }
+    await supabase.from('bookings').update({
+      reschedule_count: currentRescheduleCount + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('id', booking.id);
 
     // Log audit log for reschedule
     refundService.logAudit(supabase, {
@@ -1413,7 +1219,9 @@ router.post(['/current/reschedule', '/:token/reschedule'], async (req, res) => {
     console.error('Error rescheduling booking:', err.message);
     return res.status(500).json({ success: false, error: 'Failed to reschedule appointment. Please try again.' });
   }
-});
+}
+
+router.post(['/current/reschedule', '/:token/reschedule'], handleRescheduleBooking);
 
 /**
  * POST /api/public/bookings/manage/:token/cancel
@@ -1447,6 +1255,10 @@ router.post(['/current/cancel', '/:token/cancel'], async (req, res) => {
       });
     }
 
+    if (!['pending', 'pending_payment', 'confirmed'].includes(booking.status)) {
+      return res.status(409).json({ success: false, error: 'This appointment can no longer be cancelled.' });
+    }
+
     const provider = booking.providers || {};
     const service = booking.services || {};
 
@@ -1471,7 +1283,7 @@ router.post(['/current/cancel', '/:token/cancel'], async (req, res) => {
     const effectiveRefundStatus = (isPaymentConfirmed && refundAmount > 0) ? 'refund_due' : 'none';
     const newStatus = refundPercent === 100 ? 'cancelled' : 'late-cancellation';
 
-    const { error: updateErr } = await supabase
+    let cancellation = supabase
       .from('bookings')
       .update({
         status: newStatus,
@@ -1480,9 +1292,17 @@ router.post(['/current/cancel', '/:token/cancel'], async (req, res) => {
         refund_status: effectiveRefundStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking.id);
+      .eq('id', booking.id)
+      .eq('status', booking.status);
+    cancellation = booking.payment_status == null
+      ? cancellation.is('payment_status', null)
+      : cancellation.eq('payment_status', booking.payment_status);
+    const { data: cancelledBooking, error: updateErr } = await cancellation.select('id').maybeSingle();
 
     if (updateErr) throw updateErr;
+    if (!cancelledBooking) {
+      return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
+    }
 
     // If paid and refund due, record in refunds ledger (idempotent)
     let refundRecord = null;
