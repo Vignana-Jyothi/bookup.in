@@ -44,6 +44,12 @@ export function getBookingUrl(slug) {
   return `${base}/book/${cleanSlug}`;
 }
 
+/** Public service hint; the booking page still resolves active merchant services. */
+export function getServiceBookingUrl(slug, serviceId) {
+  if (!slug || !serviceId) return '';
+  return `${getBookingUrl(slug)}?service=${encodeURIComponent(serviceId)}`;
+}
+
 /**
  * Returns the display version of booking URL without protocol.
  * e.g. "calup-in.vercel.app/book/yourslovely"

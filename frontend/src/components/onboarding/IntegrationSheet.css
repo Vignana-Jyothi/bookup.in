@@ -49,7 +49,7 @@
 .integration-note { display: flex; align-items: flex-start; gap: 8px; margin: 22px 0 0; color: #727a68; font-size: 11px; line-height: 1.6; }
 .integration-empty { display: grid; justify-items: center; gap: 10px; padding: 45px 15px; color: #77806f; }
 .integration-empty button { border: 0; color: #526638; background: none; text-decoration: underline; cursor: pointer; }
-.integration-modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 18px; background: rgb(24 31 20 / 64%); backdrop-filter: blur(4px); }
+dialog.accessible-modal[open]:has(> .integration-modal) { display: grid; place-items: center; padding: 18px; background: rgb(24 31 20 / 64%); backdrop-filter: blur(4px); }
 .integration-modal { position: relative; width: min(480px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; padding: 30px; border-radius: 16px; background: #fff; box-shadow: 0 28px 90px rgb(0 0 0 / 24%); }
 .integration-modal-close { position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #f2f4ee; cursor: pointer; }
 .integration-modal-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 14px; color: #6332c6; background: #f1ecff; }
@@ -71,3 +71,13 @@
   .integration-locked-value, .integration-phone-input, .integration-otp-input,
   .integration-verification-controls > button { width: 100%; flex-basis: auto; }
 }
+.integration-sheet.is-setup .integration-heading h2 { font-size: 22px; }
+.integration-sheet.is-setup .integration-heading p,
+.integration-sheet.is-setup .integration-copy p,
+.integration-sheet.is-setup .integration-note { font-size: 13px; line-height: 1.6; color: #30372b; }
+.integration-sheet.is-setup .integration-copy h3 { font-size: 15px; }
+.integration-sheet.is-setup .integration-action,
+.integration-sheet.is-setup .integration-verification-controls > button { min-height: 44px; font-size: 12px; }
+.integration-sheet.is-setup .integration-locked-value,
+.integration-sheet.is-setup .integration-otp-input,
+.integration-sheet.is-setup .integration-phone-input input { font-size: 13px; }

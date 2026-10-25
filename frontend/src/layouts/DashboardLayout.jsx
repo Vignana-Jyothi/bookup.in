@@ -175,6 +175,10 @@ export default function DashboardLayout() {
 
   return (
     <div className="janjiyuk-dashboard-canvas">
+      <a className="dashboard-skip-link" href="#dashboard-main"
+        onClick={() => document.getElementById('dashboard-main')?.focus()}>
+        Skip to main content
+      </a>
       {/* Detached Black Rounded Icon Sidebar on Desktop */}
       <aside className="janjiyuk-sidebar hide-mobile">
         <div className="janjiyuk-sidebar-top">
@@ -224,10 +228,11 @@ export default function DashboardLayout() {
             )}
           </button>
 */}
-          <div
+          <NavLink
+            to="/dashboard/settings"
+            aria-label="Open account settings"
             className="janjiyuk-avatar-pill"
             title={`${provider?.name || 'User'} (${provider?.email || ''})`}
-            onClick={() => navigate('/dashboard/settings')}
             style={provider?.avatar ? { overflow: 'hidden', padding: 0 } : undefined}
           >
             {provider?.avatar ? (
@@ -235,7 +240,7 @@ export default function DashboardLayout() {
             ) : (
               getInitials(provider?.name || 'User')
             )}
-          </div>
+          </NavLink>
         </div>
       </aside>
 
@@ -272,7 +277,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Dynamic Nested Content */}
-        <main className="janjiyuk-content-body">
+        <main id="dashboard-main" tabIndex={-1} className="janjiyuk-content-body">
           {['grace', 'frozen', 'deletion_scheduled'].includes(subscriptionAccess?.entitlement?.status) && (
             <button
               type="button"

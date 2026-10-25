@@ -200,10 +200,10 @@ export default function PublicBookingPage() {
     ? state.availability
     : null);
 
-  const allServices = supabaseData?.services || ((state.provider && state.provider.slug === slug)
+  const allServices = useMemo(() => supabaseData?.services || ((state.provider && state.provider.slug === slug)
     ? (state.services || [])
-    : []);
-  const services = allServices.filter(s => s.isActive);
+    : []), [supabaseData?.services, state.provider, state.services, slug]);
+  const services = useMemo(() => allServices.filter(s => s.isActive), [allServices]);
   const instructors = useMemo(() => supabaseData?.instructors || [], [supabaseData?.instructors]);
 
   const policies = supabaseData?.policies || ((state.provider && state.provider.slug === slug)
@@ -215,6 +215,8 @@ export default function PublicBookingPage() {
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
+  const [liveGcalBusyTimes, setLiveGcalBusyTimes] = useState([]);
+  const [liveDbBusySlots, setLiveDbBusySlots] = useState([]);
   const [customerMeetingType, setCustomerMeetingType] = useState('online');
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '', notes: '' });
   const [policyAgreed, setPolicyAgreed] = useState(false);
@@ -222,6 +224,25 @@ export default function PublicBookingPage() {
   const cashfreeIntentRef = useRef(null);
   const [, setBookingError] = usePopupFeedback(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const appliedServiceLink = useRef(null);
+  const linkedServiceId = new URLSearchParams(recoveryLocation.search).get('service');
+  const unavailableLinkedService = Boolean(linkedServiceId && !isLoadingPublic && supabaseData
+    && !services.some(service => service.id === linkedServiceId));
+
+  useEffect(() => {
+    if (isLoadingPublic || !supabaseData || supabaseData.provider?.slug !== slug) return;
+    const linkKey = `${slug}:${recoveryLocation.search}`;
+    if (appliedServiceLink.current === linkKey) return;
+    appliedServiceLink.current = linkKey;
+    const service = services.find(item => item.id === linkedServiceId);
+    setSelectedService(service || null);
+    setSelectedDate(null);
+    setSelectedTime(null);
+    setLiveDbBusySlots([]);
+    setLiveGcalBusyTimes([]);
+    setCustomerMeetingType(service?.meetingType === 'in-person' ? 'in-person' : 'online');
+    setCurrentStep(1);
+  }, [slug, recoveryLocation.search, linkedServiceId, isLoadingPublic, supabaseData, services]);
 
   const selectedInstructor = useMemo(
     () => instructors.find(item => item.id === selectedService?.instructorId) || null,
@@ -277,8 +298,6 @@ export default function PublicBookingPage() {
   const todayStr = today.toISOString().split('T')[0];
 
   // Live busy times
-  const [liveGcalBusyTimes, setLiveGcalBusyTimes] = useState([]);
-  const [liveDbBusySlots, setLiveDbBusySlots] = useState([]);
 
   const fetchDatabaseBusySlots = useCallback((date, provId, serviceId) => {
     if (!date || !provId || !serviceId) return;
@@ -891,6 +910,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
         {currentStep === 1 && (
           <div className="booking-step-pane animate-fade-in-up">
             <h3 className="pane-headline">What Would You Like to Book?</h3>
+            {unavailableLinkedService && <p role="status">This service is no longer available. Choose another service below.</p>}
 
             <div className="service-selection-list">
               {services.map(svc => {

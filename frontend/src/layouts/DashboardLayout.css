@@ -13,6 +13,21 @@
 }
 
 /* --- Left Icon-Only Sidebar (Image 1) --- */
+.dashboard-skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10001;
+  transform: translateY(calc(-100% - 16px));
+  padding: 12px 18px;
+  border-radius: var(--radius-input);
+  background: var(--color-lime);
+  color: var(--color-black);
+  font-weight: 700;
+}
+
+.dashboard-skip-link:focus { transform: translateY(0); }
+
 .janjiyuk-sidebar {
   width: 68px;
   background-color: var(--theme-bg-sidebar);
@@ -152,6 +167,11 @@
 
 .janjiyuk-avatar-pill:hover {
   transform: scale(1.06);
+}
+
+.janjiyuk-avatar-pill:focus-visible {
+  outline: 3px solid var(--color-lime);
+  outline-offset: 3px;
 }
 
 /* --- Main Workspace Frame (Floating Giant Rounded Card) --- */

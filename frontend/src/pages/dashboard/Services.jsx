@@ -17,6 +17,7 @@ import PageLinks from '../../components/ui/PageLinks';
 import InstructorPanel from '../../components/dashboard/InstructorPanel.jsx';
 import './Services.css';
 import { usePopupFeedback } from '../../hooks/usePopupFeedback.js';
+import { getServiceBookingUrl } from '../../utils/url.js';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -44,6 +45,34 @@ export default function Services() {
   const [submitting, setSubmitting] = useState(false);
   const [, setSubmitError] = usePopupFeedback();
   const [servicesError, setServicesError] = usePopupFeedback(null);
+  const [copyingServiceId, setCopyingServiceId] = useState(null);
+  const [copyFallback, setCopyFallback] = useState(null);
+  const copyBusy = useRef(false);
+  const copyInputRef = useRef(null);
+
+  useEffect(() => {
+    if (copyFallback) {
+      copyInputRef.current?.focus();
+      copyInputRef.current?.select();
+    }
+  }, [copyFallback]);
+
+  const copyServiceLink = async service => {
+    const url = getServiceBookingUrl(state.provider?.slug, service.id);
+    if (!url || !service.isActive || copyBusy.current) return;
+    copyBusy.current = true;
+    setCopyingServiceId(service.id);
+    setCopyFallback(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      addToast('Service booking link copied.');
+    } catch {
+      setCopyFallback({ id: service.id, url });
+    } finally {
+      copyBusy.current = false;
+      setCopyingServiceId(null);
+    }
+  };
 
   // Authoritative database hydration on mount
   const fetchServices = useCallback(async () => {
@@ -348,7 +377,7 @@ export default function Services() {
             Service Offerings
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '3px 0 0' }}>
-            Manage the active services clients can book on your link.
+            Edit your services, check their availability, and share a booking link.
           </p>
         </div>
         <PillButton variant="primary" size="md" onClick={openCreate}>
@@ -363,145 +392,50 @@ export default function Services() {
       )}
 
       {state.services.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '18px' }}>
-          {state.services.map(service => (
-            <div
-              key={service.id}
-              className="card"
-              style={{
-                borderRadius: 'var(--radius-card)',
-                background: 'var(--theme-bg-card)',
-                boxShadow: 'var(--shadow-card)',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                transition: 'all var(--transition-fast)',
-                border: '1px solid var(--theme-border)',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '10px' }}>
-                  <h4 style={{ fontFamily: 'var(--font-heading)', fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
-                    {service.name}
-                  </h4>
-                  <span
-                    style={{
-                      padding: '3px 10px',
-                      borderRadius: 'var(--radius-pill)',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      background: service.isActive ? 'var(--theme-badge-bg)' : 'var(--theme-input-bg)',
-                      color: service.isActive ? 'var(--theme-badge-text)' : 'var(--theme-text-muted)',
-                      letterSpacing: '0.02em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {service.isActive ? 'Active' : 'Inactive'}
-                  </span>
+        <div className="service-list" aria-label="Your services">
+          {state.services.map(service => {
+            const bookingUrl = getServiceBookingUrl(state.provider?.slug, service.id);
+            const canShare = Boolean(service.isActive && bookingUrl);
+            const instructor = instructors.find(item => item.id === service.instructorId);
+            const days = (service.availableWeekdays || WEEKDAYS).filter(day => instructorDays(service.instructorId).includes(day)).map(day => DAY_LABELS[day]).join(', ');
+            return (
+              <article key={service.id} className="service-list-item" aria-label={service.name}>
+                <div className="service-list-heading">
+                  <h3>{service.name}</h3>
+                  <span className={`service-status ${service.isActive ? 'is-active' : ''}`}>{service.isActive ? 'Active' : 'Inactive'}</span>
                 </div>
-
-                {service.description && (
-                  <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', lineHeight: 1.5, margin: '0 0 16px', minHeight: '38px' }}>
-                    {service.description}
-                  </p>
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-                  <span style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 800, color: 'var(--color-text)' }}>
-                    {formatCurrency(service.price)}
-                  </span>
-                  <span style={{
-                    padding: '3px 10px',
-                    borderRadius: 'var(--radius-pill)',
-                    background: 'var(--theme-bg-card-subtle)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--theme-text-muted)',
-                  }}>
-                     {service.duration} min
-                  </span>
-                  <span style={{
-                    padding: '3px 10px',
-                    borderRadius: 'var(--radius-pill)',
-                    background: 'var(--theme-bg-card-subtle)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--theme-text-muted)',
-                  }}>
-                    {service.meetingType === 'in-person' ? ' In-person' : (service.meetingType === 'both' ? ' Online / In-person' : ' Online')}
-                  </span>
+                {service.description && <p className="service-description">{service.description}</p>}
+                <dl className="service-facts">
+                  <div><dt>Price</dt><dd>{formatCurrency(service.price)}</dd></div>
+                  <div><dt>Duration</dt><dd>{service.duration} min</dd></div>
+                  <div><dt>Meeting</dt><dd>{service.meetingType === 'in-person' ? 'In-person' : service.meetingType === 'both' ? 'Online / In-person' : 'Online'}</dd></div>
+                  <div><dt>Instructor</dt><dd>{instructor?.name || (instructorsLoading ? 'Loading...' : 'Not available')}</dd></div>
+                </dl>
+                <p className="service-days">Days: {instructorsLoading ? 'Loading...' : days || 'No available days'}</p>
+                <div className="service-row-actions">
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => openEdit(service)} aria-label={`Edit ${service.name}`}>Edit service</button>
+                  {canShare ? <a className="btn btn-secondary btn-sm" href={bookingUrl} target="_blank" rel="noopener noreferrer" aria-label={`Preview ${service.name} (opens in new tab)`}>Preview</a>
+                    : <button type="button" className="btn btn-secondary btn-sm" disabled>Preview</button>}
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={!canShare || copyingServiceId !== null} onClick={() => copyServiceLink(service)} aria-label={`Copy booking link for ${service.name}`}>
+                    {copyingServiceId === service.id ? 'Copying...' : 'Copy link'}
+                  </button>
+                  <details className="service-more">
+                    <summary aria-label={`More actions for ${service.name}`}>More actions</summary>
+                    <div className="service-more-actions">
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleToggle(service.id)}>{service.isActive ? 'Deactivate' : 'Activate'}</button>
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(service.id)}>Delete</button>
+                    </div>
+                  </details>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--theme-text-muted)', marginBottom: '16px', lineHeight: 1.6 }}>
-                  <div>Instructor: <strong>{instructors.find(item => item.id === service.instructorId)?.name || 'Owner'}</strong></div>
-                  <div>Days: {(service.availableWeekdays || WEEKDAYS)
-                    .filter(day => instructorDays(service.instructorId).includes(day))
-                    .map(day => DAY_LABELS[day]).join(', ') || 'No available days'}</div>
-                </div>
-              </div>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: '8px',
-                paddingTop: '16px',
-                borderTop: '1px solid var(--theme-border)',
-              }}>
-                <button
-                  type="button"
-                  onClick={() => openEdit(service)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--theme-border)',
-                    borderRadius: 'var(--radius-pill)',
-                    padding: '6px 14px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    color: 'var(--color-text)',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleToggle(service.id)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--theme-border)',
-                    borderRadius: 'var(--radius-pill)',
-                    padding: '6px 14px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    color: 'var(--color-text)',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  {service.isActive ? 'Deactivate' : 'Activate'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(service.id)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: 'var(--radius-pill)',
-                    padding: '6px 12px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    color: 'var(--color-error-600)',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+                {!canShare && <p className="service-share-note">{!service.isActive ? 'Activate this service to preview or share its public booking link.' : 'Your booking page address is not available yet. Reload your profile before sharing.'}</p>}
+                {copyFallback?.id === service.id && <div className="service-copy-fallback">
+                  <label htmlFor="service-copy-link">Copy this booking link manually</label>
+                  <p role="status">Clipboard access is unavailable. Select and copy the link below.</p>
+                  <input ref={copyInputRef} id="service-copy-link" className="form-input" readOnly value={copyFallback.url} onFocus={event => event.target.select()} />
+                </div>}
+              </article>
+            );
+          })}
         </div>
       ) : (
         <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
@@ -526,7 +460,7 @@ export default function Services() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <AccessibleModal label="Service details" onClose={() => setShowForm(false)}>
+        <AccessibleModal label="Service details" onClose={() => !submitting && setShowForm(false)}>
           <div
             className="modal modal-lg"
             onClick={e => e.stopPropagation()}
@@ -547,7 +481,7 @@ export default function Services() {
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0 }}>
                 {editingService ? 'Edit Service' : 'Create Service'}
               </h3>
-              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <button type="button" aria-label="Close dialog" className="modal-close" disabled={submitting} onClick={() => setShowForm(false)}>✕</button>
             </div>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <div 
@@ -565,6 +499,9 @@ export default function Services() {
                   scrollbarColor: 'var(--theme-border, #cbd5e1) transparent',
                 }}
               >
+                <fieldset className="service-editor-section">
+                  <legend>Service details</legend>
+                  <p className="service-section-hint">Describe the session and set its price and duration.</p>
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <label htmlFor="service-field-1" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service name</label>
@@ -649,6 +586,10 @@ export default function Services() {
                   </div>
                 </div>
 
+                </fieldset>
+                <fieldset className="service-editor-section">
+                  <legend>Availability</legend>
+                  <p className="service-section-hint">Assign an instructor and choose their working days. Hours are managed on the Availability page.</p>
                 <div className="form-group">
                   <label htmlFor="service-field-5" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service provider</label>
                   <select id="service-field-5"
@@ -703,6 +644,10 @@ export default function Services() {
                   {errors.availableWeekdays && <span id="service-days-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.availableWeekdays}</span>}
                 </div>
 
+                </fieldset>
+                <fieldset className="service-editor-section">
+                  <legend>Meeting location</legend>
+                  <p className="service-section-hint">Choose how customers attend this session.</p>
                 <div className="form-group">
                   <span id="service-mode-label" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Meeting Mode</span>
                   <div role="group" aria-labelledby="service-mode-label" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
@@ -792,12 +737,14 @@ export default function Services() {
                     <span id="service-location-hint" className="form-hint">Physical location where in-person sessions take place. Clients will get a Google Maps directions link.</span>
                   </div>
                 )}
+                </fieldset>
               </div>
 
               <div className="modal-footer" style={{ borderTop: '1px solid var(--theme-border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexShrink: 0, background: 'var(--theme-bg-card)' }}>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
+                  disabled={submitting}
                   style={{
                     background: 'transparent',
                     border: '1px solid var(--theme-border)',

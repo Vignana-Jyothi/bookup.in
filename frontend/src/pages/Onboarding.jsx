@@ -1,6 +1,6 @@
 /**
  * CalUp — Onboarding Flow
- * Eight-stage merchant setup, continuing account creation.
+ * Six-screen merchant setup with compatible persisted identifiers.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -19,19 +19,21 @@ import SetupShell from '../components/onboarding/SetupShell';
 import IntegrationSheet from '../components/onboarding/IntegrationSheet';
 import { usePopupFeedback } from '../hooks/usePopupFeedback.js';
 import './Onboarding.css';
+import DraftBookingPreview from '../components/onboarding/DraftBookingPreview';
+import { ONBOARDING_STEPS, ONBOARDING_LABELS, resolveOnboardingStart, onboardingHoursError } from '../utils/onboardingFlow';
 
 const TOTAL_STEPS = 8;
 // Reuse the former duplicate contact step for billing; later persisted identifiers stay stable.
-const WIZARD_STEPS = [0, 1, 2, 3, 4, 5, 6, 7];
+const WIZARD_STEPS = ONBOARDING_STEPS;
 
 const STEP_DETAILS = [
-  ['Make it yours', 'A little about you. A big step toward a simpler way to get booked and paid.'],
+  ['Business profile', 'Your business details and introduction, together in one place.'],
   ['Your billing details', 'Add the legal name and address used on Calup subscription receipts. GSTIN is optional.'],
   ['Introduce yourself', 'Help customers understand who they will meet and why they can trust your expertise.'],
   ['Create your first service', 'Set the service, delivery method, duration, and customer price.'],
-  ['Choose your hours', 'Mark the days and times when customers may request appointments.'],
+  ['Working hours and rules', 'Choose your hours, then review the rules customers will book under.'],
   ['Set booking rules', 'Control notice, booking range, breaks, and cancellation timing.'],
-  ['Connect your tools', 'Bring calendars, meetings, payments, and notifications together in one setup sheet.'],
+  ['Verification and calendar', 'Verify your contact details and connect the calendar your service needs.'],
   ['Review and finish', 'Check activation requirements and save the first publishable version of your business.'],
 ];
 
@@ -50,7 +52,11 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const calendarReturn = useRef(searchParams.get('calendar'));
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [rulesExpanded, setRulesExpanded] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const navigationBusy = useRef(false);
+  const stepContentRef = useRef(null);
   const [billing, setBilling] = useState({ legalName: state.provider?.name || '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', gstin: '', version: null });
   const billingNameEdited = useRef(false);
 
@@ -71,6 +77,8 @@ export default function Onboarding() {
   const [isTestingGoogle, setIsTestingGoogle] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured());
+  const [loadError, setLoadError] = useState('');
+  const [loadVersion, setLoadVersion] = useState(0);
   const [identityStatus, setIdentityStatus] = useState({ emailVerified: false, phoneVerified: false });
   const [entitlementStatus, setEntitlementStatus] = useState({ active: false, status: 'not_activated' });
   const [phoneOtp, setPhoneOtp] = useState('');
@@ -80,6 +88,18 @@ export default function Onboarding() {
   const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [completionResult, setCompletionResult] = useState(null);
+  const navigationDisabled = isSaving || isConnectingGoogle || isTestingGoogle || isVerifyingEmail || isVerifyingPhone || uploadingAvatar;
+
+  useEffect(() => {
+    if (isLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const heading = stepContentRef.current?.querySelector('h1, h2');
+      heading?.setAttribute('tabindex', '-1');
+      heading?.focus({ preventScroll: true });
+      stepContentRef.current?.closest('.setup-content')?.scrollTo({ top: 0 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [step, isLoading]);
 
   // Always use the permanent slug saved in the database, never a locally generated slug
   const slug = state.provider?.slug || 'my-page';
@@ -100,7 +120,11 @@ export default function Onboarding() {
     if (!isSupabaseConfigured()) {
       return;
     }
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError('');
     Promise.all([onboardingService.load(), subscriptionService.get()]).then(([result, subscription]) => {
+      if (cancelled) return;
       const draft = result.draft || {};
       setBusinessName(draft.businessName || '');
       setProviderName(draft.providerName || '');
@@ -111,12 +135,12 @@ export default function Onboarding() {
       if (draft.availability) setAvailability(draft.availability);
       if (draft.bookingRules) setBookingRules(current => ({ ...current, ...draft.bookingRules }));
       const savedStep = Math.max(0, Math.min(TOTAL_STEPS - 1, Number(result.currentStep) || 0));
-      const basicsReady = Boolean(draft.businessName && draft.providerName && draft.merchantEmail && draft.phone);
       // Read the canonical billing record even when an older onboarding API is running.
       const savedBilling = subscription.billingProfile;
       if (savedBilling) setBilling(savedBilling);
       else setBilling(current => ({ ...current, legalName: draft.providerName || '' }));
-      setStep(!basicsReady ? 0 : !savedBilling ? 1 : calendarReturn.current ? 6 : savedStep <= 1 ? 2 : savedStep);
+      setStep(resolveOnboardingStart({ draft, billingProfile: savedBilling, currentStep: savedStep, calendarReturn: calendarReturn.current }));
+      setRulesExpanded(savedStep === 5);
       setIdentityStatus(result.identity || { emailVerified: false, phoneVerified: false });
       setEmailOtpSent(Boolean(result.identity?.emailVerificationSent));
       setPhoneOtpSent(Boolean(result.identity?.phoneVerificationSent));
@@ -127,10 +151,13 @@ export default function Onboarding() {
       });
       setEntitlementStatus(result.entitlement || { active: false, status: 'not_activated' });
     }).catch(error => {
+      if (cancelled) return;
       console.error('[Onboarding] Load failed:', error);
+      setLoadError('Could not restore your saved setup. Retry before editing so your existing progress stays protected.');
       setStepError(error.message || 'Could not load setup progress.');
-    }).finally(() => setIsLoading(false));
-  }, [setStepError]);
+    }).finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [setStepError, loadVersion]);
 
   useEffect(() => {
     if (!state.provider?.slug && isSupabaseConfigured()) {
@@ -205,31 +232,36 @@ export default function Onboarding() {
   };
 
   const nextStep = async () => {
+    if (navigationBusy.current || isLoading || isConnectingGoogle || isVerifyingEmail || isVerifyingPhone || uploadingAvatar) return;
     setStepError('');
+    const rejectField = (message, id) => {
+      setStepError(message);
+      requestAnimationFrame(() => document.getElementById(id)?.focus());
+    };
     if (step === 0) {
       if (!businessName.trim() || businessName.trim().length < 2) {
-        setStepError('Please enter your business or studio name.');
+        rejectField('Please enter your business or studio name.', 'onboarding-business');
         return;
       }
     }
     if (step === 0) {
       if (!providerName.trim() || providerName.trim().length < 2) {
-        setStepError('Please enter your full name.');
+        rejectField('Please enter your full name.', 'onboarding-name');
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(merchantEmail.trim())) {
-        setStepError('Enter the Google email that should host your Calendar events and Meet links.');
+        rejectField('Enter the Google email that should host your Calendar events and Meet links.', 'onboarding-merchant-email');
         return;
       }
       const digits = phone.replace(/\D/g, '').replace(/^91(?=[6-9]\d{9}$)/, '');
       if (!/^[6-9]\d{9}$/.test(digits)) {
-        setStepError('Enter a valid 10-digit Indian mobile number.');
+        rejectField('Enter a valid 10-digit Indian mobile number.', 'onboarding-phone');
         return;
       }
     }
-    if (step === 2) {
+    if (step === 0) {
       if (!bio.trim() || bio.trim().length < 20) {
-        setStepError('Bio must be at least 20 characters to introduce yourself to clients.');
+        rejectField('Bio must be at least 20 characters to introduce yourself to clients.', 'onboarding-bio');
         return;
       }
     }
@@ -252,10 +284,22 @@ export default function Onboarding() {
         setStepError('Service description must be at least 15 characters so clients know what they are booking.');
         return;
       }
+      if (service.price === '' || !Number.isFinite(Number(service.price)) || Number(service.price) < 0 || Number(service.price) > 10000000) {
+        setStepError('Enter a valid service price between 0 and 10000000.');
+        return;
+      }
+      if (!Number.isInteger(Number(service.duration)) || Number(service.duration) < 5 || Number(service.duration) > 1440) {
+        setStepError('Service duration must be a whole number between 5 and 1440 minutes.');
+        return;
+      }
       if (service.meetingType !== 'online' && !service.locationAddress.trim()) {
         setStepError('Enter the address used for in-person appointments.');
         return;
       }
+    }
+    if (step === 4) {
+      const error = onboardingHoursError(availability, bookingRules);
+      if (error) { setRulesExpanded(true); setStepError(error); return; }
     }
     if (step === 6) {
       if (!identityStatus.emailVerified) {
@@ -268,12 +312,15 @@ export default function Onboarding() {
       }
     }
     if (step < TOTAL_STEPS - 1) {
+      navigationBusy.current = true;
       setIsSaving(true);
       try {
+        if (!isSupabaseConfigured()) throw new Error('Setup cannot be saved while the server is unavailable.');
         if (step === 1 && isSupabaseConfigured()) setBilling(await subscriptionService.saveBillingProfile(billing));
         const next = WIZARD_STEPS[WIZARD_STEPS.indexOf(step) + 1];
         if (isSupabaseConfigured()) await onboardingService.saveDraft(draftPayload(), next);
         setStep(next);
+        setLastSavedAt(new Date());
       } catch (error) {
         if (step === 1 && error.code === 'VERSION_CONFLICT') {
           try {
@@ -287,6 +334,7 @@ export default function Onboarding() {
         }
         setStepError(error.message || 'Could not save your setup progress.');
       } finally {
+        navigationBusy.current = false;
         setIsSaving(false);
       }
     }
@@ -315,17 +363,19 @@ export default function Onboarding() {
 
 */
   const prevStep = () => {
+    if (navigationBusy.current || isLoading || isConnectingGoogle || isVerifyingEmail || isVerifyingPhone || uploadingAvatar) return;
     setStepError('');
     if (step > 0) setStep(WIZARD_STEPS[WIZARD_STEPS.indexOf(step) - 1]);
   };
 
   const finishOnboarding = async () => {
+    if (navigationBusy.current || isLoading || isConnectingGoogle || isVerifyingEmail || isVerifyingPhone || uploadingAvatar) return;
+    navigationBusy.current = true;
     setStepError('');
     setIsSaving(true);
     try {
-      const result = isSupabaseConfigured()
-        ? await onboardingService.complete(draftPayload())
-        : { completed: true, publishReady: false, missing: ['calup_access'] };
+      if (!isSupabaseConfigured()) throw new Error('Setup cannot be saved while the server is unavailable.');
+      const result = await onboardingService.complete(draftPayload());
       setCompletionResult(result);
       setIdentityStatus(result.identity || identityStatus);
       setGoogleStatus(current => ({ ...current, isConnected: Boolean(result.google?.ready ?? current.isConnected), email: result.google?.email || current.email }));
@@ -338,6 +388,7 @@ export default function Onboarding() {
     } catch (error) {
       setStepError(error.message || 'Setup could not be completed. Your progress is saved.');
     } finally {
+      navigationBusy.current = false;
       setIsSaving(false);
     }
   };
@@ -468,112 +519,11 @@ export default function Onboarding() {
   };
 
   const goToDashboard = () => {
-    addToast(completionResult?.publishReady ? 'Welcome to CalUp! Your booking page is live.' : 'Setup saved. Complete the remaining activation checks from your dashboard.');
+    addToast(completionResult?.publishReady ? 'Welcome to Calup! Your booking page is live.' : 'Setup saved. Complete the remaining activation checks from your dashboard.');
     navigate('/dashboard');
   };
 
-  const renderStepContent = () => {
-    switch (step) {
-      case 0:
-        return (
-          <div className="calup-auth-setup-form">
-            <div className="calup-auth-heading calup-auth-heading--left calup-auth-heading--edit">
-              <span>Your business starts with you</span>
-              <h1>A little hello.<br />A whole lot of possibility.</h1>
-              <p>Review your saved details and give your expertise a home.</p>
-            </div>
-            <div className="calup-auth-form">
-            <div className="calup-auth-field-grid">
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-business">Business or studio name</label>
-              <input id="onboarding-business" className="form-input"
-                value={businessName} onChange={event => setBusinessName(event.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-name">Full name</label>
-              <input
-                id="onboarding-name"
-                className="form-input"
-                placeholder="e.g. Priya Sharma"
-                value={providerName}
-                onChange={event => {
-                  const name = event.target.value;
-                  setProviderName(name);
-                  if (!billingNameEdited.current) {
-                    setBilling(current => current.version ? current : { ...current, legalName: name });
-                  }
-                }}
-                autoFocus
-              />
-            </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-merchant-email">Business email</label>
-              <input id="onboarding-merchant-email" className="form-input" type="email"
-                value={merchantEmail} aria-describedby="onboarding-email-hint"
-                onChange={event => {
-                  setMerchantEmail(event.target.value.trimStart());
-                  setIdentityStatus(current => ({ ...current, emailVerified: false }));
-                  setEmailOtp('');
-                  setEmailOtpSent(false);
-                  setGoogleStatus(current => ({ ...current, isConnected: false, hostAccessReady: false }));
-                }} />
-              <span id="onboarding-email-hint" className="form-hint">This business email receives the Calup verification code and must match the Google account used for Calendar and Meet.</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-phone">Merchant mobile number</label>
-              <input id="onboarding-phone" className="form-input" inputMode="numeric"
-                placeholder="10-digit mobile number" value={phone}
-                onChange={event => {
-                  setPhone(event.target.value.replace(/\D/g, '').slice(0, 10));
-                  setIdentityStatus(current => ({ ...current, phoneVerified: false }));
-                  setPhoneOtp('');
-                  setPhoneOtpSent(false);
-                }} autoComplete="tel-national" />
-              <span className="form-hint">Confirm the number here. SMS verification happens on the integrations step.</span>
-            </div>
-            </div>
-          </div>
-        );
-
-      case 1:
-        return (
-          <div className="calup-auth-setup-form">
-            <div className="calup-auth-heading calup-auth-heading--left">
-              <span>For your records</span>
-              <h1>Your billing details.</h1>
-              <p>Use the legal name and address you want on your Calup subscription receipts.</p>
-            </div>
-            <div className="calup-auth-form">
-              {[
-                ['legalName', 'Legal name', 160],
-                ['addressLine1', 'Address line 1', 240],
-                ['addressLine2', 'Address line 2 (optional)', 240],
-                ['city', 'City', 100],
-                ['state', 'State / Union territory', 100],
-                ['postalCode', 'PIN code', 6],
-                ['gstin', 'GSTIN (optional)', 15],
-              ].map(([key, label, maxLength]) => (
-                <label key={key} htmlFor={`onboarding-billing-${key}`}>{label}
-                  <input id={`onboarding-billing-${key}`} value={billing[key] || ''}
-                    maxLength={maxLength} inputMode={key === 'postalCode' ? 'numeric' : 'text'}
-                    required={!['addressLine2', 'gstin'].includes(key)} disabled={isSaving}
-                    onChange={event => {
-                      let value = event.target.value;
-                      if (key === 'legalName') billingNameEdited.current = true;
-                      if (key === 'postalCode') value = value.replace(/\D/g, '');
-                      if (key === 'gstin') value = value.replace(/\s/g, '').toUpperCase();
-                      setBilling(current => ({ ...current, [key]: value }));
-                    }} />
-                </label>
-              ))}
-              <span className="calup-auth-field-hint">GSTIN is optional. Format validation does not verify GST registration.</span>
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
+  const renderProfileIntroduction = () => (
           <div className="onb-step animate-fade-in-up">
             <h2>Tell clients about yourself</h2>
             <p>A short bio that appears on your booking page.</p>
@@ -642,6 +592,171 @@ export default function Onboarding() {
                 rows={4}
               />
               <span id="onboarding-bio-hint" className="form-hint">At least 20 characters required. Helps clients trust your expertise.</span>
+            </div>
+          </div>
+  );
+
+  const renderBookingRules = () => (
+          <div className="onb-step animate-fade-in-up">
+            <h2>Booking rules</h2>
+            <p>Set how far in advance clients can book and other scheduling preferences.</p>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-min-notice">Minimum scheduling notice</label>
+              <div className="onb-input-with-unit">
+                <input id="onboarding-min-notice" aria-describedby="onboarding-min-notice-unit"
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  value={bookingRules.minNotice}
+                  onChange={e => setBookingRules({ ...bookingRules, minNotice: Number(e.target.value) })}
+                />
+                <span id="onboarding-min-notice-unit" className="onb-unit">hours</span>
+              </div>
+              <span className="form-hint">How much notice do you need before an appointment?</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-max-advance">Maximum advance booking</label>
+              <div className="onb-input-with-unit">
+                <input id="onboarding-max-advance" aria-describedby="onboarding-max-advance-unit"
+                  className="form-input"
+                  type="number"
+                  min="1"
+                  value={bookingRules.maxAdvanceBooking}
+                  onChange={e => setBookingRules({ ...bookingRules, maxAdvanceBooking: Number(e.target.value) })}
+                />
+                <span id="onboarding-max-advance-unit" className="onb-unit">days</span>
+              </div>
+              <span className="form-hint">How far in advance can clients book?</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-buffer">Buffer time between appointments</label>
+              <div className="onb-input-with-unit">
+                <input id="onboarding-buffer" aria-describedby="onboarding-buffer-unit"
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  max="240"
+                  step="5"
+                  value={bookingRules.bufferTime}
+                  onChange={e => setBookingRules({ ...bookingRules, bufferTime: Number(e.target.value) })}
+                />
+                <span id="onboarding-buffer-unit" className="onb-unit">minutes</span>
+              </div>
+              <span className="form-hint">Available starts advance by the service duration plus this break.</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-cancellation">Cancellation window</label>
+              <div className="onb-input-with-unit">
+                <input id="onboarding-cancellation" aria-describedby="onboarding-cancellation-unit"
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  value={bookingRules.cancellationWindow}
+                  onChange={e => setBookingRules({ ...bookingRules, cancellationWindow: Number(e.target.value) })}
+                />
+                <span id="onboarding-cancellation-unit" className="onb-unit">hours before appointment</span>
+              </div>
+              <span className="form-hint">Cancellations after this window are considered "late"</span>
+            </div>
+          </div>
+  );
+
+  const renderStepContent = () => {
+    switch (step) {
+      case 0:
+        return (
+          <div className="calup-auth-setup-form">
+            <div className="calup-auth-heading calup-auth-heading--left calup-auth-heading--edit">
+              <span>Your business starts with you</span>
+              <h1>Your business profile.</h1>
+              <p>Review your saved details and give your expertise a home.</p>
+            </div>
+            <div className="calup-auth-form">
+            <div className="calup-auth-field-grid">
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-business">Business or studio name</label>
+              <input id="onboarding-business" className="form-input"
+                value={businessName} onChange={event => setBusinessName(event.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-name">Full name</label>
+              <input
+                id="onboarding-name"
+                className="form-input"
+                placeholder="e.g. Priya Sharma"
+                value={providerName}
+                onChange={event => {
+                  const name = event.target.value;
+                  setProviderName(name);
+                  if (!billingNameEdited.current) {
+                    setBilling(current => current.version ? current : { ...current, legalName: name });
+                  }
+                }}
+              />
+            </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-merchant-email">Business email</label>
+              <input id="onboarding-merchant-email" className="form-input" type="email"
+                value={merchantEmail} aria-describedby="onboarding-email-hint"
+                onChange={event => {
+                  setMerchantEmail(event.target.value.trimStart());
+                  setIdentityStatus(current => ({ ...current, emailVerified: false }));
+                  setEmailOtp('');
+                  setEmailOtpSent(false);
+                  setGoogleStatus(current => ({ ...current, isConnected: false, hostAccessReady: false }));
+                }} />
+              <span id="onboarding-email-hint" className="form-hint">This business email receives the Calup verification code and must match the Google account used for Calendar and Meet.</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="onboarding-phone">Merchant mobile number</label>
+              <input id="onboarding-phone" className="form-input" inputMode="numeric"
+                placeholder="10-digit mobile number" value={phone}
+                onChange={event => {
+                  setPhone(event.target.value.replace(/\D/g, '').slice(0, 10));
+                  setIdentityStatus(current => ({ ...current, phoneVerified: false }));
+                  setPhoneOtp('');
+                  setPhoneOtpSent(false);
+                }} autoComplete="tel-national" />
+              <span className="form-hint">Confirm the number here. SMS verification happens on the Verification screen.</span>
+            </div>
+            </div>
+            {renderProfileIntroduction()}
+          </div>
+        );
+
+      case 1:
+        return (
+          <div className="calup-auth-setup-form">
+            <div className="calup-auth-heading calup-auth-heading--left">
+              <span>For your records</span>
+              <h1>Your billing details.</h1>
+              <p>Use the legal name and address you want on your Calup subscription receipts.</p>
+            </div>
+            <div className="calup-auth-form">
+              {[
+                ['legalName', 'Legal name', 160],
+                ['addressLine1', 'Address line 1', 240],
+                ['addressLine2', 'Address line 2 (optional)', 240],
+                ['city', 'City', 100],
+                ['state', 'State / Union territory', 100],
+                ['postalCode', 'PIN code', 6],
+                ['gstin', 'GSTIN (optional)', 15],
+              ].map(([key, label, maxLength]) => (
+                <label key={key} htmlFor={`onboarding-billing-${key}`}>{label}
+                  <input id={`onboarding-billing-${key}`} value={billing[key] || ''}
+                    maxLength={maxLength} inputMode={key === 'postalCode' ? 'numeric' : 'text'}
+                    required={!['addressLine2', 'gstin'].includes(key)} disabled={navigationDisabled}
+                    onChange={event => {
+                      let value = event.target.value;
+                      if (key === 'legalName') billingNameEdited.current = true;
+                      if (key === 'postalCode') value = value.replace(/\D/g, '');
+                      if (key === 'gstin') value = value.replace(/\s/g, '').toUpperCase();
+                      setBilling(current => ({ ...current, [key]: value }));
+                    }} />
+                </label>
+              ))}
+              <span className="calup-auth-field-hint">GSTIN is optional. Format validation does not verify GST registration.</span>
             </div>
           </div>
         );
@@ -783,72 +898,15 @@ export default function Onboarding() {
                 </div>
               ))}
             </div>
-          </div>
-        );
-
-      case 5:
-        return (
-          <div className="onb-step animate-fade-in-up">
-            <h2>Booking rules</h2>
-            <p>Set how far in advance clients can book and other scheduling preferences.</p>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-min-notice">Minimum scheduling notice</label>
-              <div className="onb-input-with-unit">
-                <input id="onboarding-min-notice" aria-describedby="onboarding-min-notice-unit"
-                  className="form-input"
-                  type="number"
-                  min="0"
-                  value={bookingRules.minNotice}
-                  onChange={e => setBookingRules({ ...bookingRules, minNotice: Number(e.target.value) })}
-                />
-                <span id="onboarding-min-notice-unit" className="onb-unit">hours</span>
-              </div>
-              <span className="form-hint">How much notice do you need before an appointment?</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-max-advance">Maximum advance booking</label>
-              <div className="onb-input-with-unit">
-                <input id="onboarding-max-advance" aria-describedby="onboarding-max-advance-unit"
-                  className="form-input"
-                  type="number"
-                  min="1"
-                  value={bookingRules.maxAdvanceBooking}
-                  onChange={e => setBookingRules({ ...bookingRules, maxAdvanceBooking: Number(e.target.value) })}
-                />
-                <span id="onboarding-max-advance-unit" className="onb-unit">days</span>
-              </div>
-              <span className="form-hint">How far in advance can clients book?</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-buffer">Buffer time between appointments</label>
-              <div className="onb-input-with-unit">
-                <input id="onboarding-buffer" aria-describedby="onboarding-buffer-unit"
-                  className="form-input"
-                  type="number"
-                  min="0"
-                  max="240"
-                  step="5"
-                  value={bookingRules.bufferTime}
-                  onChange={e => setBookingRules({ ...bookingRules, bufferTime: Number(e.target.value) })}
-                />
-                <span id="onboarding-buffer-unit" className="onb-unit">minutes</span>
-              </div>
-              <span className="form-hint">Available starts advance by the service duration plus this break.</span>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="onboarding-cancellation">Cancellation window</label>
-              <div className="onb-input-with-unit">
-                <input id="onboarding-cancellation" aria-describedby="onboarding-cancellation-unit"
-                  className="form-input"
-                  type="number"
-                  min="0"
-                  value={bookingRules.cancellationWindow}
-                  onChange={e => setBookingRules({ ...bookingRules, cancellationWindow: Number(e.target.value) })}
-                />
-                <span id="onboarding-cancellation-unit" className="onb-unit">hours before appointment</span>
-              </div>
-              <span className="form-hint">Cancellations after this window are considered "late"</span>
-            </div>
+            <section className="onb-rules-summary" aria-labelledby="onboarding-rules-summary">
+              <h3 id="onboarding-rules-summary">Booking rules</h3>
+              <p>Customers need {bookingRules.minNotice} hours of notice and can book up to {bookingRules.maxAdvanceBooking} days ahead.</p>
+              <p>Session starts include a {bookingRules.bufferTime}-minute break. Cancellations within {bookingRules.cancellationWindow} hours are considered late.</p>
+              <details open={rulesExpanded} onToggle={event => setRulesExpanded(event.currentTarget.open)}>
+                <summary>Edit booking rules</summary>
+                {renderBookingRules()}
+              </details>
+            </section>
           </div>
         );
 
@@ -856,6 +914,8 @@ export default function Onboarding() {
         return (
           <div className="onb-step animate-fade-in-up">
             <IntegrationSheet
+              setupMode
+              meetingType={service.meetingType}
               googleStatus={googleStatus}
               merchantEmail={merchantEmail}
               phone={phone}
@@ -920,7 +980,13 @@ export default function Onboarding() {
   };
 
   if (isLoading) {
-    return <SetupShell step={1} totalSteps={WIZARD_STEPS.length} title="Loading your setup" description="Restoring your saved onboarding progress." loading />;
+    return <SetupShell step={0} totalSteps={WIZARD_STEPS.length} title="Loading your setup" description="Restoring your saved onboarding progress." loading />;
+  }
+  if (loadError) {
+    return <SetupShell step={0} totalSteps={WIZARD_STEPS.length} title="Restore your setup" description="Your saved progress has not been changed.">
+      <p role="alert">{loadError}</p>
+      <button type="button" className="setup-next-button" onClick={() => setLoadVersion(value => value + 1)}>Retry loading setup</button>
+    </SetupShell>;
   }
 
   // Completion screen
@@ -957,13 +1023,15 @@ export default function Onboarding() {
     <SetupShell
       step={WIZARD_STEPS.indexOf(step)}
       totalSteps={WIZARD_STEPS.length}
+      progressLabels={ONBOARDING_LABELS}
       title={STEP_DETAILS[step][0]}
       description={STEP_DETAILS[step][1]}
       footer={(
         <>
+          <p className="onb-save-note" role="status">{lastSavedAt ? `Last saved at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Next step saves any new changes.` : 'Next step saves your progress. Reloading restores your last successful save.'}</p>
           <div className="setup-footer-actions">
             {step > 0 ? (
-              <button className="setup-previous-button" onClick={prevStep} disabled={isSaving}>
+              <button className="setup-previous-button" onClick={prevStep} disabled={navigationDisabled}>
                 <ArrowLeft size={17} /> Previous step
               </button>
             ) : (
@@ -971,11 +1039,11 @@ export default function Onboarding() {
             )}
             <div>
               {step < TOTAL_STEPS - 1 ? (
-                <button className="setup-next-button" onClick={nextStep} disabled={isSaving}>
+                <button className="setup-next-button" onClick={nextStep} disabled={navigationDisabled}>
                   {isSaving ? 'Saving...' : 'Next step'} <ArrowRight size={17} />
                 </button>
               ) : (
-                <button className="setup-next-button" onClick={finishOnboarding} disabled={isSaving}>
+                <button className="setup-next-button" onClick={finishOnboarding} disabled={navigationDisabled}>
                   {isSaving ? 'Saving setup...' : 'Finish setup'} <ArrowRight size={17} />
                 </button>
               )}
@@ -985,7 +1053,13 @@ export default function Onboarding() {
       )}
     >
         <div className="onb-wizard-content">
-          {renderStepContent()}
+          <details className="onb-draft-preview">
+            <summary>Preview your customer page <span>Draft</span></summary>
+            <DraftBookingPreview businessName={businessName} providerName={providerName} bio={bio} service={service} availability={availability} bookingRules={bookingRules} />
+          </details>
+          <fieldset ref={stepContentRef} className="onb-step-fields" disabled={navigationDisabled}>
+            {renderStepContent()}
+          </fieldset>
         </div>
 
     </SetupShell>

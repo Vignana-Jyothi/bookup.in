@@ -1,0 +1,4523 @@
+{
+  "results": [
+    {
+      "label": "shell",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-menu-btn hide-desktop",
+          "text": "Open menu",
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "shell",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-menu-btn hide-desktop",
+          "text": "Open menu",
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "shell",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-menu-btn hide-desktop",
+          "text": "Open menu",
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "shell",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-menu-btn hide-desktop",
+          "text": "Open menu",
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "shell",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 814,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-sidebar-tool-btn",
+          "text": "",
+          "width": 40,
+          "height": 40
+        }
+      ],
+      "controlCount": 11
+    },
+    {
+      "label": "shell",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-sidebar-tool-btn",
+          "text": "",
+          "width": 40,
+          "height": 40
+        }
+      ],
+      "controlCount": 11
+    },
+    {
+      "label": "shell",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1434,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-sidebar-tool-btn",
+          "text": "",
+          "width": 40,
+          "height": 40
+        }
+      ],
+      "controlCount": 11
+    },
+    {
+      "label": "shell",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "janjiyuk-sidebar-tool-btn",
+          "text": "",
+          "width": 40,
+          "height": 40
+        }
+      ],
+      "controlCount": 11
+    },
+    {
+      "label": "appointments",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "←",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "→",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 20
+    },
+    {
+      "label": "appointments",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "←",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "→",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 20
+    },
+    {
+      "label": "appointments",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "←",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "→",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 20
+    },
+    {
+      "label": "appointments",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "←",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "→",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 20
+    },
+    {
+      "label": "appointments",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 814,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Previous page",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn active",
+          "text": "1",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn ",
+          "text": "2",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Next page",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 22
+    },
+    {
+      "label": "appointments",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Previous page",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn active",
+          "text": "1",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn ",
+          "text": "2",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Next page",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 22
+    },
+    {
+      "label": "appointments",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1434,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Previous page",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn active",
+          "text": "1",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn ",
+          "text": "2",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Next page",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 22
+    },
+    {
+      "label": "appointments",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ New Appointment",
+          "width": 176,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Review payments",
+          "width": 132,
+          "height": 33
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "More filters",
+          "width": 81,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn-table-action ",
+          "text": "Actions",
+          "width": 30,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Previous page",
+          "width": 30,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn active",
+          "text": "1",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-page-btn ",
+          "text": "2",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "pagination-nav-btn",
+          "text": "Next page",
+          "width": 30,
+          "height": 28
+        }
+      ],
+      "controlCount": 22
+    },
+    {
+      "label": "services",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 600,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 768,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 820,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1024,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1440,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "services",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "+ Add Service",
+          "width": 135,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Edit",
+          "width": 51,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Deactivate",
+          "width": 87,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Delete",
+          "width": 59,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary",
+          "text": "Retry loading instructors",
+          "width": 202,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Add Instructor",
+          "width": 115,
+          "height": 33
+        }
+      ],
+      "controlCount": 7
+    },
+    {
+      "label": "availability",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 820,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1434,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "availability",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Save Changes",
+          "width": 133,
+          "height": 43
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Monday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Tuesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Wednesday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Thursday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Friday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Saturday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 18,
+          "height": 18
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday opening time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "Sunday closing time",
+          "width": 113,
+          "height": 33
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 100,
+          "height": 36
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm ",
+          "text": "Connect in Settings",
+          "width": 169,
+          "height": 33
+        }
+      ],
+      "controlCount": 27
+    },
+    {
+      "label": "analytics",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 241,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 241,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 311,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 311,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 521,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 521,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 689,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 689,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 820,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 334,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 334,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 434,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 434,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1440,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 644,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 644,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "analytics",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View appointment data table",
+          "width": 344,
+          "height": 37
+        },
+        {
+          "tag": "SUMMARY",
+          "cls": "",
+          "text": "View paid booking value data table",
+          "width": 344,
+          "height": 37
+        }
+      ],
+      "controlCount": 2
+    },
+    {
+      "label": "booking",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 814,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1434,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "booking",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Track booking ↗",
+          "width": 98,
+          "height": 25
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary btn-sm",
+          "text": "Pending payments",
+          "width": 139,
+          "height": 33
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Marketplace",
+          "width": 67,
+          "height": 18
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "Memberships",
+          "width": 74,
+          "height": 18
+        }
+      ],
+      "controlCount": 6
+    },
+    {
+      "label": "customer",
+      "viewport": 320,
+      "mode": "normal",
+      "documentWidth": 314,
+      "overflow": false,
+      "outside": [
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "left": 292,
+          "right": 326,
+          "scrollParent": null
+        }
+      ],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 139,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 217,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 217,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 217,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 217,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 390,
+      "mode": "normal",
+      "documentWidth": 385,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 139,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 287,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 287,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 287,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 287,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 600,
+      "mode": "normal",
+      "documentWidth": 594,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 768,
+      "mode": "normal",
+      "documentWidth": 762,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 820,
+      "mode": "normal",
+      "documentWidth": 814,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 1024,
+      "mode": "normal",
+      "documentWidth": 1018,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 1440,
+      "mode": "normal",
+      "documentWidth": 1434,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    },
+    {
+      "label": "customer",
+      "viewport": 844,
+      "mode": "normal",
+      "documentWidth": 838,
+      "overflow": false,
+      "outside": [],
+      "clipped": [],
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Book another ↗",
+          "width": 95,
+          "height": 22
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "INPUT",
+          "cls": "",
+          "text": "",
+          "width": 278,
+          "height": 14
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "📋 Copy Link",
+          "width": 97,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button",
+          "text": "Raise a ticket",
+          "width": 104,
+          "height": 41
+        },
+        {
+          "tag": "SELECT",
+          "cls": "",
+          "text": "All tickets\nUnanswered\nOpen\nIn progress\nResolved\nClosed\nEscalated",
+          "width": 118,
+          "height": 42
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "support-button support-secondary",
+          "text": "Refresh",
+          "width": 72,
+          "height": 41
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-primary  ",
+          "text": "Reschedule Appointment",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Add to Calendar",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "text": "Cancel Appointment",
+          "width": 438,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "btn btn-secondary  ",
+          "text": "Book another session",
+          "width": 438,
+          "height": 43
+        },
+        {
+          "tag": "A",
+          "cls": "",
+          "text": "calup.",
+          "width": 103,
+          "height": 14
+        }
+      ],
+      "controlCount": 12
+    }
+  ],
+  "pageErrors": [],
+  "mode": "Isolated real production components; no real writes"
+}

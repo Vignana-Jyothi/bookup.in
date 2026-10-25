@@ -18,6 +18,12 @@
 }
 .setup-tool-grid > span:nth-child(3n) { background: #e9f0dc; }
 .setup-sidebar-copy { padding: 0 7px; }
+.setup-sidebar:has(.setup-stage-list) .setup-sidebar-copy { margin-top: 36px; }
+.setup-stage-list { display: flex; flex-wrap: wrap; gap: 8px 14px; list-style: none; margin: 18px 0 0; padding: 0; }
+.setup-stage-list li { color: var(--setup-ink); font-size: 12px; line-height: 1.5; }
+.setup-stage-list [aria-current='step'] { font-weight: 750; text-decoration: underline; text-underline-offset: 4px; }
+@media (min-width: 1024px) { .setup-stage-list { flex-direction: column; } }
+@media (max-width: 1023px) { .setup-sidebar:has(.setup-stage-list) .setup-sidebar-copy { margin-top: 0; } }
 .setup-step-number { font-size: 13px; font-weight: 700; }
 .setup-step-number span { margin-left: 4px; color: #92978b; font-weight: 450; }
 .setup-sidebar-copy h2 { margin: 16px 0 12px; font-family: var(--font-heading); font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -.04em; line-height: 1.18; }
@@ -64,6 +70,8 @@
   .setup-content { overflow-y: auto; padding: 36px 30px; }
 }
 @media (max-width: 600px) {
+  .setup-sidebar:has(.setup-stage-list) { gap: 12px; padding: 18px 20px; }
+  .setup-sidebar:has(.setup-stage-list) .setup-sidebar-copy p { display: none; }
   .setup-page { padding: 7px; }
   .setup-shell { height: calc(100vh - 14px); height: calc(100dvh - 14px); border-radius: 13px; }
   .setup-sidebar { display: flex; gap: 20px; padding: 22px 20px; }

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Check, ChevronRight, CreditCard, Search, ShieldCheck, X,
 } from 'lucide-react';
 import IntegrationBrandIcon from './IntegrationBrandIcon';
+import AccessibleModal from '../ui/AccessibleModal.jsx';
 import './IntegrationSheet.css';
 
 const categories = ['All integrations', 'Calendars', 'Video calls', 'Payments', 'Communication'];
@@ -55,6 +56,7 @@ function IntegrationAction({ integration, googleReady, identityStatus, connectin
 }
 
 export default function IntegrationSheet({
+  setupMode = false, meetingType = 'online',
   googleStatus, merchantEmail, phone, phoneOtp, phoneOtpSent, emailOtp, emailOtpSent, identityStatus,
   connectingGoogle, testingGoogle, verifyingEmail, verifyingPhone,
   onConnectGoogle, onTestGoogle, onSendEmailOtp, onVerifyEmailOtp, onEmailOtpChange,
@@ -63,38 +65,29 @@ export default function IntegrationSheet({
   const [category, setCategory] = useState(categories[0]);
   const [query, setQuery] = useState('');
   const [cashfreeOpen, setCashfreeOpen] = useState(false);
-  const cashfreeCloseRef = useRef(null);
+  const cashfreeTriggerRef = useRef(null);
   const googleReady = Boolean(googleStatus?.isConnected);
   const filtered = useMemo(() => integrations.filter(integration => {
+    if (setupMode) return ['email', 'sms', ...(meetingType !== 'in-person' ? ['calendar'] : [])].includes(integration.id);
     const inCategory = category === categories[0] || integration.category === category;
     const searchable = `${integration.name} ${integration.description}`.toLowerCase();
     return inCategory && searchable.includes(query.trim().toLowerCase());
-  }), [category, query]);
-  const activeCount = integrations.filter(item => item.managed).length + (googleReady ? 1 : 0)
+  }).sort((a, b) => setupMode ? ['email', 'sms', 'calendar'].indexOf(a.id) - ['email', 'sms', 'calendar'].indexOf(b.id) : 0), [category, query, setupMode, meetingType]);
+  const activeCount = (setupMode ? 0 : integrations.filter(item => item.managed).length) + (googleReady && (!setupMode || meetingType !== 'in-person') ? 1 : 0)
     + (identityStatus.emailVerified ? 1 : 0) + (identityStatus.phoneVerified ? 1 : 0);
 
-  useEffect(() => {
-    if (!cashfreeOpen) return undefined;
-    cashfreeCloseRef.current?.focus();
-    const closeOnEscape = event => {
-      if (event.key === 'Escape') setCashfreeOpen(false);
-    };
-    document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [cashfreeOpen]);
-
   return (
-    <div className="integration-sheet">
+    <div className={`integration-sheet${setupMode ? ' is-setup' : ''}`}>
       <div className="integration-heading">
         <div>
-          <span>Your workflow, connected</span>
-          <h2>All your tools. Working together.</h2>
-          <p>Review every connection Calup uses to run bookings, meetings, payments, and notifications.</p>
+          {!setupMode && <span>Your workflow, connected</span>}
+          <h2>{setupMode ? 'Verify your business' : 'All your tools. Working together.'}</h2>
+          <p>{setupMode ? 'Confirm your email and mobile number. Online sessions also need Google Calendar and Meet before publishing.' : 'Review every connection Calup uses to run bookings, meetings, payments, and notifications.'}</p>
         </div>
         <strong><span /> {activeCount} ready</strong>
       </div>
 
-      <div className="integration-toolbar">
+      {!setupMode && <div className="integration-toolbar">
         <div className="integration-tabs" role="group" aria-label="Filter integrations">
           {categories.map(item => (
             <button type="button" key={item} className={category === item ? 'is-active' : ''}
@@ -105,7 +98,7 @@ export default function IntegrationSheet({
           <Search size={17} />
           <input aria-label="Search integrations" placeholder="Search" value={query} onChange={event => setQuery(event.target.value)} />
         </label>
-      </div>
+      </div>}
 
       <div className="integration-list" aria-live="polite">
         {filtered.length ? filtered.map(integration => {
@@ -113,7 +106,7 @@ export default function IntegrationSheet({
             <div className="integration-row" key={integration.id}>
               <IntegrationBrandIcon id={integration.id} />
               <div className="integration-copy">
-                <h3>{integration.name}{integration.recommended && <small>Recommended</small>}{integration.required && <small className="is-required">Required</small>}</h3>
+                <h3>{integration.name}{integration.recommended && <small>{setupMode ? 'Before publishing' : 'Recommended'}</small>}{integration.required && <small className="is-required">Required</small>}</h3>
                 <p>{integration.description}</p>
                 {integration.id === 'email' && !identityStatus.emailVerified && (
                   <div className="integration-verification-stack">
@@ -155,20 +148,21 @@ export default function IntegrationSheet({
                 identityStatus={identityStatus}
                 connectingGoogle={connectingGoogle} testingGoogle={testingGoogle}
                 onConnectGoogle={onConnectGoogle} onTestGoogle={onTestGoogle}
-                onOpenCashfree={() => setCashfreeOpen(true)} />
+                onOpenCashfree={event => {
+                  cashfreeTriggerRef.current = event.currentTarget;
+                  setCashfreeOpen(true);
+                }} />
             </div>
           );
         }) : <div className="integration-empty"><Search size={25} /><strong>No matching tools</strong><button type="button" onClick={() => { setQuery(''); setCategory(categories[0]); }}>Clear filters</button></div>}
       </div>
 
-      <p className="integration-note"><ShieldCheck size={17} /> Connections can be reviewed later in Settings. Calup never asks merchants to expose provider secrets in the browser.</p>
+      <p className="integration-note"><ShieldCheck size={17} /> {setupMode ? 'Your draft remains private until the required activation checks pass. Other tools can be reviewed later in Settings.' : 'Connections can be reviewed later in Settings. Calup never asks merchants to expose provider secrets in the browser.'}</p>
 
       {cashfreeOpen && (
-        <div className="integration-modal-backdrop" role="presentation" onMouseDown={event => {
-          if (event.target === event.currentTarget) setCashfreeOpen(false);
-        }}>
-          <section className="integration-modal" role="dialog" aria-modal="true" aria-labelledby="cashfree-preview-title">
-            <button ref={cashfreeCloseRef} type="button" className="integration-modal-close" aria-label="Close Cashfree setup preview" onClick={() => setCashfreeOpen(false)}><X size={18} /></button>
+        <AccessibleModal label="Cashfree merchant onboarding" onClose={() => setCashfreeOpen(false)} returnFocusRef={cashfreeTriggerRef}>
+          <section className="integration-modal" aria-labelledby="cashfree-preview-title">
+            <button type="button" className="integration-modal-close" aria-label="Close Cashfree setup preview" onClick={() => setCashfreeOpen(false)}><X size={18} /></button>
             <span className="integration-modal-icon"><CreditCard size={27} /></span>
             <h2 id="cashfree-preview-title">Cashfree merchant onboarding</h2>
             <p>This is the sandbox onboarding placeholder. Production activation will open Cashfree’s secure merchant flow and return only verified onboarding status to Calup.</p>
@@ -179,7 +173,7 @@ export default function IntegrationSheet({
             </div>
             <button type="button" className="btn btn-primary" onClick={() => setCashfreeOpen(false)}>Close preview</button>
           </section>
-        </div>
+        </AccessibleModal>
       )}
     </div>
   );

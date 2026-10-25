@@ -4,20 +4,20 @@ import './SetupShell.css';
 
 const toolIcons = ['calendar', 'meet', 'whatsapp', 'cashfree', 'email', 'calendar', 'zoom', 'sms'];
 
-export default function SetupShell({ step, totalSteps, title, description, headerAction, children, footer, loading = false }) {
+export default function SetupShell({ step, totalSteps, title, description, headerAction, children, footer, loading = false, progressLabels }) {
   return (
     <div className="setup-page">
       <section className="setup-shell" aria-label="Calup account setup">
         <aside className="setup-sidebar">
           <BrandLogo size="md" />
-          <div className="setup-tool-art" aria-hidden="true">
+          {!progressLabels && <div className="setup-tool-art" aria-hidden="true">
             <span className="setup-art-label">A little more connected.</span>
             <div className="setup-tool-grid">
               {toolIcons.map((tool, index) => (
                 <span key={`${tool}-${index}`}><IntegrationBrandIcon id={tool} /></span>
               ))}
             </div>
-          </div>
+          </div>}
           <div className="setup-sidebar-copy">
             <span className="setup-step-number">Step {step + 1} <span>/ {String(totalSteps).padStart(2, '0')}</span></span>
             <h2>{title}</h2>
@@ -29,15 +29,20 @@ export default function SetupShell({ step, totalSteps, title, description, heade
                 </li>
               ))}
             </ol>
+            {progressLabels && <ol className="setup-stage-list" aria-label="Setup stages">
+              {progressLabels.map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined}>
+                <span aria-hidden="true">{index + 1}.</span> {label}
+              </li>)}
+            </ol>}
           </div>
           <span className="setup-sidebar-footer">A little setup. A lot of possibility.</span>
         </aside>
 
         <main className="setup-main">
-          <header className="setup-main-header">
+          {(!progressLabels || headerAction) && <header className="setup-main-header">
             <span>Your business starts here</span>
             {headerAction}
-          </header>
+          </header>}
           <div className="setup-content" aria-busy={loading}>
             {loading ? <div className="spinner" aria-label="Loading setup" /> : children}
           </div>
