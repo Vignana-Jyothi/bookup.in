@@ -297,70 +297,62 @@ export default function PublicBookingPage() {
   const calDays = useMemo(() => getCalendarDays(calYear, calMonth), [calYear, calMonth]);
   const todayStr = today.toISOString().split('T')[0];
 
-  // Cleanup prevents older date/service requests from replacing the current slots.
+  // Only a complete response for the current resource/date can enable booking.
   const busySlotVersion = useRef(0);
+  const busyScope = useRef(null);
+  const [slotAvailability, setSlotAvailability] = useState({ scope: null, status: 'idle' });
+  const includeProviderCalendar = selectedInstructor?.isOwner !== false;
+  const slotScope = `${provider?.id}:${selectedService?.id}:${selectedDate}:${provider?.timezone || 'Asia/Kolkata'}:${includeProviderCalendar}`;
+  const slotAvailabilityReady = isDemo || (slotAvailability.scope === slotScope && slotAvailability.status === 'ready');
+  const slotAvailabilityError = slotAvailability.scope === slotScope && slotAvailability.status === 'error';
 
-  // Live busy times
-
-  const fetchDatabaseBusySlots = useCallback((date, provId, serviceId, version) => {
+  const fetchDateBusySlots = useCallback(async (date, provId, timezone, serviceId, includeCalendar) => {
     if (!date || !provId || !serviceId) return;
-    dbService.getBusySlots(provId, date, null, serviceId)
-      .then(slots => {
-        if (version === busySlotVersion.current && Array.isArray(slots)) setLiveDbBusySlots(slots);
-      })
-      .catch(err => {
-        console.warn('Could not fetch database busy slots:', err.message);
-      });
-  }, []);
-
-  const fetchDateBusySlots = useCallback((date, provId, timezone, serviceId, includeProviderCalendar, version) => {
-    if (!date || !provId || !serviceId) return;
-
-    if (includeProviderCalendar) {
-      realGoogleCalendarService.getBusyTimes(date, provId, timezone || 'Asia/Kolkata')
-        .then(times => {
-          if (version === busySlotVersion.current && Array.isArray(times)) setLiveGcalBusyTimes(times);
-        })
-        .catch(err => {
-          console.warn('Could not fetch calendar busy times:', err.message);
-        });
-    } else {
-      setLiveGcalBusyTimes([]);
+    const version = ++busySlotVersion.current;
+    const scope = `${provId}:${serviceId}:${date}:${timezone || 'Asia/Kolkata'}:${includeCalendar}`;
+    if (busyScope.current !== scope) setSelectedTime(null);
+    busyScope.current = scope;
+    setSlotAvailability({ scope, status: 'loading' });
+    try {
+      const [slots, times] = await Promise.all([
+        dbService.getBusySlots(provId, date, null, serviceId, { strict: true }),
+        includeCalendar ? realGoogleCalendarService.getBusyTimes(date, provId, timezone || 'Asia/Kolkata') : Promise.resolve([]),
+      ]);
+      if (version !== busySlotVersion.current) return;
+      if (!Array.isArray(slots) || !Array.isArray(times)) throw new Error('Invalid availability response');
+      setLiveDbBusySlots(slots);
+      setLiveGcalBusyTimes(times);
+      setSlotAvailability({ scope, status: 'ready' });
+    } catch {
+      if (version === busySlotVersion.current) setSlotAvailability({ scope, status: 'error' });
     }
-
-    // 2. Database busy slots (Calup confirmed bookings)
-    fetchDatabaseBusySlots(date, provId, serviceId, version);
-  }, [fetchDatabaseBusySlots]);
+  }, []);
 
   useEffect(() => {
     const requests = busySlotVersion;
-    const version = ++requests.current;
-    setLiveDbBusySlots([]);
-    setLiveGcalBusyTimes([]);
     if (!isDemo && selectedDate && provider?.id && selectedService?.id) {
-      fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, selectedInstructor?.isOwner !== false, version);
+      fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, includeProviderCalendar);
     }
     return () => { ++requests.current; };
-  }, [isDemo, selectedDate, selectedService?.id, selectedInstructor?.isOwner, provider?.id, provider?.timezone, fetchDateBusySlots]);
+  }, [isDemo, selectedDate, selectedService?.id, includeProviderCalendar, provider?.id, provider?.timezone, fetchDateBusySlots]);
 
   useEffect(() => {
-    if (isDemo || !selectedDate || !provider?.id || !selectedService?.id) return undefined;
-    const version = busySlotVersion.current;
-    const refresh = () => fetchDatabaseBusySlots(selectedDate, provider.id, selectedService.id, version);
+    if (isDemo || !slotAvailabilityReady || !selectedDate || !provider?.id || !selectedService?.id) return undefined;
+    const refresh = () => fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, includeProviderCalendar);
     const interval = window.setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('focus', refresh);
     };
-  }, [isDemo, selectedDate, selectedService?.id, provider?.id, fetchDatabaseBusySlots]);
+  }, [isDemo, slotAvailabilityReady, selectedDate, selectedService?.id, provider?.id, provider?.timezone, includeProviderCalendar, fetchDateBusySlots]);
 
   const calendarBusyTimes = useMemo(() => {
     return liveGcalBusyTimes;
   }, [liveGcalBusyTimes]);
 
   const timeSlotsDetailed = useMemo(() => {
-    if (!selectedDate || !selectedService) return [];
+    if (!slotAvailabilityReady || !selectedDate || !selectedService) return [];
 
     // Format database busy slots as bookings with date and times
     const formattedDbBookings = liveDbBusySlots.map(s => ({
@@ -385,7 +377,7 @@ export default function PublicBookingPage() {
       bookingsToCheck,
       calendarBusyTimes
     );
-  }, [selectedDate, selectedService, effectiveAvailability, services, liveDbBusySlots, supabaseData?.bookings, state.bookings, calendarBusyTimes]);
+  }, [slotAvailabilityReady, selectedDate, selectedService, effectiveAvailability, services, liveDbBusySlots, supabaseData?.bookings, state.bookings, calendarBusyTimes]);
 
   const timeSlots = useMemo(() => {
     return timeSlotsDetailed.filter(s => s.available).map(s => s.time);
@@ -520,7 +512,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
       }
       setCurrentStep(2);
     } else if (currentStep === 2) {
-      if (!selectedDate || !selectedTime) {
+      if (!slotAvailabilityReady || !selectedDate || !timeSlots.includes(selectedTime)) {
         addToast('Please choose a date and time slot', 'error');
         return;
       }
@@ -541,6 +533,10 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
   const handleConfirmBooking = async (e) => {
     if (e) e.preventDefault();
     if (submittingBooking) return;
+    if (!slotAvailabilityReady) {
+      setBookingError('Please wait for availability to load, or retry if it failed.');
+      return;
+    }
 
     // Validate all fields with inline errors
     const errors = validateAllFields();
@@ -1040,7 +1036,12 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                 Available Times on {selectedDate ? formatDate(selectedDate) : 'Today'}
               </div>
 
-              {timeSlotsDetailed.length > 0 ? (
+              {!slotAvailabilityReady ? (
+                <div className="no-slots-note" role={slotAvailabilityError ? 'alert' : 'status'}>
+                  <p>{slotAvailabilityError ? 'Unable to check availability. Please try again.' : 'Checking availability...'}</p>
+                  {slotAvailabilityError && <button type="button" className="btn btn-sm btn-secondary" onClick={() => fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, includeProviderCalendar)}>Retry availability</button>}
+                </div>
+              ) : timeSlotsDetailed.length > 0 ? (
                 <div className="time-slots-list">
                   {timeSlotsDetailed.map((slot, index) => {
                     const isSelected = selectedTime === slot.time;
@@ -1087,6 +1088,10 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
         {/* --- STEP 3: DETAILS & CONFIRM --- */}
         {currentStep === 3 && (
           <form className="booking-step-pane animate-fade-in-up" onSubmit={handleConfirmBooking}>
+            {!slotAvailabilityReady && <div className="no-slots-note" role={slotAvailabilityError ? 'alert' : 'status'}>
+              <p>{slotAvailabilityError ? 'Availability could not be verified. Retry before confirming your booking.' : 'Checking availability...'}</p>
+              {slotAvailabilityError && <button type="button" className="btn btn-sm btn-secondary" onClick={() => fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, includeProviderCalendar)}>Retry availability</button>}
+            </div>}
             {/* Top Booking Summary Card (Image 4) */}
             <div className="summary-banner-card">
               <div className="summary-banner-label">Booking Summary</div>
@@ -1295,7 +1300,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
               arrow
               step={2}
               totalSteps={3}
-              disabled={!selectedDate || !selectedTime}
+              disabled={!slotAvailabilityReady || !selectedDate || !timeSlots.includes(selectedTime)}
               onClick={handleNextStep}
               className="w-full"
             >
@@ -1311,7 +1316,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
               step={3}
               totalSteps={3}
               loading={submittingBooking}
-              disabled={!policyAgreed || submittingBooking}
+              disabled={!slotAvailabilityReady || !timeSlots.includes(selectedTime) || !policyAgreed || submittingBooking}
               onClick={handleConfirmBooking}
               className="w-full"
             >
