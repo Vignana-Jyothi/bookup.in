@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 // Full npm test includes real database/notification suites and is intentionally separate.
 const tests = [
-  'test-college-deployment.js', 'test-onboarding-flow.js', 'test-service-links.js',
+  'test-college-deployment.js', 'test-public-api-probe.js', 'test-onboarding-flow.js', 'test-service-links.js',
   'test-admin-same-origin-proxy.js', 'test-customer-same-origin-proxy.js',
   'test-frontend-delivery.js', 'test-buffer-driven-slots.js', 'test-multi-instructor-scheduling.js',
   'test-merchant-onboarding-contract.js', 'test-google-calendar-host-contract.js',

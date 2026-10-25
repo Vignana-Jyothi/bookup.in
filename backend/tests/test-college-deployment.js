@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { prepareCollegeEnvironment, readCollegeEnvironment, writeCollegeEnvironment, fixtureSettings } from '../scripts/college-env.mjs';
+import { verifyPublicApi } from '../scripts/verify-public-api.mjs';
 
 const namedInput = readCollegeEnvironment({
   ...fixtureSettings, GOOGLE_CLIENT_ID: 'fixture-google-id', GOOGLE_CLIENT_SECRET: 'fixture-google-secret',
@@ -80,6 +81,7 @@ try {
   if (!server.listening) await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const response = await fetch(`http://127.0.0.1:${server.address().port}/health`);
   assert.equal((await response.json()).status, 'ok');
+  await verifyPublicApi(`http://127.0.0.1:${server.address().port}`);
   await new Promise(resolve => setTimeout(resolve, 80));
   assert.deepEqual(externalRequests, [], 'Disabled workers must not execute external jobs');
 } finally {
