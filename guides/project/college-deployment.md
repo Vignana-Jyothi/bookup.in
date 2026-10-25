@@ -72,6 +72,8 @@ Keep Vercel and Render available for testing. Prefer an isolated testing Supabas
 5. Hosted CI builds both images, starts a separate `calup-ci` Compose project using fixtures and port 14242, then checks Nginx/API health, SPA routing, absent resources, JS MIME/cache and version JSON. It has no production secrets and starts no workers. Fixture images are never promoted as production images; gamma rebuilds with actual public settings.
 
    Cleanup runs after failures only when `docker_fixtures` successfully created its environment files. An earlier install/audit failure therefore does not trigger a second Compose failure about missing `.env.backend`; partial container startup is still cleaned.
+
+   Commit npm-generated lockfile security updates before rerunning validation. The 25 October fix pins body-parser 2.4.0, multer 2.5.0 and ip-address 10.7.5 within existing ranges. Do not disable the audit gate or add automatic dependency changes inside the deployment job.
 6. Push the reviewed release to college `main`; this is the automatic production trigger. Watch both validation and deploy jobs. Confirm the deployed commit and `https://calup.app` in a browser, including a controlled login/booking/integration check. Keep Vercel/Render enabled.
 
 For local configuration-only checking, `BACKEND_ENV_FILE=.env.example docker compose --env-file .env.example config --quiet` uses placeholders and does not require an engine. Building/running containers requires the actual Docker engine. `node backend/scripts/verify-docker.mjs http://127.0.0.1:4242` tests a running stack, not a remote database.
