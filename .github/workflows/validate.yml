@@ -33,6 +33,7 @@ jobs:
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
       - name: Write isolated Docker fixtures (no production secrets)
+        id: docker_fixtures
         run: node backend/scripts/college-env.mjs --fixture
       - name: Build and start isolated containers
         run: docker compose -p calup-ci -f docker-compose.yml up -d --build --wait --wait-timeout 180
@@ -41,7 +42,7 @@ jobs:
           FRONTEND_BIND_ADDRESS: 127.0.0.1
       - run: node backend/scripts/verify-docker.mjs http://127.0.0.1:14242
       - name: Remove only CI fixture containers
-        if: always()
+        if: always() && steps.docker_fixtures.outcome == 'success'
         run: docker compose -p calup-ci -f docker-compose.yml down --remove-orphans
         env:
           FRONTEND_PORT: '14242'
