@@ -21,6 +21,7 @@ import { refundService } from '../services/refundService.js';
 import { emailService } from '../services/email.js';
 import { googleCalendarService } from '../services/googleCalendar.js';
 import { DEFAULT_POLICY } from '../services/policyEngine.js';
+import { bookingStartMillis } from '../utils/bookingTime.js';
 import { customerRequestIsTrusted, getManagementToken } from '../utils/customerAccess.js';
 
 const router = Router();
@@ -176,11 +177,15 @@ router.post('/bookings/:id/coach-cancel', requireProviderAuth, async (req, res) 
       return res.json({ success: true, message: 'Booking already cancelled' });
     }
 
-    const price = Math.round(Number(booking.price || 0));
+    if (!['pending', 'pending_payment', 'confirmed'].includes(booking.status)) {
+      return res.status(409).json({ success: false, error: 'This booking can no longer be cancelled.' });
+    }
+
+    const price = booking.payment_status === 'confirmed' ? Math.round(Number(booking.price || 0)) : 0;
     const nowIso = new Date().toISOString();
 
     // 1. Update booking status
-    const { error: updErr } = await supabase
+    const { data: changedBooking, error: updErr } = await supabase
       .from('bookings')
       .update({
         status: 'cancelled',
@@ -190,9 +195,14 @@ router.post('/bookings/:id/coach-cancel', requireProviderAuth, async (req, res) 
         refund_status: price > 0 ? 'refund_due' : 'none',
         updated_at: nowIso,
       })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updErr) throw updErr;
+    if (!changedBooking) return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
 
     // 2. If paid, create refund ledger record
     if (price > 0 && booking.payment_status === 'confirmed') {
@@ -286,14 +296,20 @@ router.post('/bookings/:id/mark-no-show', requireProviderAuth, async (req, res) 
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
+    if (booking.status === 'no-show') return res.json({ success: true, message: 'Appointment already recorded as no-show.' });
+    if (booking.status !== 'confirmed') {
+      return res.status(409).json({ success: false, error: 'Only a confirmed appointment can be marked no-show.' });
+    }
+
     // Check grace period guard: session start + grace minutes
     const policy = booking.policy_snapshot || DEFAULT_POLICY;
     const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
 
-    const sessionStart = new Date(`${booking.booking_date}T${booking.start_time}:00`).getTime();
+    const sessionStart = bookingStartMillis(booking);
     const allowedAfter = sessionStart + (graceMinutes * 60 * 1000);
     const now = Date.now();
 
+    if (!Number.isFinite(allowedAfter)) return res.status(400).json({ success: false, error: 'Appointment start time is invalid.' });
     if (now < allowedAfter) {
       const waitMinutes = Math.ceil((allowedAfter - now) / 60000);
       return res.status(400).json({
@@ -304,7 +320,7 @@ router.post('/bookings/:id/mark-no-show', requireProviderAuth, async (req, res) 
 
     const nowIso = new Date().toISOString();
 
-    const { error: updErr } = await supabase
+    const { data: changedBooking, error: updErr } = await supabase
       .from('bookings')
       .update({
         status: 'no-show',
@@ -314,9 +330,14 @@ router.post('/bookings/:id/mark-no-show', requireProviderAuth, async (req, res) 
         refund_reason: 'customer_no_show',
         updated_at: nowIso,
       })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updErr) throw updErr;
+    if (!changedBooking) return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
 
     // Audit log
     await refundService.logAudit(supabase, {
@@ -387,13 +408,21 @@ router.post(['/current/report-coach-no-show', '/:token/report-coach-no-show'], a
     const booking = await findBookingByToken(supabase, token);
     if (!booking) return res.status(404).json({ success: false, error: 'Booking not found' });
 
+    if (booking.status === 'disputed' && booking.coach_no_show_reported_at) {
+      return res.json({ success: true, message: 'Coach no-show already reported.' });
+    }
+    if (!['confirmed', 'no-show'].includes(booking.status) || (Number(booking.price) > 0 && booking.payment_status !== 'confirmed')) {
+      return res.status(409).json({ success: false, error: 'Only an active appointment with verified payment can be reported.' });
+    }
+
     const policy = booking.policy_snapshot || DEFAULT_POLICY;
     const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
 
-    const sessionStart = new Date(`${booking.booking_date}T${booking.start_time}:00`).getTime();
+    const sessionStart = bookingStartMillis(booking);
     const allowedAfter = sessionStart + (graceMinutes * 60 * 1000);
     const now = Date.now();
 
+    if (!Number.isFinite(allowedAfter)) return res.status(400).json({ success: false, error: 'Appointment start time is invalid.' });
     if (now < allowedAfter) {
       const waitMinutes = Math.ceil((allowedAfter - now) / 60000);
       return res.status(400).json({
@@ -406,7 +435,7 @@ router.post(['/current/report-coach-no-show', '/:token/report-coach-no-show'], a
     const nowIso = new Date().toISOString();
 
     // Set refund_due 100%, flag booking for review
-    const { error: updErr } = await supabase
+    const { data: changedBooking, error: updErr } = await supabase
       .from('bookings')
       .update({
         coach_no_show_reported_at: nowIso,
@@ -416,9 +445,14 @@ router.post(['/current/report-coach-no-show', '/:token/report-coach-no-show'], a
         refund_reason: 'coach_no_show',
         updated_at: nowIso,
       })
-      .eq('id', booking.id);
+      .eq('id', booking.id)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updErr) throw updErr;
+    if (!changedBooking) return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
 
     if (price > 0) {
       await refundService.processRefund(supabase, {
@@ -534,7 +568,7 @@ router.post(['/current/dispute-no-show', '/:token/dispute-no-show'], async (req,
     }
 
     const nowIso = new Date().toISOString();
-    await supabase
+    const { data: disputedBooking, error: disputeError } = await supabase
       .from('bookings')
       .update({
         status: 'disputed',
@@ -542,7 +576,14 @@ router.post(['/current/dispute-no-show', '/:token/dispute-no-show'], async (req,
         dispute_reason: disputeNote?.trim() || 'Customer disputed no-show status',
         updated_at: nowIso,
       })
-      .eq('id', booking.id);
+      .eq('id', booking.id)
+      .eq('status', 'no-show')
+      .eq('updated_at', booking.updated_at)
+      .select('id')
+      .maybeSingle();
+
+    if (disputeError) throw disputeError;
+    if (!disputedBooking) return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
 
     await refundService.logAudit(supabase, {
       bookingId: booking.id,
@@ -558,7 +599,7 @@ router.post(['/current/dispute-no-show', '/:token/dispute-no-show'], async (req,
 
     return res.json({
       success: true,
-      message: 'Dispute submitted. Coach and CalUp admin have been notified.',
+      message: 'Dispute submitted.',
     });
   } catch (err) {
     console.error('[Refunds] dispute-no-show error:', err);
