@@ -8,7 +8,7 @@ import { refundService } from '../server/services/refundService.js';
 const original = { fetch: globalThis.fetch, config: { ...config }, busy: googleCalendarService.getBusyIntervals, audit: refundService.logAudit };
 let scenario; let writes; let rpcCalls;
 Object.assign(config, { supabaseUrl: 'https://reschedule-fixture.supabase.co', supabaseServiceRoleKey: 'fixture-key' });
-googleCalendarService.getBusyIntervals = async () => ({ connected: false });
+googleCalendarService.getBusyIntervals = async () => { if (scenario === 'calendar-error') throw new Error('Fixture Calendar outage'); return { connected: false }; };
 refundService.logAudit = async () => {};
 globalThis.fetch = async (input, options = {}) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -37,14 +37,14 @@ const app = express(); app.use(express.json());
 app.post('/reschedule/:token', handleRescheduleBooking);
 const server = await new Promise(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
 try {
-  for (scenario of ['availability-error', 'PGRST202', '42501', '40001', 'rpc-throw', 'conflict', 'success']) {
+  for (scenario of ['calendar-error', 'availability-error', 'PGRST202', '42501', '40001', 'rpc-throw', 'conflict', 'success']) {
     writes = 0; rpcCalls = 0;
     const response = await fetch(`http://127.0.0.1:${server.address().port}/reschedule/fixture-management-token`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newDate: '2090-01-03', newTime: '10:00' }),
     });
     assert.equal(response.status, scenario === 'success' ? 200 : scenario === 'conflict' ? 409 : 503, scenario);
     assert.equal(writes, scenario === 'success' ? 1 : 0, 'Failed operations must never use a direct-write fallback');
-    assert.equal(rpcCalls, scenario === 'availability-error' ? 0 : 1);
+    assert.equal(rpcCalls, ['availability-error', 'calendar-error'].includes(scenario) ? 0 : 1);
   }
   console.log('Atomic reschedule HTTP fixture tests passed.');
 } finally {

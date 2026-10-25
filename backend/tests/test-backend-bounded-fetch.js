@@ -46,8 +46,8 @@ try {
   assert.equal((await serviceRoleClient.from('services').select('id')).error, null);
   assert.equal((await authClient.from('services').select('id')).error, null);
   ({ googleCalendarService: calendar } = await import('../server/services/googleCalendar.js'));
-  originalToken = calendar.getValidAccessToken;
-  calendar.getValidAccessToken = async () => 'fixture-access-token';
+  originalToken = calendar.getValidTokenDetails;
+  calendar.getValidTokenDetails = async () => ({ success: true, accessToken: 'fixture-access-token' });
   assert.deepEqual(await calendar.getBusyIntervals('fixture-provider', '2030-01-01'), { connected: true, busyTimes: [] });
   assert.equal(calls.length, 3);
   const googleSource = readFileSync('backend/server/services/googleCalendar.js', 'utf8');
@@ -61,5 +61,5 @@ try {
   globalThis.fetch = originalFetch;
   Object.assign(config, originalConfig);
   if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
-  if (calendar && originalToken) calendar.getValidAccessToken = originalToken;
+  if (calendar && originalToken) calendar.getValidTokenDetails = originalToken;
 }

@@ -5,6 +5,7 @@
  */
 
 import crypto from 'crypto';
+import { bookingStartMillis } from '../utils/bookingTime.js';
 import { boundedFetch } from '../utils/boundedFetch.js';
 import { config } from '../config.js';
 import { tokenStore } from './tokenStore.js';
@@ -67,21 +68,22 @@ async function calendarEventResult(eventData, accessToken, requireMeet = true) {
   };
 }
 
-function getTimezoneOffsetString(dateStr, timeZone = 'Asia/Kolkata') {
-  try {
-    const d = new Date(`${dateStr}T12:00:00Z`);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      timeZoneName: 'longOffset',
-    }).formatToParts(d);
-    const tzPart = parts.find(p => p.type === 'timeZoneName');
-    if (tzPart && tzPart.value) {
-      const match = tzPart.value.match(/GMT([+-]\d{2}:\d{2})/);
-      if (match) return match[1];
-      if (tzPart.value === 'GMT') return '+00:00';
-    }
-  } catch (_e) {}
-  return '+05:30';
+function nextDate(date) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+}
+
+function wallTime(date, time, timeZone) {
+  if (/^24:00(:00)?$/.test(time)) { date = nextDate(date); time = '00:00'; }
+  const millis = bookingStartMillis({ booking_date: date, start_time: time }, timeZone);
+  if (!Number.isFinite(millis)) throw new Error('Invalid Calendar appointment time');
+  return new Date(millis).toISOString();
+}
+
+function eventTimes(booking, timeZone) {
+  const startDateTime = wallTime(booking.date, booking.startTime, timeZone);
+  let endDateTime = wallTime(booking.date, booking.endTime, timeZone);
+  if (endDateTime <= startDateTime) endDateTime = wallTime(nextDate(booking.date), booking.endTime, timeZone);
+  return { startDateTime, endDateTime };
 }
 
 export const googleCalendarService = {
@@ -254,7 +256,7 @@ export const googleCalendarService = {
    * Return valid token details or explicit failure reason:
    * 'not_connected' | 'token_refresh_failed'
    */
-  async getValidTokenDetails(providerId) {
+  async getValidTokenDetails(providerId, allowReread = true) {
     const tokens = await tokenStore.getDecryptedTokens(providerId);
     if (!tokens || !tokens.accessToken) {
       return {
@@ -323,7 +325,8 @@ export const googleCalendarService = {
         const errMsg = errData.error_description || errData.error || `HTTP ${refreshRes.status}`;
         if (errData.error === 'invalid_grant') {
           console.warn(`[GoogleCalendarService] Refresh token revoked or invalid for provider ${providerId}. Disconnecting.`);
-          await tokenStore.deleteTokens(providerId);
+          const deleted = await tokenStore.deleteTokens(providerId, tokens.credentialVersion);
+          if (!deleted && allowReread) return this.getValidTokenDetails(providerId, false);
           return {
             success: false,
             accessToken: null,
@@ -341,7 +344,12 @@ export const googleCalendarService = {
 
       const refreshed = await refreshRes.json();
       const newExpiresAt = Date.now() + (refreshed.expires_in || 3600) * 1000;
-      await tokenStore.updateAccessToken(providerId, refreshed.access_token, newExpiresAt);
+      if (!refreshed.access_token) throw new Error('Google refresh response omitted access token');
+      const saved = await tokenStore.updateAccessToken(providerId, refreshed.access_token, newExpiresAt, tokens.credentialVersion, refreshed.refresh_token);
+      if (!saved) {
+        if (allowReread) return this.getValidTokenDetails(providerId, false);
+        return { success: false, reason: 'token_refresh_failed', error: 'Google credentials changed during refresh' };
+      }
 
       return {
         success: true,
@@ -370,18 +378,19 @@ export const googleCalendarService = {
 
   /**
    * Fetch busy time intervals for a given date (YYYY-MM-DD)
-   * Clamped to [00:00, 23:59] in provider's timezone.
+   * Clamped to [00:00, 24:00] in provider's timezone.
    * Exposes only start and end times to preserve customer privacy.
    */
   async getBusyIntervals(providerId, dateStr, timeZone = 'Asia/Kolkata') {
-    const accessToken = await this.getValidAccessToken(providerId);
-    if (!accessToken) {
-      return { connected: false, busyTimes: [] };
+    const details = await this.getValidTokenDetails(providerId);
+    if (!details.success || !details.accessToken) {
+      if (details.reason === 'not_connected') return { connected: false, busyTimes: [] };
+      throw new Error('Google Calendar credentials are unavailable');
     }
+    const accessToken = details.accessToken;
 
-    const offset = getTimezoneOffsetString(dateStr, timeZone);
-    const timeMin = `${dateStr}T00:00:00${offset}`;
-    const timeMax = `${dateStr}T23:59:59${offset}`;
+    const timeMin = wallTime(dateStr, '00:00', timeZone);
+    const timeMax = wallTime(nextDate(dateStr), '00:00', timeZone);
 
     try {
       const freeBusyRes = await boundedFetch(`${CALENDAR_API_BASE}/freeBusy`, {
@@ -400,18 +409,20 @@ export const googleCalendarService = {
 
       if (!freeBusyRes.ok) {
         console.error('Google freeBusy error:', await freeBusyRes.text());
-        return { connected: true, busyTimes: [] };
+        throw new Error('Google Calendar availability request failed');
       }
 
       const data = await freeBusyRes.json();
-      const rawBusy = data?.calendars?.primary?.busy || [];
+      const primary = data?.calendars?.primary;
+      if (!primary || primary.errors?.length || !Array.isArray(primary.busy)) throw new Error('Google Calendar availability response is invalid');
+      const rawBusy = primary.busy;
 
-      // Format to HH:mm in provider's timezone and clamp to [00:00, 23:59]
+      // Format to HH:mm in provider timezone; next midnight is 24:00.
       const formatTime = (d) => {
         const parts = new Intl.DateTimeFormat('en-IN', {
           hour: '2-digit',
           minute: '2-digit',
-          hour12: false,
+          hourCycle: 'h23',
           timeZone,
         }).formatToParts(d);
         const h = parts.find(p => p.type === 'hour')?.value || '00';
@@ -423,6 +434,7 @@ export const googleCalendarService = {
       for (const slot of rawBusy) {
         const startDate = new Date(slot.start);
         const endDate = new Date(slot.end);
+        if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime()) || endDate <= startDate) throw new Error('Google Calendar returned an invalid busy interval');
 
         const startDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(startDate);
         const endDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(endDate);
@@ -431,7 +443,7 @@ export const googleCalendarService = {
         let endStr = formatTime(endDate);
 
         if (startDay < dateStr) startStr = '00:00';
-        if (endDay > dateStr) endStr = '23:59';
+        if (endDay > dateStr) endStr = '24:00';
 
         if (startDay <= dateStr && endDay >= dateStr) {
           busyTimes.push({
@@ -444,7 +456,7 @@ export const googleCalendarService = {
       return { connected: true, busyTimes };
     } catch (err) {
       console.error('Failed to query Google freeBusy:', err.message);
-      return { connected: true, busyTimes: [] };
+      throw new Error('Google Calendar availability is unavailable', { cause: err });
     }
   },
 
@@ -464,9 +476,7 @@ export const googleCalendarService = {
 
     const accessToken = tokenDetails.accessToken;
 
-    const offset = getTimezoneOffsetString(booking.date, timeZone);
-    const startDateTime = `${booking.date}T${booking.startTime}:00${offset}`;
-    const endDateTime = `${booking.date}T${booking.endTime}:00${offset}`;
+    const { startDateTime, endDateTime } = eventTimes(booking, timeZone);
 
     const summary = `${booking.serviceName} — ${booking.customerName} (Calup)`;
     const description = [
@@ -558,9 +568,7 @@ export const googleCalendarService = {
     }
     const accessToken = tokenDetails.accessToken;
 
-    const offset = getTimezoneOffsetString(booking.date, timeZone);
-    const startDateTime = `${booking.date}T${booking.startTime}:00${offset}`;
-    const endDateTime = `${booking.date}T${booking.endTime}:00${offset}`;
+    const { startDateTime, endDateTime } = eventTimes(booking, timeZone);
 
     try {
       const res = await boundedFetch(`${CALENDAR_API_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
@@ -628,6 +636,7 @@ export const googleCalendarService = {
    */
   async disconnect(providerId) {
     const tokens = await tokenStore.getDecryptedTokens(providerId);
+    if (!tokens) return { success: true };
     if (tokens?.accessToken) {
       try {
         await boundedFetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(tokens.accessToken)}`, {
@@ -639,7 +648,7 @@ export const googleCalendarService = {
       }
     }
 
-    await tokenStore.deleteTokens(providerId);
+    await tokenStore.deleteTokens(providerId, tokens?.credentialVersion);
     return { success: true };
   }
 };

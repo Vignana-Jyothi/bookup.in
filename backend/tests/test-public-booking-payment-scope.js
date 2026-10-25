@@ -59,7 +59,7 @@ globalThis.fetch = async (input, options = {}) => {
   }
   throw new Error(`Unexpected fixture request: ${method} ${url.pathname}`);
 };
-googleCalendarService.getBusyIntervals = async () => ({ connected: false, busyTimes: [] });
+googleCalendarService.getBusyIntervals = async () => { if (scenario.calendarUnavailable) throw new Error('Fixture Calendar outage'); return { connected: false, busyTimes: [] }; };
 googleCalendarService.createEvent = async (...args) => {
   calendarCalls.push(args);
   return { success: true, eventId: 'fixture-event', meetLink: 'https://meet.google.com/fixture-test' };
@@ -109,7 +109,7 @@ try {
   assert.equal(invalid.statusCode, 422);
   assert.equal(saved.length, 0);
   for (const input of [
-    { rpcError: '40001' }, { rpcError: '42501' }, { rpcError: '0A000' },
+    { calendarUnavailable: true }, { rpcError: '40001' }, { rpcError: '42501' }, { rpcError: '0A000' },
     { fallback: true },
     { fallback: true, conflictError: true },
     { fallback: true, conflicts: [{ start_time: '09:00', end_time: '10:00' }] },

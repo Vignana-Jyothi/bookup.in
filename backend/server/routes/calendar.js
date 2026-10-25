@@ -1,17 +1,8 @@
 import { Router } from 'express';
 import { googleCalendarService } from '../services/googleCalendar.js';
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config.js';
-import { requireProviderAuth } from '../middleware/auth.js';
+import { requireProviderAuth, serviceRoleClient } from '../middleware/auth.js';
 
 const router = Router();
-
-const serverSupabase = (config.supabaseUrl && config.supabaseKey)
-  ? createClient(config.supabaseUrl, config.supabaseKey)
-  : null;
-
-// In-process deduplication cache fallback (bookingId -> eventId)
-const eventDeduplicationCache = new Map();
 
 /**
  * GET /api/calendar/busy
@@ -35,7 +26,7 @@ router.get('/busy', async (req, res) => {
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Error fetching calendar busy intervals:', err.message);
-    res.status(500).json({ success: false, error: err.message, busyTimes: [] });
+    res.status(503).json({ success: false, error: 'Calendar availability is temporarily unavailable. Please try again.' });
   }
 });
 
@@ -45,91 +36,40 @@ router.get('/busy', async (req, res) => {
  * Idempotent with persistent database deduplication.
  */
 router.post('/events', requireProviderAuth, async (req, res) => {
-  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
-  // Use authenticated provider's ID instead of client-supplied value
+  const bookingId = req.body?.booking?.id;
   const providerId = req.providerId;
-
-  if (!booking || !booking.id || !booking.date || !booking.startTime || !booking.endTime) {
-    return res.status(400).json({ success: false, error: 'Complete booking object with id, date, startTime, and endTime is required' });
+  if (typeof bookingId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
+    return res.status(400).json({ success: false, error: 'A persisted booking ID is required' });
   }
-
-  // 1. Check if booking payload already has event ID (client-side deduplication)
-  if (booking.googleEventId || booking.google_event_id) {
-    return res.json({
-      success: true,
-      eventId: booking.googleEventId || booking.google_event_id,
-      duplicatePrevented: true,
-    });
-  }
-
-  // 2. Check in-process deduplication cache
-  if (eventDeduplicationCache.has(booking.id)) {
-    return res.json({
-      success: true,
-      eventId: eventDeduplicationCache.get(booking.id),
-      duplicatePrevented: true,
-    });
-  }
-
-  // 3. Check Supabase database for existing event ID & provider ownership
-  if (serverSupabase && booking.id && !booking.id.startsWith('booking-')) {
-    try {
-      const { data: existingBooking } = await serverSupabase
-        .from('bookings')
-        .select('id, provider_id, google_event_id')
-        .eq('id', booking.id)
-        .maybeSingle();
-
-      if (existingBooking) {
-        // Ownership check: booking must belong to authenticated provider
-        if (existingBooking.provider_id && existingBooking.provider_id !== providerId) {
-          return res.status(403).json({ success: false, error: 'You do not own this booking' });
-        }
-
-        if (existingBooking.google_event_id) {
-          eventDeduplicationCache.set(booking.id, existingBooking.google_event_id);
-          return res.json({
-            success: true,
-            eventId: existingBooking.google_event_id,
-            duplicatePrevented: true,
-          });
-        }
-      }
-    } catch (dbErr) {
-      console.warn('DB check before event creation failed (non-fatal):', dbErr.message);
-    }
-  }
-
-  // 4. Create event on Google Calendar
+  if (!serviceRoleClient) return res.status(503).json({ success: false, error: 'Booking storage is unavailable' });
   try {
-    const result = await googleCalendarService.createEvent(providerId, booking, timeZone);
-
+    const { data: saved, error } = await serviceRoleClient.from('bookings')
+      .select('*, services(name, meeting_type), providers(timezone, name)')
+      .eq('id', bookingId).eq('provider_id', providerId).maybeSingle();
+    if (error) return res.status(503).json({ success: false, error: 'Booking could not be loaded' });
+    if (!saved || saved.provider_id !== providerId) return res.status(404).json({ success: false, error: 'Booking not found' });
+    if (saved.status !== 'confirmed' || !((saved.price !== null && saved.price !== undefined && Number(saved.price) === 0) || saved.payment_status === 'confirmed')) {
+      return res.status(409).json({ success: false, error: 'Booking must be confirmed with any required payment completed' });
+    }
+    if (saved.google_event_id) return res.json({ success: true, eventId: saved.google_event_id, meetLink: saved.meet_link || null, duplicatePrevented: true });
+    const booking = {
+      id: saved.id, date: saved.booking_date, startTime: saved.start_time, endTime: saved.end_time,
+      duration: saved.duration, price: saved.price, serviceName: saved.services?.name,
+      providerName: saved.providers?.name, customerName: saved.customer_name, customerEmail: saved.customer_email,
+      customerPhone: saved.customer_phone, notes: saved.notes, meetingType: saved.meeting_type || saved.services?.meeting_type,
+    };
+    const result = await googleCalendarService.createEvent(providerId, booking, saved.providers?.timezone || 'Asia/Kolkata');
     if (result.success && result.eventId) {
-      eventDeduplicationCache.set(booking.id, result.eventId);
-
-      // Persist google_event_id and meet_link to database if real booking
-      if (serverSupabase && booking.id && !booking.id.startsWith('booking-')) {
-        const updatePayload = { google_event_id: result.eventId };
-        if (result.meetLink) updatePayload.meet_link = result.meetLink;
-        serverSupabase
-          .from('bookings')
-          .update(updatePayload)
-          .eq('id', booking.id)
-          .then(({ error }) => {
-            if (error) console.warn('Could not persist calendar details to Supabase (column may be pending):', error.message);
-          })
-          .catch(e => console.warn('Supabase update error (non-fatal):', e.message));
-      }
+      const { data: updated, error: updateError } = await serviceRoleClient.from('bookings')
+        .update({ google_event_id: result.eventId, ...(result.meetLink ? { meet_link: result.meetLink } : {}) })
+        .eq('id', bookingId).eq('provider_id', providerId).eq('status', 'confirmed')
+        .select('id').maybeSingle();
+      if (updateError || !updated) return res.status(503).json({ success: false, error: 'Calendar details could not be saved. Please retry.' });
     }
-
-    if (!result.success) {
-      console.error(`[CalendarRoutes] Google Calendar event creation failed. Provider: "${providerId}", Recipient: "${booking?.customerEmail || booking?.customerName || 'N/A'}", Error: ${result.error || result.reason || 'Unknown error'}`);
-    }
-
-    res.json(result);
+    return res.json(result);
   } catch (err) {
-    console.error(`[CalendarRoutes] Error creating Google Calendar event. Provider: "${providerId}", Recipient: "${booking?.customerEmail || booking?.customerName || 'N/A'}", Error: ${err.message || err}`);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[CalendarRoutes] Event creation failed:', err.message);
+    return res.status(503).json({ success: false, error: 'Calendar synchronization is temporarily unavailable' });
   }
 });
 
@@ -140,18 +80,26 @@ router.post('/events', requireProviderAuth, async (req, res) => {
 router.patch('/events/:eventId', requireProviderAuth, async (req, res) => {
   const { eventId } = req.params;
   const providerId = req.providerId;
-  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
+  const { booking } = req.body;
 
   if (!eventId || !booking) {
     return res.status(400).json({ success: false, error: 'eventId and booking details required' });
   }
 
   try {
-    const result = await googleCalendarService.updateEvent(providerId, eventId, booking, timeZone);
+    if (!serviceRoleClient) return res.status(503).json({ success: false, error: 'Booking storage is unavailable' });
+    const { data: saved, error } = await serviceRoleClient.from('bookings')
+      .select('id, provider_id, booking_date, start_time, end_time, providers(timezone)')
+      .eq('google_event_id', eventId).eq('provider_id', providerId).maybeSingle();
+    if (error) return res.status(503).json({ success: false, error: 'Booking could not be loaded' });
+    if (!saved || saved.provider_id !== providerId) return res.status(404).json({ success: false, error: 'Booking not found' });
+    const result = await googleCalendarService.updateEvent(providerId, eventId, {
+      date: saved.booking_date, startTime: saved.start_time, endTime: saved.end_time,
+    }, saved.providers?.timezone || 'Asia/Kolkata');
     res.json(result);
   } catch (err) {
     console.error('Error updating Google Calendar event:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(503).json({ success: false, error: 'Calendar synchronization is temporarily unavailable' });
   }
 });
 
@@ -168,11 +116,16 @@ router.delete('/events/:eventId', requireProviderAuth, async (req, res) => {
   }
 
   try {
+    if (!serviceRoleClient) return res.status(503).json({ success: false, error: 'Booking storage is unavailable' });
+    const { data: saved, error } = await serviceRoleClient.from('bookings')
+      .select('id, provider_id').eq('google_event_id', eventId).eq('provider_id', providerId).maybeSingle();
+    if (error) return res.status(503).json({ success: false, error: 'Booking could not be loaded' });
+    if (!saved || saved.provider_id !== providerId) return res.status(404).json({ success: false, error: 'Booking not found' });
     const result = await googleCalendarService.deleteEvent(providerId, eventId);
     res.json(result);
   } catch (err) {
     console.error('Error deleting Google Calendar event:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(503).json({ success: false, error: 'Calendar synchronization is temporarily unavailable' });
   }
 });
 

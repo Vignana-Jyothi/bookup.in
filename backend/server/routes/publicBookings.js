@@ -33,6 +33,7 @@ import { tokenRouteLimiter, bookingCreateLimiter } from '../middleware/rateLimit
 import { customerRequestIsTrusted, getManagementToken, setCustomerAccessCookie } from '../utils/customerAccess.js';
 import { withKeyedLock } from '../utils/keyedLock.js';
 import { bookingStartMillis } from '../utils/bookingTime.js';
+import { assertCalendarAvailability } from '../services/calendarAvailability.js';
 import { boundedFetch } from '../utils/boundedFetch.js';
 
 const router = Router();
@@ -236,26 +237,11 @@ export async function handleCreateBooking(req, res) {
     const endMin = startMin + duration;
     const endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 
-    // 3. Google Calendar busy intervals conflict check (pre-RPC, non-blocking)
+    // Connected Calendar outages cannot be treated as an empty calendar.
     try {
-      const tz = provider.timezone || 'Asia/Kolkata';
-      const gcalBusy = await googleCalendarService.getBusyIntervals(providerId, bookingDate, tz);
-      if (gcalBusy?.connected && Array.isArray(gcalBusy.busyTimes) && gcalBusy.busyTimes.length > 0) {
-        const conflictsWithGcal = gcalBusy.busyTimes.some(b => {
-          const bStart = Number(b.start.split(':')[0]) * 60 + Number(b.start.split(':')[1]);
-          const bEnd = Number(b.end.split(':')[0]) * 60 + Number(b.end.split(':')[1]);
-          return startMin < bEnd && endMin > bStart;
-        });
-
-        if (conflictsWithGcal) {
-          return res.status(409).json({
-            success: false,
-            error: 'Selected time slot conflicts with provider calendar.',
-          });
-        }
-      }
-    } catch (_gcalErr) {
-      // Non-blocking fallback if calendar provider service is unreachable
+      await assertCalendarAvailability({ database: supabase, providerId, service, provider, date: bookingDate, startTime });
+    } catch (error) {
+      return res.status(error.status || 503).json({ success: false, error: error.message });
     }
 
     // 4. Generate or use management token
@@ -1076,21 +1062,11 @@ export async function handleRescheduleBooking(req, res) {
     }
 
     try {
-      const tz = provider.timezone || 'Asia/Kolkata';
-      const gcalBusy = await googleCalendarService.getBusyIntervals(providerId, newDate, tz);
-      if (gcalBusy?.connected && Array.isArray(gcalBusy.busyTimes) && gcalBusy.busyTimes.length > 0) {
-        const conflictsWithGcal = gcalBusy.busyTimes.some(b => {
-          const bStart = Number(b.start.split(':')[0]) * 60 + Number(b.start.split(':')[1]);
-          const bEnd = Number(b.end.split(':')[0]) * 60 + Number(b.end.split(':')[1]);
-          return startMin < bEnd && endMin > bStart;
-        });
-
-        if (conflictsWithGcal) {
-          return res.status(409).json({ success: false, error: 'Selected time slot conflicts with provider calendar.' });
-        }
-      }
-    } catch (_gcalErr) {
-      // Non-blocking fallback
+      await assertCalendarAvailability({ database: supabase, providerId,
+        service: { ...service, duration, instructor_id: booking.instructor_id || service.instructor_id },
+        provider, date: newDate, startTime: newTime });
+    } catch (error) {
+      return res.status(error.status || 503).json({ success: false, error: error.message });
     }
 
     // Rescheduling requires the transactional database operation. A query/update
