@@ -6,3 +6,5 @@ Backend uses a raw runtime env file (Compose 2.30+) and forced production/5252 s
 
 Use `config --quiet` to avoid printing credentials. Read [the runbook](project/college-deployment.md) before starting services against a database or changing the college port/ingress.
 
+The default runtime file is `.env.backend`, distinct from public-only `.env`. Actual Compose fixture resolution confirmed backend-only credentials arrive there, the frontend receives only declared public build arguments, and worker ownership stays false. Configuration validation does not establish image/container execution.
+
