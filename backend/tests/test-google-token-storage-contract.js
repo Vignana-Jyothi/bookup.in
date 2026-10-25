@@ -8,6 +8,8 @@ const { tokenStore } = await import('../server/services/tokenStore.js');
 const providerId = 'google-token-memory-contract';
 const accessToken = 'access-token-must-not-reach-disk';
 const refreshToken = 'refresh-token-must-not-reach-disk';
+const legacyPath = 'backend/server/data/tokens.json';
+const legacyExisted = fs.existsSync(legacyPath);
 
 await tokenStore.saveTokens(providerId, {
   email: 'host@example.com',
@@ -21,7 +23,8 @@ const recovered = await tokenStore.getDecryptedTokens(providerId);
 assert.equal(recovered.accessToken, accessToken);
 assert.equal(recovered.refreshToken, refreshToken);
 
-const legacyFile = fs.readFileSync('backend/server/data/tokens.json', 'utf8').trim();
+assert.equal(fs.existsSync(legacyPath), legacyExisted, 'Saving credentials must not create a disk cache');
+const legacyFile = legacyExisted ? fs.readFileSync(legacyPath, 'utf8').trim() : '{}';
 assert.equal(legacyFile, '{}', 'Legacy disk cache remains empty');
 assert(!legacyFile.includes(accessToken));
 assert(!legacyFile.includes(refreshToken));
