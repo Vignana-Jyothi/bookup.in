@@ -1281,7 +1281,7 @@ router.post(['/current/cancel', '/:token/cancel'], async (req, res) => {
     const isPaymentConfirmed = booking.payment_status === 'confirmed';
     const effectiveRefundAmount = isPaymentConfirmed ? refundAmount : 0;
     const effectiveRefundStatus = (isPaymentConfirmed && refundAmount > 0) ? 'refund_due' : 'none';
-    const newStatus = refundPercent === 100 ? 'cancelled' : 'late-cancellation';
+    const newStatus = Number(booking.price || 0) <= 0 || refundPercent === 100 ? 'cancelled' : 'late-cancellation';
 
     let cancellation = supabase
       .from('bookings')

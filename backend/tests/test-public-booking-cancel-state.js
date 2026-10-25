@@ -40,6 +40,7 @@ try {
     await handler({ params: { token: 'fixture-management-token' }, headers: {}, body: {} }, res);
     assert.equal(res.statusCode, scenario.expected, scenario.status);
     assert.equal(writes, scenario.expected === 200 && !scenario.idempotent ? 1 : 0);
+    if (writes) assert.equal(res.body.status, 'cancelled', 'Free cancellation must not be labeled a late paid cancellation');
     if (!writes) assert.equal(effects, 0, 'Failed/stale/terminal cancellation must have no side effects');
   }
   console.log('PASS: customer cancellation preserves terminal decisions, detects concurrent changes and handles repeats');
