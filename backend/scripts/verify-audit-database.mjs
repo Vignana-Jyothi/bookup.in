@@ -10,8 +10,10 @@ export const auditMigrations = [
   '20261025_release_readiness.sql', '20261025_zz_integration_gateway_context.sql',
   '20261025_zza_booking_calendar_preflight.sql', '20261025_zzb_cashfree_dispatch.sql',
   '20261025_zzz_payment_notifications.sql',
+  '20261025171102_deployment_permission_hardening.sql',
 ];
 export const auditAssertions = [
+  'deployment-permission-invariants.sql',
   'legacy-booking-rpc-access-invariants.sql', 'booking-table-access-invariants.sql',
   'pending-booking-overlap-invariants.sql', 'pending-booking-expiry-scenarios.sql',
   'subscription-refund-terminal-invariants.sql', 'release-readiness-invariants.sql',

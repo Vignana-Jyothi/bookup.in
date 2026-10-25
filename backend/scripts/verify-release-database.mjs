@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const RELEASE_SCHEMA = '20261025-integration-audit';
+export const RELEASE_SCHEMA = '20261025-deployment-audit';
 
 export function readReleaseSettings(text) {
   const value = name => text.match(new RegExp(`^${name}=(.*)$`, 'm'))?.[1].replace(/\r$/, '');
@@ -10,7 +10,7 @@ export function readReleaseSettings(text) {
 }
 
 export async function verifyReleaseDatabase(settings, { fetchImpl = fetch, timeoutMs = 10000 } = {}) {
-  const failure = 'Database release check failed. Verify connectivity and apply/test the 20261025 audit migrations before deploying.';
+  const failure = 'Database release check failed. Verify connectivity and apply/test the audit migrations and additive deployment permission hardening before deploying.';
   try {
     const base = new URL(settings.supabaseUrl);
     if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash
@@ -22,7 +22,7 @@ export async function verifyReleaseDatabase(settings, { fetchImpl = fetch, timeo
         timer = setTimeout(() => { controller.abort(); reject(new Error(failure)); }, timeoutMs);
       });
       const result = await Promise.race([(async () => {
-        const response = await fetchImpl(`${base.origin}/rest/v1/rpc/get_integration_release_readiness_v1`, {
+        const response = await fetchImpl(`${base.origin}/rest/v1/rpc/get_deployment_release_readiness_v1`, {
           method: 'POST', redirect: 'error', signal: controller.signal,
           headers: { apikey: settings.supabaseServiceRoleKey, Authorization: `Bearer ${settings.supabaseServiceRoleKey}`, 'Content-Type': 'application/json' },
           body: '{}',

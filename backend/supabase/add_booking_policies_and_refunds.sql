@@ -111,6 +111,11 @@ left join public.bookings b on b.provider_id = p.id
 left join public.refunds r on r.provider_id = p.id
 group by p.id, p.name, p.email;
 
+-- Administrative aggregate must never expose merchant identity or finances publicly.
+alter view public.coach_risk_metrics set (security_invoker = true);
+revoke all on public.coach_risk_metrics from public, anon, authenticated;
+grant select on public.coach_risk_metrics to service_role;
+
 -- =============================================================================
 -- 6. STORAGE BUCKET: Private Bucket for Refund Proofs
 -- =============================================================================
