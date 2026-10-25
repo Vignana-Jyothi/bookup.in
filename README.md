@@ -27,7 +27,7 @@ Run commands from the repository root. Dependencies and the lockfile are shared;
 
 The college repository deploys `main` through its existing `gamma` runner to `https://calup.app`. Docker builds the current frontend/backend layout and Nginx routes same-origin API traffic. Vercel and Render remain configured for testing; the Vercel workflow runs only in the original source repository.
 
-Follow the tracked [college deployment runbook](guides/project/college-deployment.md) for settings, first-deployment checks, worker ownership, promotion and rollback. `npm run lint:ci` and `npm run test:isolated` work without the local-only documentation tooling. The full `npm test` additionally needs an isolated integration database/API.
+Deployment notes live locally at `guides/project/college-deployment.md`; the guides directory is intentionally excluded from Git and Docker. `npm run lint:ci` and `npm run test:isolated` work without that local documentation/tooling. The full `npm test` additionally needs an isolated integration database/API.
 
 ## Local Development
 
@@ -37,9 +37,9 @@ Follow the tracked [college deployment runbook](guides/project/college-deploymen
 
 - `npm run build`: writes the production frontend to `frontend/dist/`.
 - `npm run preview`: previews that build with the configured API proxy.
-- `npm run lint`: checks frontend/backend and repository tooling.
+- `npm run lint:ci`: checks tracked frontend/backend and repository tooling.
+- `npm run lint`: additionally checks local guide tooling, when present.
 - `npm test`: runs registered suites; integration suites require an isolated configured database/API.
-- `npm run guides`: opens reference documentation at `http://127.0.0.1:4174`.
-- `npm run guides:check`: verifies the reference reader and its documents.
+- `npm run guides` / `npm run guides:check`: local documentation tools; require the ignored guides directory.
 
-See [deployment](guides/project/DEPLOY.md), [repository organization](guides/project/structure.md), and [file takeaways](guides/repository-takeaways.md). Payment submission requires provider verification; refund records track manual settlement.
+Local reference documents remain under `guides/` and are not included in fresh Git checkouts. Payment submission requires provider verification; refund records track manual settlement.

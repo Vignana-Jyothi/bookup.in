@@ -55,7 +55,7 @@ playwright-report/
 test-results/
 
 #additional files for reference 
-guides
+/guides/
 tasks
 .npm-cache*/
 AGENTS.md
