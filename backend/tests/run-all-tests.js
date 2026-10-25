@@ -7,7 +7,10 @@ process.env.NODE_ENV = 'test';
 process.env.TOKEN_STORE_MEMORY_ONLY = 'true';
 
 const testFiles = [
+  'backend/tests/test-deployment-container-runner.js',
+  'backend/tests/test-payment-notification-scheduler.js',
   'backend/tests/test-booking-phone-verification.js',
+  'backend/tests/test-audit-dev-environment.js',
   'backend/tests/test-booking-calendar-preflight-contract.js',
   'backend/tests/test-calendar-invites.js',
   'backend/tests/test-calendar-route-authorization.js',

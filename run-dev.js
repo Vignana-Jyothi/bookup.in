@@ -10,7 +10,10 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 console.log('Starting Calup backend (3001) and live frontend (5173)...\n');
 
-const server = spawn(process.execPath, ['--watch', 'backend/server/index.js'], {
+const serverArgs = process.argv.includes('--no-watch')
+  ? ['backend/server/index.js']
+  : ['--watch', 'backend/server/index.js'];
+const server = spawn(process.execPath, serverArgs, {
   cwd: projectRoot,
   stdio: 'inherit',
   shell: false,

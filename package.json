@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node run-dev.js",
+    "dev:audit": "node backend/scripts/run-audit-dev.mjs",
     "client": "vite frontend --configLoader native",
     "server": "node backend/server/index.js",
     "start": "node backend/server/index.js",
@@ -21,7 +22,8 @@
     "preview": "vite preview frontend --configLoader native",
     "guides": "node guides/tools/serve.mjs",
     "guides:check": "node guides/tools/verify.mjs",
-    "test:database:audit": "node backend/scripts/verify-audit-database.mjs"
+    "test:database:audit": "node backend/scripts/verify-audit-database.mjs",
+    "test:deployment:containers": "node backend/scripts/verify-deployment-containers.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

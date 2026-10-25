@@ -33,7 +33,17 @@ The October 25 audit requires the nine `backend/supabase/20261025_*.sql` migrati
 
 ## Disposable database checks
 
-Install psql and restore the existing base schema/historical migrations into a disposable Supabase project with no users, providers, bookings or customer contacts. The runner refuses nonempty databases. Then run from this repository root in PowerShell:
+Existing deployments also require [the additive permission repair](backend/supabase/20261025171102_deployment_permission_hardening.sql) after the nine audit migrations. The deployment gate now requires `20261025-deployment-audit`; it rejects missing or unsafe storage/admin-view permissions before changing containers. A fresh project uses the complete bootstrap manifest.
+
+Run `npm run test:deployment:containers` from a terminal with local Docker access for fixture-only image/ingress checks, an online dependency audit and deployment-shell syntax. It uses temporary settings under ignored artifacts and removes only its own containers. Keep one intended API worker host connected to the deployment database with `BACKGROUND_WORKERS_ENABLED=true`; college Docker otherwise defaults to false.
+
+For local application testing, keep credentials in ignored `.env.audit.local`, validate with `npm run dev:audit -- --check`, then run `npm run dev:audit`. The launcher permits only the disposable project and Cashfree sandbox, prevents fallback to other env files, and keeps background workers disabled. Supply the test project backend key and configure a dedicated HTTPS webhook tunnel before enabling checkout.
+
+For a fresh Supabase project, apply the extensions and SQL files in [bootstrap-order.json](backend/supabase/bootstrap-order.json) through a project-scoped Supabase MCP connection. This sequence includes all nine audit migrations. Do not run `grant_permissions.sql` afterward. Keep the project empty of real users and records.
+
+The setup was verified through MCP on 25 October 2026: 60 application tables, ten SQL assertion suites, two-tenant access isolation, and competing booking/expiry/reschedule transactions passed. Synthetic fixtures were removed. External Cashfree and Google OAuth end-to-end tests still require separate sandbox credentials and app configuration.
+
+For repeatable CLI testing, install psql and prepare a disposable Supabase project with the base schema/historical migrations and no users, providers, bookings or customer contacts. The runner refuses nonempty databases. Run from this repository root in PowerShell:
 
 ```powershell
 $env:CALUP_AUDIT_DISPOSABLE_DB = 'true'
@@ -41,7 +51,7 @@ $env:AUDIT_DATABASE_URL = '<disposable PostgreSQL connection URI>'
 npm run test:database:audit -- --apply-audit
 ```
 
-This optionally applies only the nine audit migrations, checks grants and tenant isolation, and runs competing booking/expiry/reschedule transactions. Fixtures are removed afterward; discard the test database if interrupted. Omit --apply-audit to check an already migrated empty test database. This command has not been executed against PostgreSQL here and is never a production migration command. Full local instructions remain in ignored guides/project/disposable-database-checks.md.
+This optionally applies only the nine audit migrations, checks grants and tenant isolation, and runs competing booking/expiry/reschedule transactions. Fixtures are removed afterward; discard the test database if interrupted. Omit --apply-audit to check an already migrated empty test database. The CLI runner itself has not been executed against PostgreSQL here; its SQL checks and concurrent scenarios were executed through MCP. It is never a production migration command. Full local instructions remain in ignored guides/project/disposable-database-checks.md.
 
 ## Local Development
 
