@@ -55,3 +55,6 @@ AGENTS.md
 #additional files for reference
 product.md
 deply_plan.pdf
+
+# Generated college migration source exports and verification snapshots
+/artifacts/college-migration/
