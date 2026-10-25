@@ -7,6 +7,21 @@ process.env.NODE_ENV = 'test';
 process.env.TOKEN_STORE_MEMORY_ONLY = 'true';
 
 const testFiles = [
+  'backend/tests/test-booking-calendar-preflight-contract.js',
+  'backend/tests/test-calendar-invites.js',
+  'backend/tests/test-calendar-route-authorization.js',
+  'backend/tests/test-cashfree-dispatch-recovery.js',
+  'backend/tests/test-cashfree-dispatch.js',
+  'backend/tests/test-cashfree-payment-evidence.js',
+  'backend/tests/test-cashfree-response-boundaries.js',
+  'backend/tests/test-cashfree-webhook-boundaries.js',
+  'backend/tests/test-checkout-calendar-availability.js',
+  'backend/tests/test-google-calendar-safety.js',
+  'backend/tests/test-integration-gateway-context-contract.js',
+  'backend/tests/test-payment-notification-contract.js',
+  'backend/tests/test-payment-notifications.js',
+  'backend/tests/test-subscription-payment-evidence.js',
+  'backend/tests/test-subscription-refund-identity.js',
   'backend/tests/test-audit-database-runner.js',
   'backend/tests/test-release-readiness-contract.js',
   'backend/tests/test-release-database-probe.js',

@@ -7,7 +7,7 @@ assert.deepEqual(settings, { supabaseUrl: 'https://fixture.supabase.co', supabas
 let calls = 0;
 await verifyReleaseDatabase(settings, { fetchImpl: async (url, options) => {
   calls++;
-  assert.equal(url, 'https://fixture.supabase.co/rest/v1/rpc/get_release_readiness_v1');
+  assert.equal(url, 'https://fixture.supabase.co/rest/v1/rpc/get_integration_release_readiness_v1');
   assert.equal(options.headers.Authorization, 'Bearer fixture-private-key=literal');
   assert.equal(options.redirect, 'error');
   assert.equal(options.body, '{}');

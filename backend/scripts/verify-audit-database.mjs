@@ -7,12 +7,15 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 export const auditMigrations = [
   '20261025_booking_table_access.sql', '20261025_legacy_booking_rpc_access.sql',
   '20261025_pending_booking_overlap.sql', '20261025_subscription_refund_terminal.sql',
-  '20261025_release_readiness.sql',
+  '20261025_release_readiness.sql', '20261025_zz_integration_gateway_context.sql',
+  '20261025_zza_booking_calendar_preflight.sql', '20261025_zzb_cashfree_dispatch.sql',
+  '20261025_zzz_payment_notifications.sql',
 ];
 export const auditAssertions = [
   'legacy-booking-rpc-access-invariants.sql', 'booking-table-access-invariants.sql',
   'pending-booking-overlap-invariants.sql', 'pending-booking-expiry-scenarios.sql',
   'subscription-refund-terminal-invariants.sql', 'release-readiness-invariants.sql',
+  'booking-calendar-preflight-invariants.sql', 'cashfree-dispatch-invariants.sql', 'payment-notification-invariants.sql', 'integration-gateway-context-invariants.sql',
 ];
 
 function execute(command, args, { env, input }) {

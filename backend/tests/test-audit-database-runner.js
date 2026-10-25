@@ -27,8 +27,8 @@ await assert.rejects(verifyAuditDatabase({ env, args: [], run: async () => {
 let logs = [];
 await verifyAuditDatabase({ env, args: ['--apply-audit'], run: invoke, log: value => logs.push(value) });
 const files = calls.filter(call => call.args.includes('--file')).map(call => path.basename(call.args.at(-1)));
-assert.deepEqual(files.slice(1, 6), auditMigrations, 'Apply only audit migrations with readiness last');
-assert.deepEqual(files.slice(6, 6 + auditAssertions.length), auditAssertions);
+assert.deepEqual(files.slice(1, 1 + auditMigrations.length), auditMigrations, 'Apply only audit migrations in dependency order');
+assert.deepEqual(files.slice(1 + auditMigrations.length, 1 + auditMigrations.length + auditAssertions.length), auditAssertions);
 assert.equal(files.at(-1), 'audit-database-cleanup.sql');
 assert.equal(calls.filter(call => call.options.input).length, 6, 'Run all three real two-connection race pairs');
 assert(!logs.join('').includes(connection));
