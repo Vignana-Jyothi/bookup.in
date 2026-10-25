@@ -278,7 +278,7 @@ export function StoreProvider({ children }) {
     } catch (_e) { /* noop */ }
   }, []);
 
-  const isHydratingRef = useRef(false);
+  const hydrationVersion = useRef(0);
 
   // Synchronize with Supabase Auth & Hydrate Provider Dashboard
   const refreshFromSupabase = useCallback(async () => {
@@ -287,29 +287,32 @@ export function StoreProvider({ children }) {
       return;
     }
 
-    if (isHydratingRef.current) return;
-    isHydratingRef.current = true;
+    const version = ++hydrationVersion.current;
+    const isCurrent = () => version === hydrationVersion.current;
+    const dispatchCurrent = action => { if (isCurrent()) dispatch(action); };
 
     try {
       const { data: identity, error: identityError } = await supabase.auth.getUser();
+      if (!isCurrent()) return;
       if (identityError) throw identityError;
       if (isCalupAdmin(identity?.user)) {
-        dispatch({ type: ACTIONS.LOGOUT });
-        dispatch({ type: ACTIONS.LOGIN, payload: identity.user });
+        dispatchCurrent({ type: ACTIONS.LOGOUT });
+        dispatchCurrent({ type: ACTIONS.LOGIN, payload: identity.user });
         return;
       }
       const uid = identity?.user?.id;
 
       if (!uid) {
-        dispatch({ type: ACTIONS.LOGOUT });
-        isHydratingRef.current = false;
+        dispatchCurrent({ type: ACTIONS.LOGOUT });
         return;
       }
 
       let dashData = await dbService.getDashboardData(uid);
+      if (!isCurrent()) return;
       if (!dashData?.provider) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser) {
+        if (!isCurrent()) return;
+        if (currentUser?.id === uid) {
           const provName = currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Provider';
           const baseSlug = (provName || 'provider').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'provider';
           const provSlug = `${baseSlug}-${currentUser.id.slice(0, 5)}`;
@@ -326,7 +329,7 @@ export function StoreProvider({ children }) {
       }
 
       if (dashData && dashData.provider) {
-        dispatch({
+        dispatchCurrent({
           type: ACTIONS.HYDRATE_DASHBOARD,
           payload: {
             user: {
@@ -344,7 +347,7 @@ export function StoreProvider({ children }) {
         });
       } else {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
-        dispatch({
+        dispatchCurrent({
           type: ACTIONS.LOGIN,
           payload: currentUser
             ? { id: currentUser.id, email: currentUser.email, name: currentUser.user_metadata?.name || 'Provider' }
@@ -353,9 +356,7 @@ export function StoreProvider({ children }) {
       }
     } catch (err) {
       console.error('Failed to hydrate from Supabase:', err);
-      dispatch({ type: ACTIONS.SET_AUTH_LOADING, payload: false });
-    } finally {
-      isHydratingRef.current = false;
+      dispatchCurrent({ type: ACTIONS.SET_AUTH_LOADING, payload: false });
     }
   }, []);
 
@@ -364,6 +365,8 @@ export function StoreProvider({ children }) {
       dispatch({ type: ACTIONS.SET_AUTH_LOADING, payload: false });
       return;
     }
+
+    const authRequests = hydrationVersion;
 
     // Check existing Supabase session on boot/refresh
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -379,14 +382,17 @@ export function StoreProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'MFA_CHALLENGE_VERIFIED') && session?.user) {
+        ++hydrationVersion.current;
         // Do not await another Auth call while inside Supabase's auth event lock.
         setTimeout(() => refreshFromSupabase(session.user.id), 0);
       } else if (event === 'SIGNED_OUT') {
+        ++hydrationVersion.current;
         dispatch({ type: ACTIONS.LOGOUT });
       }
     });
 
     return () => {
+      ++authRequests.current;
       subscription?.unsubscribe();
     };
   }, [refreshFromSupabase]);

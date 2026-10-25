@@ -1,0 +1,26 @@
+﻿import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { bookingStartMillis } from '../../frontend/src/utils/bookingTime.js';
+import { DEFAULT_POLICY } from '../../frontend/src/utils/policyEngine.js';
+const source = await readFile(new URL('../../frontend/src/pages/booking/CustomerBooking.jsx', import.meta.url), 'utf8');
+const timing = source.split('  const cancellationWindow = policies?.cancellationWindow ?? 12;')[1].split('  const [showDisputeModal')[0];
+const eligibility = new Function('policies', 'resolvedBooking', 'provider', 'nowMillis', 'bookingStartMillis', 'DEFAULT_POLICY', `const cancellationWindow = policies?.cancellationWindow ?? 12;${timing}\nreturn {isWithinFreeCancellation,isWithinRescheduleWindow,rescheduleWindow,sessionStartMillis};`);
+const booking = { date: '2026-11-01', startTime: '10:00:00', status: 'confirmed', policySnapshot: { reschedule_min_hours_before: 2, no_show_grace_minutes: 15 } };
+const provider = { timezone: 'Asia/Kolkata' };
+const start = Date.parse('2026-11-01T04:30:00Z');
+const before = eligibility({ cancellationWindow: 48 }, booking, provider, start - 12 * 3600000, bookingStartMillis, DEFAULT_POLICY);
+assert.equal(before.sessionStartMillis, start);
+assert.equal(before.isWithinFreeCancellation, false);
+assert.equal(before.isWithinRescheduleWindow, true, 'Distinct reschedule cutoff must permit a session 12h away');
+assert.equal(eligibility({ cancellationWindow: 1 }, booking, provider, start - 3600000, bookingStartMillis, DEFAULT_POLICY).isWithinRescheduleWindow, false);
+assert.equal(eligibility({}, { ...booking, startTime: 'invalid' }, provider, start, bookingStartMillis, DEFAULT_POLICY).isWithinRescheduleWindow, false);
+
+const noShowBody = source.split('  const canReportCoachNoShow = useMemo(() => {')[1].split('  const canDisputeNoShow')[0];
+assert.match(noShowBody, /\[resolvedBooking, sessionStartMillis, nowMillis\]/, 'Clock must be a memo dependency');
+const noShow = new Function('resolvedBooking', 'sessionStartMillis', 'nowMillis', 'DEFAULT_POLICY', `return (() => {${noShowBody.split('  }, [')[0]}})();`);
+assert.equal(noShow(booking, start, start + 14 * 60000, DEFAULT_POLICY), false);
+assert.equal(noShow(booking, start, start + 15 * 60000, DEFAULT_POLICY), true, 'A confirmed booking becomes reportable without a network status change');
+assert.match(source, /setInterval\(\(\) => setNowMillis\(Date.now\(\)\), 30000\)/);
+assert.match(source, /currentTime: new Date\(nowMillis\)/);
+assert.match(source, /\[resolvedBooking, provider\?\.timezone, nowMillis\]/);
+console.log('PASS: customer reschedule policy, provider wall clock, invalid-time closure and live no-show/refund clock');

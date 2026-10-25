@@ -4,7 +4,7 @@
  * Allows customers to view confirmation, reschedule slots, and cancel with policy evaluation.
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import TicketPanel from '../../components/support/TicketPanel';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { usePopupFeedback } from '../../hooks/usePopupFeedback.js';
@@ -34,6 +34,7 @@ import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { customerBookingService } from '../../services/booking/customerBookingService';
 import { clearLastBooking } from '../../utils/lastBooking';
 import { calculateCancellationRefund, DEFAULT_POLICY } from '../../utils/policyEngine';
+import { bookingStartMillis } from '../../utils/bookingTime.js';
 import PillButton from '../../components/ui/PillButton';
 import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
 import BrandLogo from '../../components/ui/BrandLogo';
@@ -93,8 +94,16 @@ export default function CustomerBooking() {
   const [rescheduleGcalBusyTimes, setRescheduleGcalBusyTimes] = useState([]);
   const [isLoadingRescheduleSlots, setIsLoadingRescheduleSlots] = useState(false);
   const [rescheduleSlotsError, setRescheduleSlotsError] = useState(null);
+  const rescheduleRequestVersion = useRef(0);
+  const [loadedRescheduleScope, setLoadedRescheduleScope] = useState(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const [nowMillis, setNowMillis] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMillis(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const today = new Date(nowMillis).toISOString().split('T')[0];
 
   // Payment state
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
@@ -260,43 +269,45 @@ export default function CustomerBooking() {
     return getCalendarDays(rescheduleCalYear, rescheduleCalMonth);
   }, [rescheduleCalYear, rescheduleCalMonth]);
 
+  const rescheduleScope = `${provider?.id}:${resolvedBooking?.id}:${newDate}`;
+  const rescheduleSlotsReady = loadedRescheduleScope === rescheduleScope && !isLoadingRescheduleSlots && !rescheduleSlotsError;
   const fetchRescheduleSlots = useCallback(async (date) => {
+    const version = ++rescheduleRequestVersion.current;
+    const isCurrent = () => version === rescheduleRequestVersion.current;
+    setNewTime('');
+    setLoadedRescheduleScope(null);
+    setRescheduleDbBusySlots([]);
+    setRescheduleGcalBusyTimes([]);
     if (!date || !provider?.id) return;
     setIsLoadingRescheduleSlots(true);
     setRescheduleSlotsError(null);
-
     const tz = provider.timezone || 'Asia/Kolkata';
     try {
       const [busySlots, gcalTimes] = await Promise.all([
-        dbService.getBusySlots(provider.id, date, resolvedBooking?.id).catch(err => {
-          console.warn('[CustomerBooking] dbService.getBusySlots failed:', err);
-          return [];
-        }),
-        realGoogleCalendarService.getBusyTimes(date, provider.id, tz).catch(err => {
-          console.warn('[CustomerBooking] realGoogleCalendarService.getBusyTimes failed:', err);
-          return [];
-        }),
+        dbService.getBusySlots(provider.id, date, resolvedBooking?.id, targetServiceId, { strict: true }),
+        realGoogleCalendarService.getBusyTimes(date, provider.id, tz),
       ]);
-
-      setRescheduleDbBusySlots(Array.isArray(busySlots) ? busySlots : []);
-      setRescheduleGcalBusyTimes(Array.isArray(gcalTimes) ? gcalTimes : []);
-    } catch (err) {
-      console.error('[CustomerBooking] Error fetching slots for date:', err);
-      setRescheduleSlotsError('Unable to load available slots. Please try again.');
+      if (!isCurrent()) return;
+      if (!Array.isArray(busySlots) || !Array.isArray(gcalTimes)) throw new Error('Invalid availability response');
+      setRescheduleDbBusySlots(busySlots);
+      setRescheduleGcalBusyTimes(gcalTimes);
+      setLoadedRescheduleScope(`${provider.id}:${resolvedBooking?.id}:${date}`);
+    } catch {
+      if (isCurrent()) setRescheduleSlotsError('Unable to load available slots. Please try again.');
     } finally {
-      setIsLoadingRescheduleSlots(false);
+      if (isCurrent()) setIsLoadingRescheduleSlots(false);
     }
-  }, [provider?.id, provider?.timezone, resolvedBooking?.id]);
+  }, [provider?.id, provider?.timezone, resolvedBooking?.id, targetServiceId]);
 
   useEffect(() => {
-    if (showRescheduleModal && newDate) {
-      fetchRescheduleSlots(newDate);
-    }
+    const requests = rescheduleRequestVersion;
+    if (showRescheduleModal && newDate) fetchRescheduleSlots(newDate);
+    return () => { ++requests.current; };
   }, [showRescheduleModal, newDate, fetchRescheduleSlots]);
 
   // Available slots for customer rescheduling (strictly available, excluding own current slot)
   const availableRescheduleSlots = useMemo(() => {
-    if (!resolvedBooking || !newDate || !availability || !targetServiceId) return [];
+    if (!rescheduleSlotsReady || !resolvedBooking || !newDate || !availability || !targetServiceId) return [];
 
     const formattedDbBookings = rescheduleDbBusySlots.map(s => ({
       date: newDate,
@@ -332,6 +343,7 @@ export default function CustomerBooking() {
         return true;
       });
   }, [
+    rescheduleSlotsReady,
     resolvedBooking,
     newDate,
     availability,
@@ -344,18 +356,18 @@ export default function CustomerBooking() {
     state.bookings,
   ]);
 
-  // Evaluate cancellation policy timing
+  // Time-sensitive controls use the provider's wall clock and refresh while the page is open.
   const cancellationWindow = policies?.cancellationWindow ?? 12;
-  const isWithinFreeCancellation = useMemo(() => {
-    if (!resolvedBooking?.date || !resolvedBooking?.startTime) return true;
-    try {
-      const aptTime = new Date(`${resolvedBooking.date}T${resolvedBooking.startTime}:00`).getTime();
-      const now = new Date().getTime();
-      return (aptTime - now) / (1000 * 60 * 60) >= cancellationWindow;
-    } catch {
-      return true;
-    }
-  }, [resolvedBooking, cancellationWindow]);
+  const sessionStartMillis = bookingStartMillis({
+    booking_date: resolvedBooking?.date,
+    start_time: resolvedBooking?.startTime,
+  }, provider?.timezone || 'Asia/Kolkata');
+  const hoursNotice = (sessionStartMillis - nowMillis) / 3600000;
+  const isWithinFreeCancellation = Number.isFinite(hoursNotice) && hoursNotice >= cancellationWindow;
+  const rescheduleMinHours = Number(resolvedBooking?.policySnapshot?.reschedule_min_hours_before
+    ?? policies?.reschedule_min_hours_before ?? DEFAULT_POLICY.reschedule_min_hours_before);
+  const rescheduleWindow = Number.isFinite(rescheduleMinHours) ? rescheduleMinHours : DEFAULT_POLICY.reschedule_min_hours_before;
+  const isWithinRescheduleWindow = Number.isFinite(hoursNotice) && hoursNotice >= rescheduleWindow;
 
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeType, setDisputeType] = useState('refund');
@@ -366,34 +378,33 @@ export default function CustomerBooking() {
     if (!resolvedBooking) return null;
     return calculateCancellationRefund({
       booking: resolvedBooking,
-      currentTime: new Date(),
+      currentTime: new Date(nowMillis),
       timezone: provider?.timezone || 'Asia/Kolkata',
     });
-  }, [resolvedBooking, provider?.timezone]);
+  }, [resolvedBooking, provider?.timezone, nowMillis]);
 
   const canReportCoachNoShow = useMemo(() => {
     if (!resolvedBooking || resolvedBooking.status !== 'confirmed') return false;
     const policy = resolvedBooking.policySnapshot || DEFAULT_POLICY;
     const graceMinutes = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
     try {
-      const sessionStart = new Date(`${resolvedBooking.date}T${resolvedBooking.startTime}:00`).getTime();
-      return Date.now() >= sessionStart + (graceMinutes * 60 * 1000);
+      return Number.isFinite(sessionStartMillis) && nowMillis >= sessionStartMillis + (graceMinutes * 60 * 1000);
     } catch (_) {
       return false;
     }
-  }, [resolvedBooking]);
+  }, [resolvedBooking, sessionStartMillis, nowMillis]);
 
   const canDisputeNoShow = useMemo(() => {
     if (!resolvedBooking || resolvedBooking.status !== 'no-show') return false;
     try {
       const markedAt = resolvedBooking.customerNoShowAt ? new Date(resolvedBooking.customerNoShowAt).getTime() : new Date(resolvedBooking.createdAt).getTime();
-      return Date.now() - markedAt <= 48 * 60 * 60 * 1000;
+      return nowMillis - markedAt <= 48 * 60 * 60 * 1000;
     } catch (_) {
       return false;
     }
-  }, [resolvedBooking]);
+  }, [resolvedBooking, nowMillis]);
 
-  // Loading state (avoids flashing "Appointment Not Found" during initial fetch)
+  // Loading state avoids flashing "Appointment Not Found" during the initial fetch.
   if (isLoading) {
     return (
       <div className="booking-page">
@@ -644,8 +655,8 @@ export default function CustomerBooking() {
   }
 
   const handleOpenReschedule = () => {
-    if (!isWithinFreeCancellation) {
-      addToast(`Rescheduling is not allowed within ${cancellationWindow} hours of the appointment. Please contact your provider directly.`, 'error');
+    if (!isWithinRescheduleWindow) {
+      addToast(`Rescheduling is not allowed within ${rescheduleWindow} hours of the appointment. Please contact your provider directly.`, 'error');
       return;
     }
 
@@ -673,11 +684,12 @@ export default function CustomerBooking() {
     }
     setNewDate(initialDate);
     setNewTime('');
+    setLoadedRescheduleScope(null);
     setShowRescheduleModal(true);
   };
 
   const handleConfirmReschedule = async () => {
-    if (!newDate || !newTime || isSubmittingReschedule) return;
+    if (!rescheduleSlotsReady || !newDate || !newTime || isSubmittingReschedule) return;
 
     const isSlotValid = availableRescheduleSlots.some(s => s.time === newTime);
     if (!isSlotValid) {
@@ -1802,22 +1814,22 @@ export default function CustomerBooking() {
           {isConfirmed && !isReadOnlyTracking && (
             <div className="manage-actions-stack">
               <PillButton
-                variant={isWithinFreeCancellation ? "primary" : "secondary"}
+                variant={isWithinRescheduleWindow ? "primary" : "secondary"}
                 onClick={handleOpenReschedule}
-                disabled={!isWithinFreeCancellation}
-                title={!isWithinFreeCancellation ? `Rescheduling is not allowed within ${cancellationWindow} hours of appointment.` : ''}
+                disabled={!isWithinRescheduleWindow}
+                title={!isWithinRescheduleWindow ? `Rescheduling is not allowed within ${rescheduleWindow} hours of appointment.` : ''}
                 style={{
                   width: '100%',
                   justifyContent: 'center',
-                  opacity: !isWithinFreeCancellation ? 0.6 : 1,
-                  cursor: !isWithinFreeCancellation ? 'not-allowed' : 'pointer',
+                  opacity: !isWithinRescheduleWindow ? 0.6 : 1,
+                  cursor: !isWithinRescheduleWindow ? 'not-allowed' : 'pointer',
                 }}
               >
                 Reschedule Appointment
               </PillButton>
-              {!isWithinFreeCancellation && (
+              {!isWithinRescheduleWindow && (
                 <div style={{ fontSize: '11.5px', color: 'var(--color-text-tertiary, #64748b)', textAlign: 'center', marginTop: '-4px' }}>
-                  Rescheduling closed within {cancellationWindow}h cutoff window.
+                  Rescheduling closed within {rescheduleWindow}h cutoff window.
                 </div>
               )}
 
@@ -1933,15 +1945,15 @@ export default function CustomerBooking() {
           {!isConfirmed && !isCancelled && !isCompleted && isReschedulable && !isReadOnlyTracking && (
             <div className="manage-actions-stack" style={{ marginTop: '16px' }}>
               <PillButton
-                variant={isWithinFreeCancellation ? "primary" : "secondary"}
+                variant={isWithinRescheduleWindow ? "primary" : "secondary"}
                 onClick={handleOpenReschedule}
-                disabled={!isWithinFreeCancellation}
-                title={!isWithinFreeCancellation ? `Rescheduling is not allowed within ${cancellationWindow} hours of appointment.` : ''}
+                disabled={!isWithinRescheduleWindow}
+                title={!isWithinRescheduleWindow ? `Rescheduling is not allowed within ${rescheduleWindow} hours of appointment.` : ''}
                 style={{
                   width: '100%',
                   justifyContent: 'center',
-                  opacity: !isWithinFreeCancellation ? 0.6 : 1,
-                  cursor: !isWithinFreeCancellation ? 'not-allowed' : 'pointer',
+                  opacity: !isWithinRescheduleWindow ? 0.6 : 1,
+                  cursor: !isWithinRescheduleWindow ? 'not-allowed' : 'pointer',
                 }}
               >
                 Reschedule Appointment
@@ -2067,7 +2079,7 @@ export default function CustomerBooking() {
                     )}
                   </div>
 
-                  {isLoadingRescheduleSlots ? (
+                  {isLoadingRescheduleSlots || (!rescheduleSlotsReady && !rescheduleSlotsError) ? (
                     <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
                       <div className="spinner" style={{ margin: '0 auto 8px', width: 24, height: 24 }} />
                       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--theme-text-muted)' }}>
@@ -2163,7 +2175,7 @@ export default function CustomerBooking() {
                 </PillButton>
                 <PillButton
                   variant="primary"
-                  disabled={!newDate || !newTime || isSubmittingReschedule || isLoadingRescheduleSlots}
+                  disabled={!rescheduleSlotsReady || !newDate || !newTime || isSubmittingReschedule}
                   onClick={handleConfirmReschedule}
                 >
                   {isSubmittingReschedule ? 'Rescheduling...' : 'Confirm Reschedule'}

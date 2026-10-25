@@ -1,7 +1,7 @@
 import { supabase } from '../supabase/supabaseClient.js';
 import { getApiBase } from '../../utils/api.js';
 
-async function request(path = '', options = {}) {
+async function performRequest(path = '', options = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Authentication required.');
   const response = await fetch(`${getApiBase()}/v1/merchant/onboarding${path}`, {
@@ -22,6 +22,23 @@ async function request(path = '', options = {}) {
     throw error;
   }
   return result.data;
+}
+
+// Bound identity, response headers and body parsing as one operation.
+async function request(path = '', options = {}) {
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Merchant setup request timed out. Please try again.'));
+    }, 15000);
+  });
+  try {
+    return await Promise.race([performRequest(path, { ...options, signal: controller.signal }), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const onboardingService = {

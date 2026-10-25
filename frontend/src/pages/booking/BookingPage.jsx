@@ -297,26 +297,29 @@ export default function PublicBookingPage() {
   const calDays = useMemo(() => getCalendarDays(calYear, calMonth), [calYear, calMonth]);
   const todayStr = today.toISOString().split('T')[0];
 
+  // Cleanup prevents older date/service requests from replacing the current slots.
+  const busySlotVersion = useRef(0);
+
   // Live busy times
 
-  const fetchDatabaseBusySlots = useCallback((date, provId, serviceId) => {
+  const fetchDatabaseBusySlots = useCallback((date, provId, serviceId, version) => {
     if (!date || !provId || !serviceId) return;
     dbService.getBusySlots(provId, date, null, serviceId)
       .then(slots => {
-        if (Array.isArray(slots)) setLiveDbBusySlots(slots);
+        if (version === busySlotVersion.current && Array.isArray(slots)) setLiveDbBusySlots(slots);
       })
       .catch(err => {
         console.warn('Could not fetch database busy slots:', err.message);
       });
   }, []);
 
-  const fetchDateBusySlots = useCallback((date, provId, timezone, serviceId, includeProviderCalendar) => {
+  const fetchDateBusySlots = useCallback((date, provId, timezone, serviceId, includeProviderCalendar, version) => {
     if (!date || !provId || !serviceId) return;
 
     if (includeProviderCalendar) {
       realGoogleCalendarService.getBusyTimes(date, provId, timezone || 'Asia/Kolkata')
         .then(times => {
-          if (Array.isArray(times)) setLiveGcalBusyTimes(times);
+          if (version === busySlotVersion.current && Array.isArray(times)) setLiveGcalBusyTimes(times);
         })
         .catch(err => {
           console.warn('Could not fetch calendar busy times:', err.message);
@@ -326,19 +329,24 @@ export default function PublicBookingPage() {
     }
 
     // 2. Database busy slots (Calup confirmed bookings)
-    fetchDatabaseBusySlots(date, provId, serviceId);
+    fetchDatabaseBusySlots(date, provId, serviceId, version);
   }, [fetchDatabaseBusySlots]);
 
   useEffect(() => {
-    if (isDemo) return;
-    if (selectedDate && provider?.id && selectedService?.id) {
-      fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, selectedInstructor?.isOwner !== false);
+    const requests = busySlotVersion;
+    const version = ++requests.current;
+    setLiveDbBusySlots([]);
+    setLiveGcalBusyTimes([]);
+    if (!isDemo && selectedDate && provider?.id && selectedService?.id) {
+      fetchDateBusySlots(selectedDate, provider.id, provider.timezone, selectedService.id, selectedInstructor?.isOwner !== false, version);
     }
+    return () => { ++requests.current; };
   }, [isDemo, selectedDate, selectedService?.id, selectedInstructor?.isOwner, provider?.id, provider?.timezone, fetchDateBusySlots]);
 
   useEffect(() => {
     if (isDemo || !selectedDate || !provider?.id || !selectedService?.id) return undefined;
-    const refresh = () => fetchDatabaseBusySlots(selectedDate, provider.id, selectedService.id);
+    const version = busySlotVersion.current;
+    const refresh = () => fetchDatabaseBusySlots(selectedDate, provider.id, selectedService.id, version);
     const interval = window.setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
     return () => {

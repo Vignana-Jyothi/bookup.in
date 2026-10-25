@@ -1,5 +1,5 @@
-const proofNames = ['calup_attempt_v1', 'calup_attempt_reference_v1', 'calup_commerce_access', 'calup_commerce_challenge'];
-const allowed = /^\/api\/v1\/public\/(?:booking-attempts(?:\/[A-Za-z0-9/-]+)?|checkout-sessions\/current(?:\/(?:open|refresh|complete))?|commerce\/[A-Za-z0-9._~-]+\/[A-Za-z0-9/_-]+|support\/tickets(?:\/[A-Za-z0-9/-]+)?)$/;
+const proofNames = ['calup_attempt_v1', 'calup_attempt_reference_v1', 'calup_customer_access', 'calup_commerce_access', 'calup_commerce_challenge'];
+const allowed = /^\/api\/v1\/public\/(?:booking-attempts(?:\/[A-Za-z0-9/-]+)?|checkout-sessions\/current(?:\/(?:open|refresh|complete))?|customer-bookings\/(?:track|current)|bookings(?:\/(?:access-session|busy-slots|create|current(?:\/(?:reschedule|cancel|mark-paid|report-coach-no-show|refund-action|dispute-no-show))?))?|commerce\/[A-Za-z0-9._~-]+\/[A-Za-z0-9/_-]+|support\/tickets(?:\/[A-Za-z0-9/-]+)?)$/;
 
 // Keep customer proof first-party when the SPA and API are on different sites.
 export function createCustomerProxy({ fetchImpl = fetch,
@@ -34,18 +34,19 @@ export function createCustomerProxy({ fetchImpl = fetch,
       .filter(value => proofNames.includes(value.split('=')[0]) && !/[\r\n]/.test(value));
     if (proofs.length) headers.cookie = proofs.join('; ');
     let body;
+    const bodyLimit = upstream.pathname.endsWith('/bookings/current/mark-paid') ? 4 * 1024 * 1024 : 262144;
     if (req.method === 'POST') {
       if (req.body !== undefined) body = typeof req.body === 'string' || Buffer.isBuffer(req.body) ? req.body : JSON.stringify(req.body);
       else {
         const chunks = []; let size = 0;
         for await (const chunk of req) {
           size += Buffer.byteLength(chunk);
-          if (size > 262144) { res.statusCode = 413; return res.end(); }
+          if (size > bodyLimit) { res.statusCode = 413; return res.end(); }
           chunks.push(Buffer.from(chunk));
         }
         body = Buffer.concat(chunks);
       }
-      if (Buffer.byteLength(body || '') > 262144) { res.statusCode = 413; return res.end(); }
+      if (Buffer.byteLength(body || '') > bodyLimit) { res.statusCode = 413; return res.end(); }
     }
     try {
       const result = await fetchImpl(upstream, { method: req.method, headers,

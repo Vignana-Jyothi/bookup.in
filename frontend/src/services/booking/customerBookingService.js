@@ -3,7 +3,8 @@
  * Communicates with clean, cookie-authenticated customer booking endpoints.
  */
 
-import { getApiBase } from '../../utils/api.js';
+import { getApiBase, getPublicSessionApiBase } from '../../utils/api.js';
+import { boundedFetch } from '../../utils/boundedFetch.js';
 
 export { getApiBase };
 
@@ -12,10 +13,10 @@ export const customerBookingService = {
    * Create booking via backend (authoritative conflict checks + server-side WhatsApp confirmations)
    */
   async createBooking(bookingPayload) {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
     let res;
     try {
-      res = await fetch(`${apiBase}/public/bookings`, {
+      res = await boundedFetch(`${apiBase}/v1/public/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(bookingPayload),
@@ -40,12 +41,12 @@ export const customerBookingService = {
    * Fetch appointment by management token from the backend
    */
   async getBooking(token, customerPhone = '') {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
     const bookingReference = String(token || '').trim().toUpperCase();
 
     if (/^M\d{9}$/.test(bookingReference)) {
       if (!customerPhone) return null;
-      const res = await fetch(`${apiBase}/v1/public/customer-bookings/track`, {
+      const res = await boundedFetch(`${apiBase}/v1/public/customer-bookings/track`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -54,14 +55,14 @@ export const customerBookingService = {
       const result = await res.json().catch(() => ({}));
       if (res.ok && result.data?.booking) return result.data;
       if (res.status === 404) {
-        const legacyExchange = await fetch(`${apiBase}/v1/public/bookings/access-session`, {
+        const legacyExchange = await boundedFetch(`${apiBase}/v1/public/bookings/access-session`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ bookingId: bookingReference, customerPhone }),
         });
         if (legacyExchange.ok) {
-          const current = await fetch(`${apiBase}/v1/public/bookings/current`, {
+          const current = await boundedFetch(`${apiBase}/v1/public/bookings/current`, {
             credentials: 'include',
             headers: { Accept: 'application/json' },
           });
@@ -76,7 +77,7 @@ export const customerBookingService = {
     }
 
     if (token) {
-      const exchange = await fetch(`${apiBase}/v1/public/bookings/access-session`, {
+      const exchange = await boundedFetch(`${apiBase}/v1/public/bookings/access-session`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -85,7 +86,7 @@ export const customerBookingService = {
       if (!exchange.ok) return null;
     }
 
-    const currentReference = await fetch(`${apiBase}/v1/public/customer-bookings/current`, {
+    const currentReference = await boundedFetch(`${apiBase}/v1/public/customer-bookings/current`, {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
@@ -94,7 +95,7 @@ export const customerBookingService = {
       if (result.data?.booking) return result.data;
     }
 
-    const currentManagement = await fetch(`${apiBase}/v1/public/bookings/current`, {
+    const currentManagement = await boundedFetch(`${apiBase}/v1/public/bookings/current`, {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
@@ -113,8 +114,8 @@ export const customerBookingService = {
       throw new Error('Date and time are required for rescheduling.');
     }
 
-    const apiBase = getApiBase();
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/reschedule`, {
+    const apiBase = getPublicSessionApiBase();
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/reschedule`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -135,9 +136,9 @@ export const customerBookingService = {
    * Cancel appointment via backend (which checks cancellation policy window)
    */
   async cancelBooking(token) {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
 
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/cancel`, {
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/cancel`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -155,14 +156,17 @@ export const customerBookingService = {
    * Sends optional screenshot file via FormData
    */
   async markPaid(token, screenshotFile = null) {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
 
+    if (screenshotFile && screenshotFile.size > (4 * 1024 * 1024) - 8192) {
+      throw new Error('Please choose a payment screenshot smaller than 4 MB.');
+    }
     const formData = new FormData();
     if (screenshotFile) {
       formData.append('screenshot', screenshotFile);
     }
 
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/mark-paid`, {
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/mark-paid`, {
       method: 'POST',
       credentials: 'include',
       body: screenshotFile ? formData : undefined,
@@ -180,9 +184,9 @@ export const customerBookingService = {
    * Customer reports coach no-show after start + grace period
    */
   async reportCoachNoShow(token) {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
 
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/report-coach-no-show`, {
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/report-coach-no-show`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -199,9 +203,9 @@ export const customerBookingService = {
    * Customer confirms receipt or disputes refund
    */
   async refundAction(token, action, disputeNote = '') {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
 
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/refund-action`, {
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/refund-action`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -219,9 +223,9 @@ export const customerBookingService = {
    * Customer disputes a customer no-show within 48h
    */
   async disputeNoShow(token, disputeNote = '') {
-    const apiBase = getApiBase();
+    const apiBase = getPublicSessionApiBase();
 
-    const res = await fetch(`${apiBase}/v1/public/bookings/current/dispute-no-show`, {
+    const res = await boundedFetch(`${apiBase}/v1/public/bookings/current/dispute-no-show`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -242,7 +246,7 @@ export const customerBookingService = {
     if (!providerId) return null;
     const apiBase = getApiBase();
     try {
-      const res = await fetch(`${apiBase}/policies/public/${encodeURIComponent(providerId)}`);
+      const res = await boundedFetch(`${apiBase}/policies/public/${encodeURIComponent(providerId)}`);
       if (res.ok) {
         return await res.json();
       }

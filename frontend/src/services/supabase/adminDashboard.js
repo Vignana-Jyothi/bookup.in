@@ -1,7 +1,8 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { supabase } from './supabaseClient.js';
 import { getAdminApiBase } from '../../utils/api.js';
 
-export async function loadAdminDashboard({ section, period, search, filter, offset, signal }, { client = supabase, request = fetch } = {}) {
+export async function loadAdminDashboard({ section, period, search, filter, offset, signal }, { client = supabase, request = boundedFetch } = {}) {
   const { data, error } = await client.auth.getSession();
   if (error || !data?.session?.access_token) { const denied = new Error('Sign in to Calup again.'); denied.status = 401; throw denied; }
   const query = new URLSearchParams({ period, search, filter, offset: String(offset) });
@@ -13,7 +14,7 @@ export async function loadAdminDashboard({ section, period, search, filter, offs
   return result;
 }
 
-export async function adminRefundRequest(id, { action, body, key, signal } = {}, { client = supabase, request = fetch } = {}) {
+export async function adminRefundRequest(id, { action, body, key, signal } = {}, { client = supabase, request = boundedFetch } = {}) {
   const { data,error } = await client.auth.getSession();
   if(error || !data?.session?.access_token) throw new Error('Sign in again before reviewing refunds.');
   const response = await request(`${getAdminApiBase()}/v1/admin/refund-requests/${encodeURIComponent(id)}${action ? `/${action}` : ''}`, {

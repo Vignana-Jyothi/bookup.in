@@ -1,8 +1,9 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { getAdminApiBase } from '../../utils/api.js';
 
 export const isCalupAdmin = user => user?.app_metadata?.role === 'calup_admin';
 
-async function adminRequest(client, path, { method = 'GET', body } = {}, request = fetch) {
+async function adminRequest(client, path, { method = 'GET', body } = {}, request = boundedFetch) {
   const { data, error } = await client.auth.getSession();
   if (error || !data?.session?.access_token) throw new Error('Sign in to Calup again.');
   const response = await request(`${getAdminApiBase()}/v1/admin/auth${path}`, {

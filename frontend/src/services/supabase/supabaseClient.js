@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { boundedFetch } from '../../utils/boundedFetch.js';
 
 const rawUrl = (
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
@@ -30,6 +31,7 @@ export const isSupabaseConfigured = () => {
 // Safe fallback client initialization
 export const supabase = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseKey, {
+      global: { fetch: boundedFetch },
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -40,6 +42,7 @@ export const supabase = isSupabaseConfigured()
       'https://placeholder-project.supabase.co',
       'placeholder-anon-key',
       {
+        global: { fetch: boundedFetch },
         auth: {
           persistSession: false,
           autoRefreshToken: false,
