@@ -6,6 +6,8 @@ umask 077
 docker compose version
 node -e 'const [a,b]=process.argv[1].replace(/^v/, "").split(".").map(Number); if(a<2||(a===2&&b<30)) throw Error("Docker Compose 2.30+ is required for raw runtime env files")' "$(docker compose version --short)"
 docker compose -f docker-compose.yml config --quiet
+# Read-only database gate: migrations are applied and verified separately.
+node backend/scripts/verify-release-database.mjs .env.backend
 release="${GITHUB_SHA:-local}"
 state="$(mktemp -d "${RUNNER_TEMP:-/tmp}/calup-rollback.XXXXXX")"
 frontend_id="$(docker compose ps -q frontend)"

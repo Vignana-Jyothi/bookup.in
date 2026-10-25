@@ -29,6 +29,20 @@ The college repository deploys `main` through its existing `gamma` runner to `ht
 
 Deployment notes live locally at `guides/project/college-deployment.md`; the guides directory is intentionally excluded from Git and Docker. `npm run lint:ci` and `npm run test:isolated` work without that local documentation/tooling. The full `npm test` additionally needs an isolated integration database/API.
 
+The October 25 audit requires the five `backend/supabase/20261025_*.sql` migrations after the existing schema/migrations. Use [the disposable database runner](backend/scripts/verify-audit-database.mjs) to test them against an empty Supabase test database with the existing schema. The runner uses the matching `backend/tests/*-invariants.sql` and `pending-booking-expiry-scenarios.sql`; verify concurrent reservations and tenant isolation there. Apply reviewed migrations to the deployment database before promoting the application. Deployment performs a read-only schema/privilege readiness check and leaves the running containers untouched if it fails. It never applies SQL automatically. These changes remove browser booking insertion and email-based ownership reassignment; legacy account relinking requires a trusted migration.
+
+## Disposable database checks
+
+Install psql and restore the existing base schema/historical migrations into a disposable Supabase project with no users, providers, bookings or customer contacts. The runner refuses nonempty databases. Then run from this repository root in PowerShell:
+
+```powershell
+$env:CALUP_AUDIT_DISPOSABLE_DB = 'true'
+$env:AUDIT_DATABASE_URL = '<disposable PostgreSQL connection URI>'
+npm run test:database:audit -- --apply-audit
+```
+
+This optionally applies only the five audit migrations, checks grants and tenant isolation, and runs competing booking/expiry/reschedule transactions. Fixtures are removed afterward; discard the test database if interrupted. Omit --apply-audit to check an already migrated empty test database. This command has not been executed against PostgreSQL here and is never a production migration command. Full local instructions remain in ignored guides/project/disposable-database-checks.md.
+
 ## Local Development
 
 1. Install dependencies with `npm install` using Node.js 22.12+ (required by the current Vite toolchain).
