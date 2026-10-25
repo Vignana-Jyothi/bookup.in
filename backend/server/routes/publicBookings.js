@@ -134,7 +134,7 @@ async function findBookingByToken(supabase, token, options = {}) {
  * POST /api/public/bookings (or /api/public/bookings/create)
  * Authoritative booking creation with conflict detection and synchronous WhatsApp notifications.
  */
-async function handleCreateBooking(req, res) {
+export async function handleCreateBooking(req, res) {
   const {
     providerId,
     serviceId,
@@ -219,6 +219,7 @@ async function handleCreateBooking(req, res) {
     }
 
     const duration = Number(service.duration) || 60;
+    const isPaid = (Number(service.price) || 0) > 0;
 
     const generatedSlot = await generatedSlotIsValid(supabase, providerId, serviceId, bookingDate, startTime);
     if (generatedSlot === null) {
@@ -401,7 +402,6 @@ async function handleCreateBooking(req, res) {
           const endM = String(endTotalMin % 60).padStart(2, '0');
           const calculatedEndTime = `${endH}:${endM}`;
 
-          const isPaid = (Number(service.price) || 0) > 0;
           const policyAcceptedAt = req.body.policyAcceptedAt || (req.body.policyAccepted !== false ? new Date().toISOString() : null);
 
           const insertPayload = {
@@ -487,7 +487,6 @@ async function handleCreateBooking(req, res) {
 
     // 6a. Post-insert updates: management_token_encrypted, meeting type snapshots, payment_status & pending status (non-blocking)
     try {
-      const isPaid = (Number(service.price) || 0) > 0;
       const paymentStatus = isPaid ? 'awaiting_payment' : 'not_required';
       const postInsertPayload = {
         management_token_encrypted: tokenEncrypted,
