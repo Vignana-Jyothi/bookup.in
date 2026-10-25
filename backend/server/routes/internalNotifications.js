@@ -35,17 +35,13 @@ function getSupabaseClient() {
 function verifyInternalSecret(req, res, next) {
   const configuredSecret = config.internalCronSecret?.trim();
 
-  // If secret is set, enforce strict validation
-  if (configuredSecret) {
-    const headerSecret = (req.headers['x-internal-secret'] || '').trim();
-    const authHeader = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
-
-    if (headerSecret !== configuredSecret && authHeader !== configuredSecret) {
-      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid internal secret' });
-    }
-  } else if (process.env.NODE_ENV === 'production') {
-    // In production, require INTERNAL_CRON_SECRET to be defined
-    console.warn('[InternalNotifications] INTERNAL_CRON_SECRET is not configured in production!');
+  if (!configuredSecret) {
+    return res.status(503).json({ success: false, error: 'Internal notification routes are disabled.' });
+  }
+  const headerSecret = String(req.headers['x-internal-secret'] || '').trim();
+  const authHeader = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (headerSecret !== configuredSecret && authHeader !== configuredSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid internal secret' });
   }
 
   next();
@@ -269,71 +265,6 @@ router.get('/process-reminders', verifyInternalSecret, async (req, res) => {
     return res.json({ success: true, ...summary });
   } catch (err) {
     console.error('[InternalNotifications] Reminder processor failed:', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * POST /api/internal/notifications/cleanup-duplicate-services
- * Internal maintenance endpoint to delete duplicate service rows (requires internal secret)
- */
-router.post('/cleanup-duplicate-services', verifyInternalSecret, async (req, res) => {
-  try {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return res.status(500).json({ success: false, error: 'Supabase client unavailable' });
-    }
-
-    const { providerId } = req.body;
-    if (!providerId) {
-      return res.status(400).json({ success: false, error: 'providerId is required' });
-    }
-
-    // 1. Fetch all services for provider ordered by created_at ascending
-    const { data: services, error: fetchErr } = await supabase
-      .from('services')
-      .select('*')
-      .eq('provider_id', providerId)
-      .order('created_at', { ascending: true });
-
-    if (fetchErr) {
-      return res.status(500).json({ success: false, error: fetchErr.message });
-    }
-
-    if (!services || services.length <= 1) {
-      return res.json({ success: true, message: 'No duplicates found', remaining: services });
-    }
-
-    // Keep earliest (index 0), delete the rest
-    const toDeleteIds = services.slice(1).map(s => s.id);
-    const { error: delErr } = await supabase
-      .from('services')
-      .delete()
-      .in('id', toDeleteIds);
-
-    if (delErr) {
-      return res.status(500).json({ success: false, error: delErr.message });
-    }
-
-    // 2. Fetch remaining services to confirm
-    const { data: remaining, error: refetchErr } = await supabase
-      .from('services')
-      .select('*')
-      .eq('provider_id', providerId);
-
-    if (refetchErr) {
-      return res.status(500).json({ success: false, error: refetchErr.message });
-    }
-
-    return res.json({
-      success: true,
-      deletedCount: toDeleteIds.length,
-      deletedIds: toDeleteIds,
-      remainingCount: remaining?.length || 0,
-      remaining,
-    });
-  } catch (err) {
-    console.error('[InternalNotifications] Cleanup duplicate services failed:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

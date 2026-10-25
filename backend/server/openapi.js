@@ -221,6 +221,5 @@ export const openApiDocument = {
     '/api/auth/google/disconnect': { post: { tags: ['Google OAuth'], summary: 'Disconnect Google Calendar', security: bearer, responses: { 200: ok('Tokens revoked and removed.') } } },
 
     '/api/internal/notifications/process-reminders': { get: { tags: ['Internal'], summary: 'Run reminder dispatcher', security: internalSecret, responses: { 200: ok('Reminder run result.') } }, post: { tags: ['Internal'], summary: 'Run reminder dispatcher', security: internalSecret, responses: { 200: ok('Reminder run result.') } } },
-    '/api/internal/notifications/cleanup-duplicate-services': { post: { tags: ['Internal'], summary: 'Clean duplicate service rows', security: internalSecret, responses: { 200: ok('Cleanup result.') } } },
   },
 };
