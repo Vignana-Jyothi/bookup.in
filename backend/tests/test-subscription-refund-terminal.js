@@ -21,7 +21,7 @@ globalThis.fetch = async () => { throw new Error('No real network access is perm
 serviceRoleClient.rpc = async (name, payload) => {
   if (name === 'get_subscription_refund_context_v1') {
     contexts++;
-    return { data: { providerId: 'fixture-provider', providerOrderId: 'fixture-order', amountPaise: 10000,
+    return { data: { environment: cashfreeClient.environment, gatewayAccount: 'calup_subscription', purpose: 'subscription', paymentPath: 'cashfree', providerId: 'fixture-provider', providerOrderId: 'fixture-order', amountPaise: 10000,
       status: current, providerRefundId: 'fixture-refund' }, error: null };
   }
   assert.equal(name, 'mark_subscription_refund_v1');
@@ -38,7 +38,7 @@ cashfreeClient.getRefund = async () => {
     await staleReady;
     throw Object.assign(new Error('Fixture timeout after another reconciler succeeded'), { outcome: 'unknown', code: 'FIXTURE_TIMEOUT' });
   }
-  return { refund_id: 'fixture-refund', refund_status: 'SUCCESS' };
+  return { order_id: 'fixture-order', refund_id: 'fixture-refund', refund_status: 'SUCCESS', refund_currency: 'INR', refund_amount: 100 };
 };
 try {
   const results = await Promise.allSettled([reconcileSubscriptionRefund('fixture-id'), reconcileSubscriptionRefund('fixture-id')]);

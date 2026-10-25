@@ -3,12 +3,13 @@ import { Router } from 'express';
 import { config } from '../config.js';
 import { bookingCreateLimiter, customerTrackingLimiter, tokenRouteLimiter } from '../middleware/rateLimiter.js';
 import { serviceRoleClient } from '../middleware/auth.js';
-import { amountToPaise, cashfreeClient, cashfreeOrderExpiry, findSuccessfulPayment } from '../services/cashfree.js';
+import { amountToPaise, cashfreeClient, cashfreeOrderExpiry, assertCashfreeOrder, assertCashfreeScope, verifiedSuccessfulPayment } from '../services/cashfree.js';
 import { wakeGoogleCalendarSyncWorker } from '../services/googleCalendarSync.js';
 import { customerRequestIsTrusted, getCustomerAccess, setCustomerAccessCookie } from '../utils/customerAccess.js';
 import { decryptToken, encryptToken } from '../utils/crypto.js';
 import { reconcileSubscriptionOrder } from './merchantSubscription.js';
 import { bookingRefundsEnabled, recordBookingRefundWebhook } from '../services/bookingRefundExecution.js';
+import { assertCalendarAvailability } from '../services/calendarAvailability.js';
 
 const ATTEMPT_COOKIE = 'calup_attempt_v1';
 const ATTEMPT_REFERENCE_COOKIE = 'calup_attempt_reference_v1';
@@ -185,21 +186,18 @@ export async function reconcileAttempt(attemptId, { database = serviceRoleClient
   });
   if (contextError || !contextData) throw contextError || new Error('Reconciliation context missing');
   let context = rpcValue(contextData);
+  assertCashfreeScope(context, client);
   if (!context.providerOrderId) return context;
 
   let order;
   try {
     order = await client.getOrder(context.providerOrderId);
   } catch (error) {
-    if (context.paymentStatus === 'creation_unknown' && error?.outcome === 'definitive' && error?.status === 404) {
-      await database.rpc('mark_cashfree_order_creation_failed_v1', {
-        p_payment_order_id: context.paymentOrderId,
-        p_safe_error_code: 'ORDER_NOT_FOUND',
-      });
-      return { ...context, paymentStatus: 'creation_failed' };
-    }
+    // A GET 404 may race a still-processing, previously timed-out order POST.
+    // Keep its durable reference and reconciliation instead of declaring no payment.
     throw error;
   }
+  assertCashfreeOrder(context, order);
   if (context.paymentStatus === 'creation_unknown' && order.payment_session_id) {
     const { data: marked, error: markError } = await database.rpc('mark_cashfree_order_created_v1', {
       p_payment_order_id: context.paymentOrderId,
@@ -230,7 +228,7 @@ export async function reconcileAttempt(attemptId, { database = serviceRoleClient
   }
 
   const payments = await client.getOrderPayments(context.providerOrderId);
-  const payment = findSuccessfulPayment(payments);
+  const payment = verifiedSuccessfulPayment(context, order, payments);
   if (!payment) return { ...context, gatewayPaymentInProgress: true };
 
   const paidPaise = amountToPaise(payment.payment_amount);
@@ -267,10 +265,9 @@ export async function restoreBookingCheckout(attempt, { database = serviceRoleCl
   if (error) throw error;
   const context = rpcValue(data);
   if (!context?.providerOrderId || context.attemptId !== attempt.attemptId) throw new Error('Checkout context unavailable');
+  assertCashfreeScope(context, client);
   const order = await client.getOrder(context.providerOrderId);
-  if (amountToPaise(order.order_amount) !== context.amountPaise || order.order_currency !== context.currency) {
-    throw new Error('Checkout amount or currency mismatch');
-  }
+  assertCashfreeOrder(context, order);
   assertActiveHold();
   if (order.order_status !== 'ACTIVE' || !order.payment_session_id) {
     return { ...await reconcile(attempt.attemptId), paymentSessionId: null, gatewayReconciling: true };
@@ -411,6 +408,24 @@ export function createCashfreeV1Router() {
     const tokenHash = sha256(attemptToken);
     const contactHash = crypto.createHmac('sha256', Buffer.from(config.tokenEncryptionKey, 'hex')).update(phone).digest('hex');
 
+    // Check new holds against the owner Calendar before reserving or charging.
+    // Existing idempotent attempts must remain recoverable after their own event exists.
+    const preflight = await serviceRoleClient.rpc('get_booking_calendar_preflight_v1', {
+      p_provider_id: input.providerId, p_service_id: input.serviceId,
+      p_idempotency_key: idempotencyKey, p_request_hash: requestHash,
+    });
+    if (preflight.error) return mapDatabaseError(preflight.error, res, reqId);
+    const calendarContext = rpcValue(preflight.data);
+    if (typeof calendarContext?.existingAttempt !== 'boolean') return sendError(res, 503, 'AVAILABILITY_UNAVAILABLE', 'Booking availability could not be verified.', reqId);
+    if (!calendarContext.existingAttempt) {
+      try {
+        await assertCalendarAvailability({ database: serviceRoleClient, providerId: input.providerId,
+          service: calendarContext.service, provider: calendarContext.provider, date: input.bookingDate, startTime: input.startTime });
+      } catch (calendarError) {
+        return sendError(res, calendarError.status || 503, calendarError.status === 409 ? 'SLOT_UNAVAILABLE' : 'AVAILABILITY_UNAVAILABLE', calendarError.message, reqId);
+      }
+    }
+
     const { data, error } = await serviceRoleClient.rpc('acquire_booking_hold_v1', {
       p_provider_id: input.providerId,
       p_service_id: input.serviceId,
@@ -446,15 +461,38 @@ export function createCashfreeV1Router() {
     }
 
     const attempt = rpcValue(data);
+    let gatewayContext;
+    try {
+      const contextResult = await serviceRoleClient.rpc('get_cashfree_reconciliation_context_v1', { p_attempt_id: attempt.attemptId });
+      if (contextResult.error) throw contextResult.error;
+      gatewayContext = rpcValue(contextResult.data);
+      assertCashfreeScope(gatewayContext, cashfreeClient);
+    } catch {
+      return sendError(res, 503, 'PAYMENT_SCOPE_MISMATCH', 'This payment belongs to another gateway configuration. Please contact support.', reqId);
+    }
     setAttemptCookie(res, attemptToken, attempt.attemptId);
+    if (attempt.paymentStatus === 'succeeded') {
+      return sendData(res, 200, { ...attempt, paymentSessionId: null, cashfreeMode: config.cashfreeEnvironment }, reqId);
+    }
     if (attempt.paymentSessionId && attempt.paymentStatus === 'pending') {
       return sendRestoredCheckout(attempt, res, reqId);
     }
     if (['creation_failed', 'closed_unpaid'].includes(attempt.paymentStatus)) {
       return sendError(res, 409, 'ATTEMPT_TERMINAL', 'This payment attempt has ended. Start a new checkout.', reqId);
     }
+    if (attempt.paymentStatus === 'creation_unknown' || gatewayContext.providerOrderId) {
+      return sendRestoredCheckout(attempt, res, reqId);
+    }
+    if (!Number.isFinite(Date.parse(attempt.holdExpiresAt)) || Date.parse(attempt.holdExpiresAt) <= Date.now()) {
+      return sendError(res, 410, 'HOLD_EXPIRED', 'This payment hold has expired. Please select a new slot.', reqId);
+    }
 
     const providerOrderId = `calup_${String(attempt.paymentOrderId).replace(/-/g, '')}`;
+    const dispatch = await serviceRoleClient.rpc('begin_cashfree_order_dispatch_v1', {
+      p_payment_order_id: attempt.paymentOrderId, p_provider_order_id: providerOrderId,
+    });
+    if (dispatch.error) return mapDatabaseError(dispatch.error, res, reqId);
+    if (dispatch.data !== true) return sendData(res, 202, { ...attempt, paymentSessionId: null, paymentStatus: 'creation_unknown', gatewayReconciling: true }, reqId);
     try {
       const cashfreeOrder = await cashfreeClient.createOrder({
         order_id: providerOrderId,
@@ -473,13 +511,15 @@ export function createCashfreeV1Router() {
         order_note: 'Calup service booking',
         order_tags: { purpose: 'service_booking', attempt_id: attempt.attemptId },
       }, `create:${attempt.paymentOrderId}`);
+      assertCashfreeOrder({ providerOrderId, amountPaise: attempt.amountPaise, currency: attempt.currency }, cashfreeOrder);
 
       const { data: marked, error: markError } = await serviceRoleClient.rpc('mark_cashfree_order_created_v1', {
         p_payment_order_id: attempt.paymentOrderId,
         p_provider_order_id: cashfreeOrder.order_id,
         p_payment_session_id: cashfreeOrder.payment_session_id,
       });
-      if (markError) return mapDatabaseError(markError, res, reqId);
+      if (markError) throw markError;
+      if (Date.parse(attempt.holdExpiresAt) <= Date.now()) return sendData(res, 202, { ...rpcValue(marked), paymentSessionId: null, gatewayReconciling: true }, reqId);
       return sendData(res, 201, { ...rpcValue(marked), cashfreeMode: config.cashfreeEnvironment }, reqId);
     } catch (error_) {
       console.error('[CashfreeV1] Create order failed', {
@@ -488,14 +528,8 @@ export function createCashfreeV1Router() {
         code: error_?.code || 'CASHFREE_ERROR',
         outcome: error_?.outcome || 'unknown',
       });
-      const unknown = error_?.outcome !== 'definitive';
-      if (unknown) {
-        await serviceRoleClient.rpc('mark_cashfree_order_unknown_v1', {
-          p_payment_order_id: attempt.paymentOrderId,
-          p_provider_order_id: providerOrderId,
-          p_safe_error_code: error_?.code || 'CASHFREE_ERROR',
-        });
-      } else {
+      const unknown = error_?.outcome !== 'definitive' || error_?.status === 409;
+      if (!unknown) {
         await serviceRoleClient.rpc('mark_cashfree_order_creation_failed_v1', {
           p_payment_order_id: attempt.paymentOrderId,
           p_safe_error_code: error_?.code || 'CASHFREE_ERROR',
@@ -636,11 +670,14 @@ export function createCashfreeWebhookRouter() {
           if (!attemptId) throw new Error('Unknown Cashfree booking order');
           await reconcileAttempt(attemptId);
         }
-        await serviceRoleClient.rpc('finish_cashfree_event_v1', { p_event_key: eventKey, p_status: 'processed', p_safe_error: null });
+        await serviceRoleClient.rpc('finish_cashfree_event_scoped_v1', { p_event_key: eventKey, p_environment: config.cashfreeEnvironment,
+          p_gateway_account: isSubscription ? 'calup_subscription' : 'calup_primary', p_status: 'processed', p_safe_error: null });
       } catch (processingError) {
         console.error('[CashfreeV1] Webhook reconciliation failed:', processingError?.message);
-        await serviceRoleClient.rpc('finish_cashfree_event_v1', {
+        await serviceRoleClient.rpc('finish_cashfree_event_scoped_v1', {
           p_event_key: eventKey,
+          p_environment: config.cashfreeEnvironment,
+          p_gateway_account: isSubscription ? 'calup_subscription' : 'calup_primary',
           p_status: 'review_required',
           p_safe_error: 'RECONCILIATION_FAILED',
         });
