@@ -1,0 +1,64 @@
+name: Vercel Production Deployment
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy:
+    if: github.repository == 'prateekthota18-boop/bookup.in' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/dev" ]; then
+            vercel pull --yes --environment=production --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Build Project Artifacts
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/dev" ]; then
+            vercel build --prod --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          else
+            vercel build --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Verify First-Party Cookie API Functions
+        run: node backend/scripts/verify-vercel-admin-proxy.mjs
+
+      - name: Deploy Project Artifacts to Vercel
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/dev" ]; then
+            vercel deploy --prebuilt --prod --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          else
+            vercel deploy --prebuilt --local-config=frontend/vercel.json --token="$VERCEL_TOKEN"
+          fi

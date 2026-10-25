@@ -1,0 +1,16 @@
+.brand-integration-icon {
+  width: 42px; height: 42px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px; color: #687b3b;
+}
+.brand-integration-icon svg { width: 36px; height: 36px; }
+.brand-integration-icon--whatsapp { color: #fff; background: #25b862; }
+.brand-integration-icon--sms, .brand-integration-icon--email { background: #eef3e3; }
+.brand-integration-icon--zoom { color: #fff; background: #2d8cff; }
+.brand-integration-icon--webex { color: #fff; background: #16886f; }
+.brand-integration-icon--whatsapp svg, .brand-integration-icon--sms svg,
+.brand-integration-icon--email svg, .brand-integration-icon--zoom svg, .brand-integration-icon--webex svg { width: 25px; height: 25px; }
+.brand-cashfree { color: #6931cc; font-size: 29px; font-weight: 800; letter-spacing: -3px; line-height: 1; }
+.brand-cashfree > span { color: #ef943f; font-size: 20px; }
+.brand-integration-icon.is-small { width: 29px; height: 29px; border-radius: 7px; }
+.brand-integration-icon.is-small svg { width: 23px; height: 23px; }
+.brand-integration-icon.is-small .brand-cashfree { font-size: 21px; }

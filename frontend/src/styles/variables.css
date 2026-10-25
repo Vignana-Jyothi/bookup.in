@@ -1,0 +1,182 @@
+/* ============================================
+   BookUp "Janjiyuk-tier" Design Tokens
+   ============================================ */
+
+:root {
+  /* --- Canonical Brand Colors --- */
+  --color-lime: #C6F135;
+  --color-lime-soft: #E9F7B8;
+  --color-lime-light: #F4FCD9;
+  --color-lime-hover: #B3E323;
+  --color-black: #0E0E0E;
+  --color-white: #FFFFFF;
+  --color-surface: #F6F6F1;
+  --color-dark-bg: #0E0E0E;
+  --color-dark-card: #1B1B1B;
+  --color-dark-card-hover: #242424;
+  --color-dark-border: #2C2C2C;
+  --color-text-muted: #6B6B63;
+
+  /* Legacy & Semantic Palette */
+  --color-primary-50: #F4FCD9;
+  --color-primary-100: #E9F7B8;
+  --color-primary-500: #C6F135;
+  --color-primary-600: #0E0E0E;
+  --color-primary-700: #000000;
+
+  --color-gray-25: #FCFCFD;
+  --color-gray-50: #F9FAFB;
+  --color-gray-100: #F3F4F6;
+  --color-gray-200: #E5E7EB;
+  --color-gray-300: #D1D5DB;
+  --color-gray-400: #9CA3AF;
+  --color-gray-500: #6B7280;
+  --color-gray-600: #4B5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1F2937;
+  --color-gray-900: #111827;
+
+  --color-success-50: #ECFDF5;
+  --color-success-100: #D1FAE5;
+  --color-success-500: #10B981;
+  --color-success-600: #047857;
+
+  --color-warning-50: #FFFBEB;
+  --color-warning-500: #F59E0B;
+
+  --color-error-50: #FEF2F2;
+  --color-error-100: #FEE2E2;
+  --color-error-500: #EF4444;
+  --color-error-600: #DC2626;
+
+  /* --- Typography --- */
+  --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-accent: 'Instrument Serif', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family: var(--font-body);
+
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.8125rem;  /* 13px */
+  --font-size-base: 0.875rem; /* 14px */
+  --font-size-md: 1rem;       /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3.25rem;   /* 52px */
+  --font-size-6xl: 4.25rem;   /* 68px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* --- Spacing --- */
+  --space-0: 0;
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
+  --space-20: 5rem;    /* 80px */
+  --space-24: 6rem;    /* 96px */
+
+  /* --- Radius --- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-card: 16px;
+  --radius-2xl: 16px;
+  --radius-input: 16px;
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
+
+  /* --- Shadows (Soft & Tinted) --- */
+  --shadow-sm: 0 2px 8px rgba(14, 14, 14, 0.04);
+  --shadow-md: 0 8px 24px rgba(14, 14, 14, 0.06);
+  --shadow-lg: 0 16px 36px rgba(14, 14, 14, 0.08);
+  --shadow-xl: 0 24px 52px rgba(14, 14, 14, 0.12);
+  --shadow-card: none;
+
+  /* --- Transitions --- */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* --- Layout Heights --- */
+  --sidebar-width: 80px;
+  --topbar-height: 68px;
+  --max-content-width: 1280px;
+  --max-booking-width: 440px;
+}
+
+/* --- LIGHT THEME (Default) --- */
+:root, [data-theme="light"] {
+  --theme-canvas-bg: var(--color-surface);
+  --theme-bg-page: var(--color-surface);
+  --theme-bg-card: var(--color-white);
+  --theme-bg-card-subtle: #F6F6F1;
+  --theme-bg-sidebar: var(--color-black);
+  --theme-text-primary: #0E0E0E;
+  --theme-text-secondary: #4A4A44;
+  --theme-text-muted: #64748B;
+  --theme-placeholder: #5B6B82;
+  --theme-focus-ring: #536B1F;
+  --theme-border: #E5E5DC;
+  --theme-border-strong: #CECED6;
+  --theme-input-bg: #F8F8F4;
+  --theme-schedule-highlight: rgba(198, 241, 53, 0.16);
+  --theme-schedule-highlight-text: #1E2802;
+  --theme-badge-bg: var(--color-lime-soft);
+  --theme-badge-text: #243003;
+
+  /* Backward-compatible variables */
+  --color-bg: var(--theme-bg-page);
+  --color-bg-subtle: var(--color-surface);
+  --color-surface: var(--theme-bg-card);
+  --color-surface-raised: var(--color-white);
+  --color-text: var(--theme-text-primary);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-text-tertiary: var(--theme-text-muted);
+  --color-border: var(--theme-border);
+}
+
+/* --- DARK THEME --- */
+[data-theme="dark"] {
+  --theme-canvas-bg: #0A0A0A;
+  --theme-bg-page: #0E0E0E;
+  --theme-bg-card: var(--color-dark-card);
+  --theme-bg-card-subtle: #141414;
+  --theme-bg-sidebar: #0E0E0E;
+  --theme-text-primary: #FFFFFF;
+  --theme-text-secondary: #D4D4D0;
+  --theme-text-muted: #9CA3AF;
+  --theme-placeholder: #9CA3AF;
+  --theme-focus-ring: var(--color-lime);
+  --theme-border: #292929;
+  --theme-border-strong: #3D3D3D;
+  --theme-input-bg: #141414;
+  --theme-schedule-highlight: #1A2406;
+  --theme-schedule-highlight-text: #E5FF70;
+  --theme-badge-bg: #283307;
+  --theme-badge-text: #D5FF42;
+
+  /* Backward-compatible variables */
+  --color-bg: var(--theme-bg-page);
+  --color-bg-subtle: #121212;
+  --color-surface: var(--theme-bg-card);
+  --color-surface-raised: #242424;
+  --color-text: var(--theme-text-primary);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-text-tertiary: var(--theme-text-muted);
+  --color-border: var(--theme-border);
+}

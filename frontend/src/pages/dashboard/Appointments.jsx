@@ -1,0 +1,2325 @@
+/**
+ * CalUp — Appointments Page
+ * Redesigned high-density, Linear/Stripe-quality appointments dashboard
+ * Context-aware row actions, unified multi-criteria filtering, search, sorting, and responsive cards
+ */
+
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
+/* Disabled navigation enhancement (user request):
+import { appointmentFilters } from '../../utils/navigation';
+*/
+import { businessDate, shiftDate } from '../../utils/dashboardData.js';
+import {
+  useStore,
+  formatCurrency,
+  formatDate,
+  formatTime,
+  getStatusBadgeClass,
+  getDepositBadgeClass,
+  getStatusLabel,
+  getDepositLabel,
+} from '../../data/store';
+import { ACTIONS } from '../../data/actions';
+import { timeToMinutes, minutesToTime, getTimeSlotsDetailedForDate } from '../../utils/helpers';
+import { whatsAppService } from '../../services/notifications/MockWhatsAppProvider';
+import { realGoogleCalendarService } from '../../services/calendar/RealGoogleCalendarProvider';
+import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
+import { dbService } from '../../services/supabase/dbService';
+import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
+import BookingRefundRequest from '../../components/dashboard/BookingRefundRequest';
+import { DEFAULT_POLICY } from '../../utils/policyEngine';
+import { appointmentRefundLabel } from '../../utils/appointmentRefundStatus.js';
+
+const APPOINTMENT_VIEWS = [
+  { key: 'all', label: 'All' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'confirmed', label: 'All confirmed' },
+  { key: 'payment-pending', label: 'Payment Pending' },
+  { key: 'refunds-due', label: 'Refund ledger' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'late-cancellation', label: 'Late cancellations' },
+  { key: 'no-show', label: 'No-show' },
+];
+
+export default function Appointments() {
+  const { state, dispatch, addToast } = useStore();
+  const { now } = useOutletContext() || {};
+  const actionReturnFocus = useRef(null);
+  const rememberActionFocus = () => {
+    setActionError('');
+    const active = document.activeElement;
+    actionReturnFocus.current = active?.closest('.actions-dropdown-anchor')?.querySelector('.btn-table-action') || active;
+  };
+
+/* Disabled navigation enhancement (user request):
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeFilters = useMemo(() => appointmentFilters(location.search), [location.search]);
+
+*/  // Active view & detail selection
+  const [selectedBooking, setSelectedBooking] = useState(null);
+
+  // Tabs & Filters
+  const [activeTab, setActiveTab] = useState('all');
+/* Disabled navigation enhancement (user request):
+  const [searchQuery, setSearchQuery] = useState(() => routeFilters.query);
+*/
+  const [searchQuery, setSearchQuery] = useState('');
+/* Disabled navigation enhancement (user request):
+  useEffect(() => { setSearchQuery(routeFilters.query); setCurrentPage(1); setFilterDatePreset(['today', 'next7', 'next30', 'past'].includes(location.state?.appointmentDatePreset) ? location.state.appointmentDatePreset : 'all'); setFilterStatus('all'); setFilterService('all'); setActiveTab('all'); }, [location.key, location.state?.appointmentDatePreset, routeFilters.query]);
+*/
+  const [filterService, setFilterService] = useState('all');
+  const [filterDatePreset, setFilterDatePreset] = useState('all');
+  const [sortBy, setSortBy] = useState('date-newest');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Row dropdown & Action target
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [actionBooking, setActionBooking] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const actionBusyRef = useRef(false);
+  const manualIntentRef = useRef(null);
+  const runSavedAction = async action => {
+    if (actionBusyRef.current) return;
+    actionBusyRef.current = true; setActionBusy(true); setActionError('');
+    try { await action(); }
+    catch (error) { setActionError(error.message || 'The appointment could not be saved. Please retry.'); addToast(error.message || 'The appointment could not be saved. Please retry.', 'error'); }
+    finally { actionBusyRef.current = false; setActionBusy(false); }
+  };
+  const requirePersistedBooking = booking => {
+    if (!state.auth?.isDemoMode && (!isSupabaseConfigured() || !booking?.id || booking.id.startsWith('booking-'))) {
+      throw new Error('This appointment is not saved on the server. Refresh appointments before changing it.');
+    }
+  };
+  const syncCalendarAfterSave = async (booking, action) => {
+    if (!state.googleCalendar?.isConnected || !booking.googleEventId) return;
+    let result;
+    try { result = await action(); } catch { /* The appointment is already saved; report calendar failure separately. */ }
+    if (!result?.success) addToast('The appointment was saved, but Google Calendar could not be updated. Check the calendar connection.', 'warning');
+  };
+
+  // Modals
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completionEndTime, setCompletionEndTime] = useState('');
+
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showNoShowModal, setShowNoShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Payment verification state
+  const [rejectModalBooking, setRejectModalBooking] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [processingPaymentId, setProcessingPaymentId] = useState(null);
+  const [viewScreenshotUrl, setViewScreenshotUrl] = useState(null);
+
+  // Refunds due state
+  const [refundsDueList, setRefundsDueList] = useState([]);
+  const [isLoadingRefunds, setIsLoadingRefunds] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [selectedRefundTarget, setSelectedRefundTarget] = useState(null);
+  const [refundProofFile, setRefundProofFile] = useState(null);
+  const [isSubmittingRefundSent, setIsSubmittingRefundSent] = useState(false);
+
+  const fetchRefundsDue = useCallback(async () => {
+    if (!state.provider?.id) return;
+    setIsLoadingRefunds(true);
+    try {
+      const data = await dbService.getRefundsDue(state.provider.id);
+      setRefundsDueList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn('Failed to load refunds due:', e);
+    } finally {
+      setIsLoadingRefunds(false);
+    }
+  }, [state.provider?.id]);
+
+  useEffect(() => {
+    fetchRefundsDue();
+  }, [fetchRefundsDue]);
+
+  const unifiedRefundsDue = useMemo(() => {
+    const list = [...refundsDueList];
+    (state.bookings || []).forEach(b => {
+      if (b.sourceSystem !== 'cashfree_v1' && (b.refundStatus === 'refund_due' || b.refundStatus === 'refunded' || b.refundStatus === 'disputed') && !list.some(r => r.booking_id === b.id || r.id === b.id)) {
+        list.push({
+          id: `ref-${b.id}`,
+          booking_id: b.id,
+          amount: b.refundAmount || b.price || 0,
+          status: b.refundStatus,
+          reason: b.refundReason || 'cancellation_refund',
+          created_at: b.cancelledAt || b.createdAt || new Date().toISOString(),
+          bookings: {
+            id: b.id,
+            customer_name: b.customerName,
+            customer_email: b.customerEmail,
+            customer_phone: b.customerPhone,
+            customer_whatsapp: b.customerWhatsApp,
+            booking_date: b.date,
+            start_time: b.startTime,
+            price: b.price,
+            services: { name: b.serviceName },
+          },
+        });
+      }
+    });
+    return list;
+  }, [refundsDueList, state.bookings]);
+
+  const handleConfirmRefundSent = async () => {
+    if (!selectedRefundTarget) return;
+    setIsSubmittingRefundSent(true);
+    try {
+      let proofUrl = null;
+      if (refundProofFile) {
+        proofUrl = await dbService.uploadRefundProof(selectedRefundTarget.id, refundProofFile);
+      }
+      await dbService.markRefundSent(selectedRefundTarget.id, proofUrl);
+
+      setRefundsDueList(prev => prev.map(r => r.id === selectedRefundTarget.id ? { ...r, status: 'refunded', proof_url: proofUrl } : r));
+      dispatch({
+        type: ACTIONS.UPDATE_BOOKING,
+        payload: {
+          id: selectedRefundTarget.booking_id,
+          refundStatus: 'refunded',
+        },
+      });
+
+      addToast('Refund marked as sent.');
+      setShowRefundModal(false);
+      setSelectedRefundTarget(null);
+      setRefundProofFile(null);
+    } catch (err) {
+      console.error('Failed to mark refund sent:', err);
+      addToast(err.message || 'Failed to update refund status.', 'error');
+    } finally {
+      setIsSubmittingRefundSent(false);
+    }
+  };
+
+  // Manual booking modal state
+  const [showManualModal, setShowManualModal] = useState(false);
+  const activeServices = (state.services || []).filter(s => s.isActive);
+  const today = businessDate(now, state.provider?.timezone || 'Asia/Kolkata');
+  const gcalConnected = Boolean(state.googleCalendar?.isConnected);
+
+  // Maximum advance booking date window
+  const maxAdvanceDays = state.availability?.maxAdvanceBooking ?? 30;
+  const maxDate = shiftDate(today, maxAdvanceDays);
+
+  const [manualForm, setManualForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    customerWhatsApp: '',
+    serviceId: '',
+    date: today,
+    startTime: '',
+    depositStatus: 'paid',
+    notes: '',
+  });
+
+  // Global click-outside & Escape key to close actions dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.actions-dropdown-anchor')) {
+        setOpenDropdownId(null);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+
+
+  const openManualBookingModal = () => {
+    setActionError('');
+    setManualForm({
+      customerName: '',
+      customerPhone: '',
+      customerEmail: '',
+      customerWhatsApp: '',
+      serviceId: activeServices[0]?.id || '',
+      date: today,
+      startTime: '',
+      depositStatus: 'paid',
+      notes: '',
+    });
+    setShowManualModal(true);
+  };
+
+  const [googleBusy, setGoogleBusy] = useState({ providerId: null, dates: {} });
+  useEffect(() => {
+    if (!state.googleCalendar?.isConnected || !state.provider?.id) return undefined;
+    const dates = [...new Set([showRescheduleModal ? rescheduleDate : '', showManualModal ? manualForm.date : ''].filter(Boolean))];
+    if (!dates.length) return undefined;
+    let active = true;
+    Promise.all(dates.map(async date => [date, await realGoogleCalendarService.getBusyTimes(date, state.provider.id, state.provider.timezone || 'Asia/Kolkata')]))
+      .then(entries => { if (active) setGoogleBusy({ providerId: state.provider.id, dates: Object.fromEntries(entries) }); });
+    return () => { active = false; };
+  }, [state.googleCalendar?.isConnected, state.provider?.id, state.provider?.timezone, showRescheduleModal, rescheduleDate, showManualModal, manualForm.date]);
+  const getGcalBusyTimesForDate = useCallback(dateStr => googleBusy.providerId === state.provider?.id ? googleBusy.dates[dateStr] || [] : [], [googleBusy, state.provider?.id]);
+
+  // Active booking for modals (can be selected booking OR action target from table row)
+  const activeModalTarget = useMemo(() => {
+    if (actionBooking) return actionBooking;
+    if (selectedBooking) return state.bookings.find(bk => bk.id === selectedBooking) || null;
+    return null;
+  }, [actionBooking, selectedBooking, state.bookings]);
+
+  // Actions
+  const handleOpenReschedule = (booking) => {
+    rememberActionFocus();
+    setActionBooking(booking);
+    setRescheduleDate(booking.date >= today ? booking.date : today);
+    setRescheduleTime('');
+    setShowRescheduleModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleConfirmReschedule = (booking) => runSavedAction(async () => {
+    requirePersistedBooking(booking);
+    if (!rescheduleDate || !rescheduleTime) return;
+
+    // Validate that slot is still available
+    const availableSlots = getTimeSlotsDetailedForDate(
+      rescheduleDate,
+      state.availability,
+      state.services,
+      booking.serviceId,
+      state.bookings,
+      getGcalBusyTimesForDate(rescheduleDate),
+      booking.id
+    );
+
+    const slotObj = availableSlots.find(s => s.time === rescheduleTime);
+    if (!slotObj || !slotObj.available) {
+      addToast('The selected time slot is no longer available. Please select another slot.', 'error');
+      setRescheduleTime('');
+      return;
+    }
+
+    const [h, m] = rescheduleTime.split(':').map(Number);
+    const endMinutes = h * 60 + m + booking.duration;
+    const newEndTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+    if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
+      if (!await dbService.rescheduleBooking(booking.id, rescheduleDate, rescheduleTime, newEndTime)) throw new Error('The reschedule was not saved. Retry or refresh appointments.');
+    }
+
+    dispatch({
+      type: ACTIONS.RESCHEDULE_BOOKING,
+      payload: {
+        id: booking.id,
+        date: rescheduleDate,
+        startTime: rescheduleTime,
+        endTime: newEndTime,
+      },
+    });
+
+    // Sync reschedule to Google Calendar
+    if (state.googleCalendar?.isConnected && booking.googleEventId) {
+      const providerId = state.provider?.id || 'provider-1';
+      await syncCalendarAfterSave(booking, () => realGoogleCalendarService.updateEvent(booking.googleEventId, {
+        ...booking,
+        date: rescheduleDate,
+        startTime: rescheduleTime,
+        endTime: newEndTime,
+      }, providerId));
+    }
+
+    addToast('Appointment rescheduled.');
+    setShowRescheduleModal(false);
+    setActionBooking(null);
+  });
+
+  const handleOpenComplete = (booking) => {
+    rememberActionFocus();
+    setActionBooking(booking);
+    setCompletionEndTime(booking.endTime);
+    setShowCompleteModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleConfirmComplete = (booking) => runSavedAction(async () => {
+    requirePersistedBooking(booking);
+    const scheduledEndMin = timeToMinutes(booking.endTime);
+    const actualEndMin = timeToMinutes(completionEndTime);
+    const freedMin = Math.max(0, scheduledEndMin - actualEndMin);
+
+    const payload = {
+      id: booking.id,
+      actualEndTime: freedMin > 0 ? completionEndTime : undefined,
+    };
+
+    if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
+      if (!await dbService.updateBookingStatus(booking.id, 'completed', { actual_end_time: freedMin > 0 ? completionEndTime : null })) throw new Error('Completion was not saved. Please retry.');
+    }
+
+    dispatch({ type: ACTIONS.MARK_COMPLETED, payload });
+
+    if (freedMin > 0) {
+      addToast(`Freed up ${freedMin} min — now bookable by other clients. ✓`);
+    } else {
+      addToast('Appointment marked as completed ✓');
+    }
+
+    setShowCompleteModal(false);
+    setActionBooking(null);
+  });
+
+  const handleOpenNoShow = (booking) => {
+    rememberActionFocus();
+    setActionBooking(booking);
+    setShowNoShowModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleConfirmNoShow = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode) {
+      const result = await dbService.markCustomerNoShow(id);
+      if (!result || result.success === false) throw new Error('No-show could not be saved. Please retry.');
+    }
+    dispatch({ type: ACTIONS.MARK_NO_SHOW, payload: id });
+    addToast('No-show recorded. Review the booking for dispute updates.');
+    setShowNoShowModal(false); setActionBooking(null);
+  });
+
+  const handleOpenCancel = (booking) => {
+    rememberActionFocus();
+    setActionBooking(booking);
+    setShowCancelModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleConfirmCancel = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode) {
+      if (!await dbService.coachCancelBooking(id)) throw new Error('Cancellation was not saved. Please retry.');
+    }
+    dispatch({ type: ACTIONS.UPDATE_BOOKING, payload: { id, status: 'cancelled', refundStatus: target?.price > 0 ? 'refund_due' : 'none', refundAmount: target?.price || 0 } });
+    await syncCalendarAfterSave(target, () => realGoogleCalendarService.deleteEvent(target.googleEventId, state.provider.id));
+    addToast(`Appointment cancelled.${target?.price > 0 ? ' Refund review is available in the refund ledger.' : ''}`);
+    fetchRefundsDue();
+    setShowCancelModal(false); setActionBooking(null);
+  });
+
+  const handleMarkLateCancellation = booking => runSavedAction(async () => {
+    requirePersistedBooking(booking);
+    if (!state.auth?.isDemoMode && !await dbService.updateBookingStatus(booking.id, 'late-cancellation', { deposit_status: 'forfeited' })) throw new Error('Late cancellation was not saved. Please retry.');
+    dispatch({ type: ACTIONS.MARK_LATE_CANCELLATION, payload: booking.id });
+    addToast('Late cancellation recorded. Deposit status saved as forfeited.');
+    setOpenDropdownId(null);
+  });
+
+  const handleOpenDelete = (booking) => {
+    rememberActionFocus();
+    setActionBooking(booking);
+    setShowDeleteModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleConfirmDelete = id => runSavedAction(async () => {
+    const target = state.bookings.find(booking => booking.id === id);
+    requirePersistedBooking(target);
+    if (!state.auth?.isDemoMode && !await dbService.deleteBooking(id)) throw new Error('Deletion was not saved. Please retry.');
+    dispatch({ type: ACTIONS.DELETE_BOOKING, payload: id });
+    await syncCalendarAfterSave(target, () => realGoogleCalendarService.deleteEvent(target.googleEventId, state.provider.id));
+    addToast('Appointment deleted.');
+    setShowDeleteModal(false); setActionBooking(null);
+    if (selectedBooking === id) setSelectedBooking(null);
+  });
+
+  // Payment verification handlers
+  const handleConfirmPayment = async (booking) => {
+    if (!booking) return;
+    setProcessingPaymentId(booking.id);
+    try {
+      if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
+        await dbService.confirmPayment(booking.id);
+      }
+      dispatch({
+        type: ACTIONS.UPDATE_BOOKING,
+        payload: {
+          id: booking.id,
+          status: 'confirmed',
+          paymentStatus: 'confirmed',
+          paymentConfirmedAt: new Date().toISOString(),
+        },
+      });
+      addToast(`Payment confirmed for ${booking.customerName} ✓`);
+    } catch (err) {
+      addToast(err.message || 'Failed to confirm payment.', 'error');
+    } finally {
+      setProcessingPaymentId(null);
+    }
+  };
+
+  const handleOpenRejectPayment = (booking) => {
+    rememberActionFocus();
+    setRejectModalBooking(booking);
+    setRejectReason('');
+  };
+
+  const handleConfirmRejectPayment = async () => {
+    if (!rejectModalBooking) return;
+    const booking = rejectModalBooking;
+    setProcessingPaymentId(booking.id);
+    try {
+      if (!state.auth?.isDemoMode && isSupabaseConfigured() && booking.id && !booking.id.startsWith('booking-')) {
+        await dbService.rejectPayment(booking.id, rejectReason.trim());
+      }
+
+      if (state.googleCalendar?.isConnected && booking.googleEventId) {
+        const providerId = state.provider?.id || 'provider-1';
+        try {
+          realGoogleCalendarService.deleteEvent(booking.googleEventId, providerId);
+        } catch (_) {}
+      }
+
+      dispatch({
+        type: ACTIONS.UPDATE_BOOKING,
+        payload: {
+          id: booking.id,
+          paymentStatus: 'rejected',
+          paymentRejectedAt: new Date().toISOString(),
+          paymentRejectedReason: rejectReason.trim() || null,
+          status: 'rejected',
+        },
+      });
+
+      // Refresh bookings list from Supabase if available
+      if (!state.auth?.isDemoMode && isSupabaseConfigured() && state.provider?.id) {
+        try {
+          const fresh = await dbService.getBookings(state.provider.id);
+          if (Array.isArray(fresh) && fresh.length > 0) {
+            fresh.forEach(freshBooking => {
+              dispatch({ type: ACTIONS.UPDATE_BOOKING, payload: freshBooking });
+            });
+          }
+        } catch (_) {}
+      }
+
+      addToast('Payment rejected.');
+      setRejectModalBooking(null);
+      setRejectReason('');
+      if (selectedBooking === booking.id) {
+        setSelectedBooking(null);
+      }
+    } catch (err) {
+      addToast(err.message || 'Failed to reject payment.', 'error');
+    } finally {
+      setProcessingPaymentId(null);
+    }
+  };
+
+  const renderPaymentBadge = (b) => {
+    if (b.price <= 0 || b.paymentStatus === 'not_required') {
+      return null;
+    }
+    if (b.paymentStatus === 'confirmed') {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: '#DCFCE7',
+            color: '#166534',
+            border: '1px solid #86EFAC',
+          }}
+        >
+          Paid ✓
+        </span>
+      );
+    }
+    if (b.paymentStatus === 'verification_pending') {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: '#EFF6FF',
+            color: '#1E40AF',
+            border: '1px solid #BFDBFE',
+          }}
+        >
+           Verification Pending
+        </span>
+      );
+    }
+    if (b.paymentStatus === 'rejected') {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: '#FEE2E2',
+            color: '#991B1B',
+            border: '1px solid #FECACA',
+          }}
+          title={b.paymentRejectedReason || 'Payment rejected'}
+        >
+          Payment Rejected
+        </span>
+      );
+    }
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 8px',
+          borderRadius: '9999px',
+          fontSize: '11px',
+          fontWeight: 600,
+          background: '#FEF3C7',
+          color: '#92400E',
+          border: '1px solid #FDE68A',
+        }}
+      >
+        Awaiting Payment
+      </span>
+    );
+  };
+
+  // Manual booking submission
+  const manualSlotsDetailed = useMemo(() => {
+    if (!manualForm.date || !manualForm.serviceId || !state.availability) return [];
+    return getTimeSlotsDetailedForDate(
+      manualForm.date,
+      state.availability,
+      state.services,
+      manualForm.serviceId,
+      state.bookings,
+      getGcalBusyTimesForDate(manualForm.date)
+    );
+  }, [manualForm.date, manualForm.serviceId, state.availability, state.services, state.bookings, getGcalBusyTimesForDate]);
+
+  const handleCreateManualBooking = event => {
+    event.preventDefault();
+    return runSavedAction(async () => {
+      if (!manualForm.customerName.trim() || !manualForm.customerPhone.trim() || !manualForm.serviceId || !manualForm.date || !manualForm.startTime) throw new Error('Complete the required customer and appointment fields.');
+      if (!manualSlotsDetailed.some(value => value.time === manualForm.startTime && value.available)) throw new Error('This slot is no longer available. Select another time.');
+      const payload = {
+        serviceId: manualForm.serviceId, customerName: manualForm.customerName.trim(),
+        customerPhone: manualForm.customerPhone.trim(), customerWhatsApp: manualForm.customerWhatsApp.trim(),
+        customerEmail: manualForm.customerEmail.trim(), bookingDate: manualForm.date,
+        startTime: manualForm.startTime, notes: manualForm.notes.trim(),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (manualIntentRef.current?.fingerprint !== fingerprint) manualIntentRef.current = { fingerprint, key: crypto.randomUUID() };
+      const saved = await dbService.createMerchantBooking(payload, manualIntentRef.current.key);
+      dispatch({ type: ACTIONS.ADD_BOOKING, payload: { booking: saved, customer: { id: saved.customerId, name: saved.customerName, phone: saved.customerPhone, email: saved.customerEmail, whatsapp: saved.customerWhatsApp } } });
+      if (gcalConnected) {
+        let calendar;
+        try { calendar = await realGoogleCalendarService.createEvent(saved, state.provider.id, state.provider.timezone || 'Asia/Kolkata'); }
+        catch { /* A calendar failure must not present the saved appointment as unsaved. */ }
+        if (calendar?.success) dispatch({ type: ACTIONS.UPDATE_BOOKING, payload: { id: saved.id, googleEventId: calendar.eventId, meetLink: calendar.meetLink, syncedToGoogleCalendar: true } });
+        else addToast('Appointment saved. Google Calendar has not synchronized; check the calendar connection.', 'warning');
+      }
+      manualIntentRef.current = null;
+      addToast('Appointment saved. Any payment remains separate from this manual record.');
+      setShowManualModal(false);
+    });
+  };
+
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    return {
+      all: state.bookings.length,
+      confirmed: state.bookings.filter(b => b.status === 'confirmed').length,
+      'late-cancellation': state.bookings.filter(b => b.status === 'late-cancellation').length,
+      upcoming: state.bookings.filter(b => b.date >= today && b.status === 'confirmed').length,
+      'payment-pending': state.bookings.filter(b => b.paymentStatus === 'verification_pending').length,
+      'refunds-due': unifiedRefundsDue.filter(r => r.status === 'refund_due').length,
+      completed: state.bookings.filter(b => b.status === 'completed').length,
+      cancelled: state.bookings.filter(b => b.status === 'cancelled' || b.status === 'late-cancellation').length,
+      'no-show': state.bookings.filter(b => b.status === 'no-show').length,
+    };
+  }, [state.bookings, today, unifiedRefundsDue]);
+
+  // Pending payment confirmations for coach alert section
+  const pendingPaymentBookings = useMemo(() => {
+    return state.bookings.filter(b => b.paymentStatus === 'verification_pending');
+  }, [state.bookings]);
+
+  // Comprehensive Filtering & Sorting
+  const filteredBookings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    // Date presets calculation
+    const next7Str = shiftDate(today, 7);
+    const next30Str = shiftDate(today, 30);
+
+    return state.bookings
+      .filter(b => {
+        // 1. Tab filter
+        if (activeTab === 'upcoming') {
+          if (!(b.date >= today && b.status === 'confirmed')) return false;
+        } else if (activeTab === 'payment-pending') {
+          if (b.paymentStatus !== 'verification_pending') return false;
+        } else if (activeTab === 'cancelled') {
+          if (!(b.status === 'cancelled' || b.status === 'late-cancellation')) return false;
+        } else if (activeTab !== 'all') {
+          if (b.status !== activeTab) return false;
+        }
+
+        // 2. Search query filter
+        if (query) {
+          const matchName = b.customerName?.toLowerCase().includes(query);
+          const matchEmail = b.customerEmail?.toLowerCase().includes(query);
+          const matchPhone = b.customerPhone?.toLowerCase().includes(query);
+          const matchService = b.serviceName?.toLowerCase().includes(query);
+          const matchBookingId = b.bookingId?.toLowerCase().includes(query);
+          if (!matchName && !matchEmail && !matchPhone && !matchService && !matchBookingId) return false;
+        }
+
+        // 3. Service dropdown filter
+        if (filterService !== 'all' && b.serviceId !== filterService) {
+          return false;
+        }
+
+/* Disabled navigation enhancement (user request):
+        if (routeFilters.from && b.date < routeFilters.from) return false;
+*/
+/* Disabled navigation enhancement (user request):
+        if (routeFilters.to && b.date > routeFilters.to) return false;
+*/
+        // 5. Date preset filter
+        if (filterDatePreset === 'today') {
+          if (b.date !== today) return false;
+        } else if (filterDatePreset === 'next7') {
+          if (b.date < today || b.date > next7Str) return false;
+        } else if (filterDatePreset === 'next30') {
+          if (b.date < today || b.date > next30Str) return false;
+        } else if (filterDatePreset === 'past') {
+          if (b.date >= today) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'date-newest':
+            return b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime);
+          case 'date-oldest':
+            return a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime);
+          case 'customer-asc':
+            return (a.customerName || '').localeCompare(b.customerName || '');
+          case 'customer-desc':
+            return (b.customerName || '').localeCompare(a.customerName || '');
+          case 'amount-desc':
+            return (b.price || 0) - (a.price || 0);
+          case 'amount-asc':
+            return (a.price || 0) - (b.price || 0);
+          default:
+            return b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime);
+        }
+      });
+  }, [state.bookings, activeTab, searchQuery, filterService, filterDatePreset, sortBy, today]);
+
+  // Active filters count
+  const moreFiltersCount = Number(filterService !== 'all') + Number(filterDatePreset !== 'all') + Number(sortBy !== 'date-newest');
+  const hasActiveFilters = searchQuery.trim() !== '' || moreFiltersCount > 0 || activeTab !== 'all';
+  const changeFilter = (setter, value) => {
+    setter(value);
+    setCurrentPage(1);
+    setOpenDropdownId(null);
+  };
+
+  const handleResetFilters = () => {
+/* Disabled navigation enhancement (user request):
+    navigate('/dashboard/appointments', { replace: true });
+    setCurrentPage(1);
+
+*/    setSearchQuery('');
+    setFilterService('all');
+    setFilterDatePreset('all');
+    setSortBy('date-newest');
+    setActiveTab('all');
+    setCurrentPage(1);
+    setOpenDropdownId(null);
+  };
+
+  // Pagination calculation
+  const totalCount = filteredBookings.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = totalCount === 0 ? 0 : (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalCount);
+  const paginatedBookings = useMemo(() => {
+    return filteredBookings.slice(startIndex, endIndex);
+  }, [filteredBookings, startIndex, endIndex]);
+
+  // Context-aware row action menu component
+  const renderActionsMenu = (booking, isNearBottom = false) => {
+    const isMenuOpen = openDropdownId === booking.id;
+    const isConfirmed = booking.status === 'confirmed';
+    const isCashfreeAppointment = booking.sourceSystem === 'cashfree_v1';
+
+    return (
+      <div className="actions-dropdown-anchor" onClick={e => e.stopPropagation()}>
+        <button
+          type="button"
+          aria-label="Actions"
+          aria-expanded={isMenuOpen}
+          className={`btn-table-action ${isMenuOpen ? 'active' : ''}`}
+          onClick={() => setOpenDropdownId(isMenuOpen ? null : booking.id)}
+        >
+          ⋮
+        </button>
+
+        {isMenuOpen && (
+          <div className={`actions-dropdown-menu ${isNearBottom ? 'actions-dropdown-menu-up' : ''}`}>
+            {/* View Details */}
+            <button
+              type="button"
+              className="actions-dropdown-item"
+              onClick={() => {
+                setOpenDropdownId(null);
+                setSelectedBooking(booking.id);
+              }}
+            >
+              <span className="item-icon"></span>
+              <span>View details</span>
+            </button>
+
+            {/* Get Directions for in-person bookings */}
+            {(() => {
+              const itemMeetingType = booking.meetingType || booking.meeting_type || (booking.locationAddressSnapshot || booking.location_address_snapshot ? 'in-person' : 'online');
+              const itemIsInPerson = itemMeetingType === 'in-person';
+              const itemAddress = booking.locationAddressSnapshot || booking.location_address_snapshot || booking.locationAddress || booking.location_address || (itemIsInPerson ? (state.services?.find(s => s.id === booking.serviceId)?.locationAddress || state.provider?.defaultLocationAddress || null) : null);
+              if (itemIsInPerson && itemAddress) {
+                return (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itemAddress)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="actions-dropdown-item"
+                    style={{ textDecoration: 'none' }}
+                    onClick={() => setOpenDropdownId(null)}
+                  >
+                    <span className="item-icon"></span>
+                    <span>Get Directions</span>
+                  </a>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Payment verification actions */}
+            {!isCashfreeAppointment && booking.paymentStatus === 'verification_pending' && (
+              <>
+                <button
+                  type="button"
+                  className="actions-dropdown-item"
+                  style={{ color: '#16A34A', fontWeight: 600 }}
+                  onClick={() => {
+                    setOpenDropdownId(null);
+                    handleConfirmPayment(booking);
+                  }}
+                >
+                  <span className="item-icon">✓</span>
+                  <span>Accept Payment</span>
+                </button>
+                <button
+                  type="button"
+                  className="actions-dropdown-item"
+                  style={{ color: '#DC2626' }}
+                  onClick={() => {
+                    setOpenDropdownId(null);
+                    handleOpenRejectPayment(booking);
+                  }}
+                >
+                  <span className="item-icon">✕</span>
+                  <span>Reject Payment</span>
+                </button>
+              </>
+            )}
+
+            {/* Confirmed actions */}
+            {isConfirmed && !isCashfreeAppointment && (
+              <>
+                <button
+                  type="button"
+                  className="actions-dropdown-item"
+                  onClick={() => handleOpenReschedule(booking)}
+                >
+                  <span className="item-icon"></span>
+                  <span>Reschedule</span>
+                </button>
+                <button
+                  type="button"
+                  className="actions-dropdown-item"
+                  onClick={() => handleOpenComplete(booking)}
+                >
+                  <span className="item-icon">✓</span>
+                  <span>Mark as completed</span>
+                </button>
+                {(() => {
+                  const policy = booking.policySnapshot || state.policies || DEFAULT_POLICY;
+                  const grace = Number(policy.no_show_grace_minutes ?? DEFAULT_POLICY.no_show_grace_minutes);
+                  const sessionStart = new Date(`${booking.date}T${booking.startTime}:00`).getTime();
+                  const allowedAfter = sessionStart + (grace * 60 * 1000);
+                  const isGracePassed = Date.now() >= allowedAfter;
+                  const waitMinutes = Math.ceil((allowedAfter - Date.now()) / 60000);
+
+                  return (
+                    <button
+                      type="button"
+                      className="actions-dropdown-item"
+                      disabled={!isGracePassed}
+                      title={!isGracePassed ? `Cannot mark no-show until ${grace}m after session start (${waitMinutes}m remaining)` : 'Mark customer as no-show'}
+                      style={{
+                        opacity: !isGracePassed ? 0.45 : 1,
+                        cursor: !isGracePassed ? 'not-allowed' : 'pointer',
+                      }}
+                      onClick={() => {
+                        if (isGracePassed) handleOpenNoShow(booking);
+                      }}
+                    >
+                      <span className="item-icon"></span>
+                      <span>Mark as no-show {!isGracePassed && `(${waitMinutes}m left)`}</span>
+                    </button>
+                  );
+                })()}
+                <button
+                  type="button"
+                  className="actions-dropdown-item"
+                  onClick={() => handleOpenCancel(booking)}
+                >
+                  <span className="item-icon">✕</span>
+                  <span>Cancel appointment</span>
+                </button>
+              </>
+            )}
+
+            {!isCashfreeAppointment && <div className="actions-dropdown-divider" />}
+
+            {/* Destructive Delete */}
+            {!isCashfreeAppointment && <button
+              type="button"
+              className="actions-dropdown-item actions-dropdown-item-danger"
+              onClick={() => handleOpenDelete(booking)}
+            >
+              <span className="item-icon"></span>
+              <span>Delete</span>
+            </button>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Reschedule slots detailed calculation for modal
+  const rescheduleSlotsDetailed = useMemo(() => {
+    if (!activeModalTarget || !rescheduleDate) return [];
+    return getTimeSlotsDetailedForDate(
+      rescheduleDate,
+      state.availability,
+      state.services,
+      activeModalTarget.serviceId,
+      state.bookings,
+      getGcalBusyTimesForDate(rescheduleDate),
+      activeModalTarget.id
+    );
+  }, [activeModalTarget, rescheduleDate, state.availability, state.services, state.bookings, getGcalBusyTimesForDate]);
+
+  // =========================================================================
+  // VIEW 1: Appointment Detail View (if selectedBooking is set)
+  // =========================================================================
+  if (selectedBooking) {
+    const b = state.bookings.find(bk => bk.id === selectedBooking);
+    if (!b) {
+      setSelectedBooking(null);
+      return null;
+    }
+
+    const isSyncedToGcal = Boolean(b.googleEventId);
+    const scheduledEndMin = timeToMinutes(b.endTime);
+    const selectedEndMin = timeToMinutes(completionEndTime || b.endTime);
+    const freedPreviewMin = Math.max(0, scheduledEndMin - selectedEndMin);
+
+    const bMeetingType = b.meetingType || b.meeting_type || (b.locationAddressSnapshot || b.location_address_snapshot ? 'in-person' : 'online');
+    const bIsInPerson = bMeetingType === 'in-person';
+    const bLocationAddress = b.locationAddressSnapshot ||
+      b.location_address_snapshot ||
+      b.locationAddress ||
+      b.location_address ||
+      (bIsInPerson ? (state.services?.find(s => s.id === b.serviceId)?.locationAddress || state.provider?.defaultLocationAddress || state.provider?.default_location_address || null) : null);
+    const bMapsUrl = bLocationAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bLocationAddress)}` : null;
+
+    // WhatsApp message preview text
+    let waPreviewText = '';
+    if (b.status === 'confirmed') {
+      waPreviewText = whatsAppService.generateConfirmationMessage(b, state.provider);
+    } else if (b.status === 'cancelled' || b.status === 'late-cancellation') {
+      waPreviewText = whatsAppService.generateCancellationMessage(b, state.provider);
+    } else {
+      waPreviewText = `Hi ${b.customerName}! Thank you for attending your ${b.serviceName} session with ${state.provider?.name || 'us'}. We hope you had a great experience! `;
+    }
+
+    return (
+      <div className="animate-fade-in-up">
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setSelectedBooking(null)}
+          style={{ marginBottom: 'var(--space-4)' }}
+        >
+          ← Back to appointments
+        </button>
+
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <div>
+            <h1 className="page-title">Appointment Details</h1>
+            <p className="page-subtitle">Booking ID: {b.bookingId || b.id}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+            {isSyncedToGcal && (
+              <span className="badge badge-active" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}>
+                <span></span> Synced to Google Calendar
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ color: 'var(--color-error-600)', borderColor: 'var(--color-error-200)' }}
+              onClick={() => handleOpenDelete(b)}
+            >
+               Delete
+            </button>
+          </div>
+        </div>
+
+        <div className="appointment-details-grid">
+          {/* Customer Info */}
+          <div className="card card-padding">
+            <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>Customer</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Name</div>
+                <div style={{ fontWeight: 600, fontSize: 'var(--font-size-base)', color: 'var(--color-text)' }}>{b.customerName}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Phone / WhatsApp</div>
+                <div>{b.customerPhone}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Email</div>
+                <div>{b.customerEmail || '—'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Appointment Info */}
+          <div className="card card-padding">
+            <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>Appointment</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Service</div>
+                <div style={{ fontWeight: 600 }}>{b.serviceName}</div>
+              </div>
+              {b.instructorName && (
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Instructor</div>
+                  <div style={{ fontWeight: 600 }}>{b.instructorName}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Date & Scheduled Time</div>
+                <div>{formatDate(b.date)} · {formatTime(b.startTime)} – {formatTime(b.endTime)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Mode</div>
+                <div>{bIsInPerson ? ' In-person' : ' Online'}</div>
+              </div>
+              {bIsInPerson && (
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Location</div>
+                  <div style={{ marginBottom: (bLocationAddress && bMapsUrl) ? '8px' : '0', color: 'var(--color-text)', fontSize: 'var(--font-size-sm)' }}>
+                    {bLocationAddress || 'No address specified'}
+                  </div>
+                  {bLocationAddress && bMapsUrl && (
+                    <PillButton
+                      variant="secondary"
+                      size="sm"
+                      href={bMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Get Directions 
+                    </PillButton>
+                  )}
+                </div>
+              )}
+              {b.actualEndTime && (
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-success-700)', fontWeight: 600 }}>
+                     Completed Early
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-success-700)' }}>
+                    Finished at {formatTime(b.actualEndTime)} (released remaining time for bookings)
+                  </div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Duration</div>
+                <div>{b.duration} minutes</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Price</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', color: 'var(--color-text)' }}>{formatCurrency(b.price)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Status</div>
+                <span className={`badge ${getStatusBadgeClass(b.status)}`}>{appointmentRefundLabel(b, getStatusLabel(b.status))}</span>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Calendar Sync</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: isSyncedToGcal ? 'var(--color-primary-600)' : 'var(--color-text-secondary)' }}>
+                  {isSyncedToGcal ? '✓ Event synced to provider Google Calendar' : 'Local booking only'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Information */}
+          {b.price > 0 && (
+            <div className="card card-padding">
+              <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>Payment</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Verification Status</div>
+                  <div style={{ marginTop: 4 }}>{renderPaymentBadge(b)}</div>
+                </div>
+                {b.paymentMarkedPaidAt && (
+                  <div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Marked Paid At</div>
+                    <div style={{ fontSize: 'var(--font-size-sm)' }}>{new Date(b.paymentMarkedPaidAt).toLocaleString()}</div>
+                  </div>
+                )}
+                {b.paymentConfirmedAt && (
+                  <div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Confirmed At</div>
+                    <div style={{ fontSize: 'var(--font-size-sm)' }}>{new Date(b.paymentConfirmedAt).toLocaleString()}</div>
+                  </div>
+                )}
+                {b.paymentRejectedReason && (
+                  <div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: '#DC2626', fontWeight: 600 }}>Rejection Reason</div>
+                    <div style={{ fontSize: 'var(--font-size-sm)', color: '#DC2626' }}>{b.paymentRejectedReason}</div>
+                  </div>
+                )}
+                {b.paymentScreenshotUrl && (
+                  <div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>Proof Screenshot</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <img
+                        src={b.paymentScreenshotUrl}
+                        alt="Proof of payment"
+                        style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--theme-border)', cursor: 'pointer' }}
+                        onClick={() => setViewScreenshotUrl(b.paymentScreenshotUrl)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setViewScreenshotUrl(b.paymentScreenshotUrl)}
+                      >
+                         View Full Proof
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {b.paymentStatus === 'verification_pending' && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: 'var(--space-2)' }}>
+                    <button
+                      type="button"
+                      className="btn btn-success btn-sm"
+                      disabled={processingPaymentId === b.id}
+                      onClick={() => handleConfirmPayment(b)}
+                    >
+                      ✓ Accept Payment
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
+                      disabled={processingPaymentId === b.id}
+                      onClick={() => handleOpenRejectPayment(b)}
+                    >
+                      ✕ Reject Payment
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions bar inside detail view */}
+        {b.sourceSystem === 'cashfree_v1' && <BookingRefundRequest key={b.id} appointment={b} />}
+        {b.status === 'confirmed' && b.sourceSystem !== 'cashfree_v1' && (
+          <div className="card card-padding" style={{ marginTop: 'var(--space-6)' }}>
+            <h4 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>Actions</h4>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <button className="btn btn-success btn-sm" onClick={() => handleOpenComplete(b)}>
+                ✓ Mark Completed
+              </button>
+              {bIsInPerson && bLocationAddress && bMapsUrl && (
+                <PillButton
+                  variant="secondary"
+                  size="sm"
+                  href={bMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                   Get Directions
+                </PillButton>
+              )}
+              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenReschedule(b)}>
+                 Reschedule
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenCancel(b)}>
+                ✕ Cancel Appointment
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleOpenNoShow(b)}>
+                 Mark No-show
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleMarkLateCancellation(b)}>
+                 Mark Late Cancellation
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Render shared modals */}
+        {renderModals(b, scheduledEndMin, freedPreviewMin)}
+        {renderPaymentModals()}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW 2: Appointments Main Table View
+  // =========================================================================
+  return (
+    <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--color-text)' }}>
+            Appointments
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '4px 0 0' }}>
+            Manage and track all your client sessions in one place.
+          </p>
+        </div>
+        <PillButton variant="primary" onClick={openManualBookingModal}>
+          + New Appointment
+        </PillButton>
+      </div>
+
+      {pendingPaymentBookings.length > 0 && (
+        <section className="appointment-review-task" aria-label="Payment review task">
+          <div>
+            <strong>{pendingPaymentBookings.length} {pendingPaymentBookings.length === 1 ? 'payment needs' : 'payments need'} review</strong>
+            <p>Check the payment in your UPI app, then open the appointment to review proof and accept or reject it.</p>
+          </div>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => { handleResetFilters(); changeFilter(setActiveTab, 'payment-pending'); }}>
+            Review payments
+          </button>
+        </section>
+      )}
+
+      <section className="appointment-filters" aria-label="Appointment filters">
+        <div className="appointment-filter-primary">
+          <label className="appointment-filter-field">
+            <span>Appointment view</span>
+            <select className="form-input" value={activeTab} onChange={event => changeFilter(setActiveTab, event.target.value)}>
+              {APPOINTMENT_VIEWS.map(view => <option key={view.key} value={view.key}>{view.label}{view.key === 'refunds-due' ? ' (' + tabCounts[view.key] + ' due)' : ' (' + tabCounts[view.key] + ')'}</option>)}
+            </select>
+          </label>
+          {activeTab !== 'refunds-due' && (
+            <label className="appointment-filter-field appointment-filter-search">
+              <span>Search appointments</span>
+              <input type="search" className="form-input" placeholder="Booking ID, customer, or service" value={searchQuery} onChange={event => changeFilter(setSearchQuery, event.target.value)} />
+            </label>
+          )}
+        </div>
+        {activeTab !== 'refunds-due' && (
+          <>
+            <details className="appointment-more-filters">
+              <summary>More filters{moreFiltersCount > 0 ? ' (' + moreFiltersCount + ' active)' : ''}</summary>
+              <div className="appointment-filter-secondary">
+                <label className="appointment-filter-field">
+                  <span>Service</span>
+                  <select className="form-input" value={filterService} onChange={event => changeFilter(setFilterService, event.target.value)}>
+                    <option value="all">All services</option>
+                    {state.services?.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
+                  </select>
+                </label>
+                <label className="appointment-filter-field">
+                  <span>Appointment dates</span>
+                  <select className="form-input" value={filterDatePreset} onChange={event => changeFilter(setFilterDatePreset, event.target.value)}>
+                    <option value="all">All dates</option>
+                    <option value="today">Today</option>
+                    <option value="next7">Next 7 days</option>
+                    <option value="next30">Next 30 days</option>
+                    <option value="past">Past dates</option>
+                  </select>
+                </label>
+                <label className="appointment-filter-field">
+                  <span>Sort appointments</span>
+                  <select className="form-input" value={sortBy} onChange={event => changeFilter(setSortBy, event.target.value)}>
+                    <option value="date-newest">Date: newest first</option>
+                    <option value="date-oldest">Date: oldest first</option>
+                    <option value="customer-asc">Customer A to Z</option>
+                    <option value="customer-desc">Customer Z to A</option>
+                    <option value="amount-desc">Amount: highest first</option>
+                    <option value="amount-asc">Amount: lowest first</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+            <div className="appointment-filter-results">
+              <p role="status">{totalCount} {totalCount === 1 ? 'appointment matches' : 'appointments match'}</p>
+              {hasActiveFilters && <button type="button" className="btn btn-ghost btn-sm" onClick={handleResetFilters}>Reset filters</button>}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Refunds Due Tab View */}
+      {activeTab === 'refunds-due' ? (
+        <div style={{
+          background: 'var(--theme-bg-card)',
+          borderRadius: 'var(--radius-card)',
+          border: '1px solid var(--theme-border)',
+          padding: '24px',
+          boxShadow: 'var(--shadow-card)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Refunds Due & Ledger</h3>
+              <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '4px 0 0 0' }}>
+                Track cancellations and refunds owed to clients. Once you send payment via UPI, upload proof to alert the customer.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={fetchRefundsDue}
+              disabled={isLoadingRefunds}
+            >
+              ↻ Refresh
+            </button>
+          </div>
+
+          {unifiedRefundsDue.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}></div>
+              <div style={{ fontWeight: 600 }}>All refunds clear!</div>
+              <div style={{ fontSize: '13px', marginTop: '4px' }}>No pending refunds owed to customers.</div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+                <thead>
+                  <tr style={{ color: 'var(--theme-text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Customer</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Service</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Session Date</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Refund Amount</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 600 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unifiedRefundsDue.map((ref) => {
+                    const b = ref.bookings || {};
+                    return (
+                      <tr key={ref.id} className="highlighted-lime">
+                        <td style={{ padding: '14px', fontWeight: 600 }}>
+                          <div>{b.customer_name || 'Customer'}</div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', fontWeight: 400, marginTop: 2 }}>
+                            {b.customer_phone || b.customer_email || '—'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 600 }}>{b.services?.name || 'Session'}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div>{b.booking_date ? formatDate(b.booking_date) : '—'}</div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)' }}>
+                            {b.start_time ? formatTime(b.start_time) : ''}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#DC2626' }}>
+                            {formatCurrency(ref.amount)}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '9999px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            background: ref.status === 'confirmed' ? '#DCFCE7' : (ref.status === 'disputed' ? '#FEE2E2' : '#FEF3C7'),
+                            color: ref.status === 'confirmed' ? '#166534' : (ref.status === 'disputed' ? '#991B1B' : '#92400E'),
+                          }}>
+                            {ref.status === 'refund_due' ? 'Refund Due' : (ref.status === 'refunded' ? 'Refund Sent' : ref.status)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px', textAlign: 'center' }}>
+                          {ref.status === 'refund_due' ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              onClick={() => {
+                                setSelectedRefundTarget(ref);
+                                setRefundProofFile(null);
+                                setShowRefundModal(true);
+                              }}
+                              style={{ background: '#16A34A', color: '#FFFFFF', fontWeight: 600, fontSize: '12px' }}
+                            >
+                              Mark Refunded
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#64748B' }}>
+                              {ref.proof_url ? (
+                                <a href={ref.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563EB', fontWeight: 500 }}>
+                                  View Proof 
+                                </a>
+                              ) : 'Sent ✓'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : paginatedBookings.length > 0 ? (
+        <>
+          {/* Desktop Table Container (Matching Overview Today's Schedule) */}
+          <div className="appointments-desktop-table" style={{
+            background: 'var(--theme-bg-card)',
+            borderRadius: 'var(--radius-card)',
+            border: '1px solid var(--theme-border)',
+            padding: '24px',
+            boxShadow: 'var(--shadow-card)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+          }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+                <thead>
+                  <tr style={{ color: 'var(--theme-text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Customer</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Service</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Date & Time</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Amount</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 600, width: '48px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedBookings.map((b, idx) => {
+                    const isNearBottom = idx >= paginatedBookings.length - 2 && paginatedBookings.length > 3;
+                    return (
+                      <tr key={b.id} className={idx % 2 === 1 ? 'highlighted-lime' : ''} style={{ transition: 'all var(--transition-fast)' }}>
+                        {/* Customer */}
+                        <td style={{ padding: '14px', fontWeight: 600 }}>
+                          <div
+                            onClick={() => setSelectedBooking(b.id)}
+                            title="Click to view details"
+                            style={{ cursor: 'pointer', color: 'var(--color-text)' }}
+                          >
+                            {b.customerName}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', fontWeight: 400, marginTop: 2 }}>
+                            {b.customerEmail || b.customerPhone || '—'}
+                          </div>
+                          {b.bookingId && (
+                            <div style={{ fontSize: '11px', color: 'var(--theme-text-muted)', fontFamily: 'monospace', marginTop: 2 }}>
+                              {b.bookingId}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Service */}
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 600 }}>{b.serviceName}</div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', marginTop: 2 }}>{b.duration} min</div>
+                        </td>
+
+                        {/* Date & Time */}
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ opacity: 0.7 }}></span>
+                            {formatDate(b.date)}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--theme-text-muted)', marginTop: 2 }}>
+                            {formatTime(b.startTime)} – {formatTime(b.endTime)}
+                            {b.actualEndTime && (
+                              <span style={{ marginLeft: 6, color: '#16A34A', fontWeight: 500 }}>
+                                (wrapped {formatTime(b.actualEndTime)})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Amount */}
+                        <td style={{ padding: '14px', fontWeight: 700 }}>
+                          {formatCurrency(b.price)}
+                        </td>
+
+                        {/* Status */}
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                            <span className={`badge ${getStatusBadgeClass(b.status)}`}>
+                              {appointmentRefundLabel(b, getStatusLabel(b.status))}
+                            </span>
+                            {renderPaymentBadge(b)}
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: '14px', textAlign: 'center' }}>
+                          {renderActionsMenu(b, isNearBottom)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="table-pagination">
+              <div className="pagination-info">
+                Showing <strong>{startIndex + 1}</strong>–<strong>{endIndex}</strong> of <strong>{totalCount}</strong> appointments
+              </div>
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-nav-btn"
+                  disabled={safeCurrentPage === 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                >
+                  ←
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    className={`pagination-page-btn ${safeCurrentPage === pageNum ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="pagination-nav-btn"
+                  disabled={safeCurrentPage === totalPages}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Cards View */}
+          <div className="appointments-mobile-cards">
+            {paginatedBookings.map((b, idx) => {
+              const isNearBottom = idx >= paginatedBookings.length - 2 && paginatedBookings.length > 3;
+              return (
+                <div key={b.id} className="appointment-card-mobile card card-padding">
+                  <div className="mobile-card-top">
+                    <div>
+                      <div
+                        className="mobile-card-customer"
+                        onClick={() => setSelectedBooking(b.id)}
+                      >
+                        {b.customerName}
+                      </div>
+                      <div className="mobile-card-sub">
+                        {b.customerEmail || b.customerPhone || '—'}
+                      </div>
+                      {b.bookingId && <div className="mobile-card-sub">Booking ID: {b.bookingId}</div>}
+                    </div>
+                    {renderActionsMenu(b, isNearBottom)}
+                  </div>
+
+                  <div className="mobile-card-service-row">
+                    <span className="service-name">{b.serviceName}</span>
+                    <span className="service-duration">({b.duration} min)</span>
+                  </div>
+
+                  <div className="mobile-card-datetime">
+                     {formatDate(b.date)} · {formatTime(b.startTime)}
+                    {b.actualEndTime && (
+                      <span style={{ color: 'var(--color-success-700)', fontWeight: 500, marginLeft: 4 }}>
+                        (early {formatTime(b.actualEndTime)})
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mobile-card-bottom">
+                    <div className="mobile-card-price">{formatCurrency(b.price)}</div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className={`badge ${getStatusBadgeClass(b.status)}`}>
+                        <span className="badge-dot" />
+                        {appointmentRefundLabel(b, getStatusLabel(b.status))}
+                      </span>
+                      {renderPaymentBadge(b)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Mobile Pagination */}
+            {totalPages > 1 && (
+              <div className="table-pagination" style={{ marginTop: 'var(--space-4)' }}>
+                <div className="pagination-info">
+                  Page <strong>{safeCurrentPage}</strong> of <strong>{totalPages}</strong> ({totalCount} total)
+                </div>
+                <div className="pagination-controls">
+                  <button
+                    type="button"
+                    className="pagination-nav-btn"
+                    disabled={safeCurrentPage === 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    className="pagination-nav-btn"
+                    disabled={safeCurrentPage === totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="card">
+          <div className="empty-state">
+            <div style={{ fontSize: '2rem', marginBottom: 12 }}></div>
+            <div className="empty-state-title">No appointments found</div>
+            <div className="empty-state-description">
+              {hasActiveFilters
+                ? 'No appointments match the selected filters or search query.'
+                : activeTab === 'upcoming'
+                ? 'No upcoming appointments. Share your booking link to get booked!'
+                : 'No appointments in this category yet.'}
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ marginTop: 'var(--space-4)' }}
+                onClick={handleResetFilters}
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      {renderModals(activeModalTarget, activeModalTarget ? timeToMinutes(activeModalTarget.endTime) : 0, 0)}
+      {renderPaymentModals()}
+
+      {/* Manual Booking Modal */}
+      {showManualModal && (
+        <AccessibleModal label="Create appointment" onClose={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create New Appointment</h3>
+              <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>✕</button>
+            </div>
+            <form onSubmit={handleCreateManualBooking}>
+              {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="appointment-field-1" className="form-label">Customer Name *</label>
+                    <input id="appointment-field-1"
+                      className="form-input"
+                      placeholder="e.g. Rahul Sharma"
+                      value={manualForm.customerName}
+                      onChange={e => setManualForm({ ...manualForm, customerName: e.target.value })}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="appointment-field-2" className="form-label">Phone Number *</label>
+                    <input id="appointment-field-2"
+                      className="form-input"
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={manualForm.customerPhone}
+                      onChange={e => setManualForm({ ...manualForm, customerPhone: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="appointment-field-3" className="form-label">WhatsApp Number</label>
+                    <input id="appointment-field-3"
+                      className="form-input"
+                      type="tel"
+                      placeholder="Same as phone"
+                      value={manualForm.customerWhatsApp}
+                      onChange={e => setManualForm({ ...manualForm, customerWhatsApp: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="appointment-field-4" className="form-label">Email</label>
+                    <input id="appointment-field-4"
+                      className="form-input"
+                      type="email"
+                      placeholder="customer@email.com"
+                      value={manualForm.customerEmail}
+                      onChange={e => setManualForm({ ...manualForm, customerEmail: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="appointment-field-5" className="form-label">Select Service *</label>
+                  <select id="appointment-field-5"
+                    className="form-input"
+                    value={manualForm.serviceId}
+                    onChange={e => setManualForm({ ...manualForm, serviceId: e.target.value, startTime: '' })}
+                    required
+                  >
+                    {activeServices.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.duration} min · {formatCurrency(s.price)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="appointment-field-6" className="form-label">Date *</label>
+                    <input id="appointment-field-6"
+                      type="date"
+                      className="form-input"
+                      min={today}
+                      max={maxDate}
+                      value={manualForm.date}
+                      onChange={e => setManualForm({ ...manualForm, date: e.target.value, startTime: '' })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <span id="manual-appointment-time-label" className="form-label">Select Time Slot *</span>
+                  {manualSlotsDetailed.length > 0 ? (
+                    <div role="group" aria-labelledby="manual-appointment-time-label" style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))',
+                      gap: 'var(--space-2)',
+                      maxHeight: 160,
+                      overflowY: 'auto',
+                      padding: 2,
+                    }}>
+                      {manualSlotsDetailed.map(slot => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={!slot.available}
+                          className={`btn btn-sm ${manualForm.startTime === slot.time ? 'btn-primary' : 'btn-secondary'}`}
+                          aria-pressed={manualForm.startTime === slot.time}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 'var(--font-size-xs)',
+                            padding: '6px 4px',
+                            opacity: slot.available ? 1 : 0.45,
+                            cursor: slot.available ? 'pointer' : 'not-allowed',
+                          }}
+                          onClick={() => slot.available && setManualForm({ ...manualForm, startTime: slot.time })}
+                        >
+                          <span>{formatTime(slot.time)}</span>
+                          {!slot.available && (
+                            <span style={{ fontSize: '0.625rem', opacity: 0.85, fontWeight: 500 }}>
+                              {slot.reason === 'booked' ? 'Booked' : 'Unavailable'}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)', color: 'var(--color-warning-700)', fontSize: 'var(--font-size-xs)' }}>
+                      No available time slots on this date according to your availability rules and existing bookings.
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="appointment-field-7" className="form-label">Notes (optional)</label>
+                  <textarea id="appointment-field-7"
+                    className="form-input form-textarea"
+                    rows={2}
+                    placeholder="Walk-in, booked over phone, special requests..."
+                    value={manualForm.notes}
+                    onChange={e => setManualForm({ ...manualForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowManualModal(false); }}>Cancel</button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={actionBusy || !manualForm.startTime}
+                >
+                  {actionBusy ? 'Saving appointment...' : 'Create Appointment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </AccessibleModal>
+      )}
+    </div>
+  );
+
+  // Helper to render shared action modals (Reschedule, Complete, Cancel, No-Show, Delete)
+  function renderModals(target, scheduledEndMin, freedPreviewMin) {
+    if (!target) return null;
+
+    const currentScheduledEndMin = scheduledEndMin || timeToMinutes(target.endTime);
+    const currentSelectedEndMin = timeToMinutes(completionEndTime || target.endTime);
+    const currentFreedMin = freedPreviewMin || Math.max(0, currentScheduledEndMin - currentSelectedEndMin);
+
+    return (
+      <>
+        {/* Reschedule Modal */}
+        {showRescheduleModal && (
+          <AccessibleModal label="Reschedule appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Reschedule Appointment</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Appointment</div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-md)', marginTop: 2 }}>{target.customerName}</div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                    {target.serviceName} ({target.duration} mins)
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-primary-700)', fontWeight: 500, marginTop: 4 }}>
+                     {formatDate(target.date)} ·  {formatTime(target.startTime)} – {formatTime(target.endTime)}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                  <label htmlFor="appointment-field-8" className="form-label">Select New Date</label>
+                  <input id="appointment-field-8"
+                    type="date"
+                    className="form-input"
+                    min={today}
+                    max={maxDate}
+                    value={rescheduleDate}
+                    onChange={e => {
+                      setRescheduleDate(e.target.value);
+                      setRescheduleTime('');
+                    }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                  <span id="appointment-reschedule-time-label" className="form-label">Select Available Time</span>
+                  {rescheduleSlotsDetailed.length > 0 ? (
+                    <div role="group" aria-labelledby="appointment-reschedule-time-label" style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+                      gap: 'var(--space-2)',
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      padding: 2,
+                    }}>
+                      {rescheduleSlotsDetailed.map(slot => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={!slot.available}
+                          className={`btn btn-sm ${rescheduleTime === slot.time ? 'btn-primary' : 'btn-secondary'}`}
+                          aria-pressed={rescheduleTime === slot.time}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 'var(--font-size-xs)',
+                            padding: '6px 4px',
+                            opacity: slot.available ? 1 : 0.45,
+                            cursor: slot.available ? 'pointer' : 'not-allowed',
+                          }}
+                          onClick={() => slot.available && setRescheduleTime(slot.time)}
+                        >
+                          <span>{formatTime(slot.time)}</span>
+                          {!slot.available && (
+                            <span style={{ fontSize: '0.625rem', opacity: 0.85, fontWeight: 500 }}>
+                              {slot.reason === 'booked' ? 'Booked' : 'Unavailable'}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)', color: 'var(--color-warning-700)', fontSize: 'var(--font-size-xs)' }}>
+                      No available time slots on this date according to your availability rules and buffers. Please choose another date.
+                    </div>
+                  )}
+                </div>
+
+                {rescheduleTime && (
+                  <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-200)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-sm)', color: 'var(--color-primary-900)' }}>
+                    New scheduled time: <strong>{formatDate(rescheduleDate)} at {formatTime(rescheduleTime)}</strong>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowRescheduleModal(false); }}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  disabled={actionBusy || !rescheduleDate || !rescheduleTime} onClick={() => handleConfirmReschedule(target)}
+                >
+                  Confirm Reschedule
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* Complete Modal */}
+        {showCompleteModal && (
+          <AccessibleModal label="Complete appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Complete Appointment</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <p style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                  Mark session with <strong>{target.customerName}</strong> ({target.serviceName}) as finished.
+                </p>
+
+                <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Scheduled Slot</div>
+                  <div style={{ fontWeight: 600 }}>{formatTime(target.startTime)} – {formatTime(target.endTime)} ({target.duration} mins)</div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                  <label htmlFor="appointment-field-9" className="form-label">Actual Wrap-up Time</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                    <input id="appointment-field-9"
+                      type="time"
+                      className="form-input"
+                      style={{ width: 140 }}
+                      value={completionEndTime}
+                      onChange={e => setCompletionEndTime(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setCompletionEndTime(target.endTime)}
+                    >
+                      On Schedule ({target.endTime})
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    {[15, 20, 30].map(mins => {
+                      const earlyMin = currentScheduledEndMin - mins;
+                      if (earlyMin <= timeToMinutes(target.startTime)) return null;
+                      const earlyTime = minutesToTime(earlyMin);
+                      return (
+                        <button
+                          key={mins}
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          style={{ border: '1px solid var(--color-border)', fontSize: 'var(--font-size-xs)' }}
+                          onClick={() => setCompletionEndTime(earlyTime)}
+                        >
+                          {mins} min early ({earlyTime})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {currentFreedMin > 0 ? (
+                  <div style={{
+                    padding: 'var(--space-3) var(--space-4)',
+                    background: 'var(--color-success-50)',
+                    border: '1px solid var(--color-success-200)',
+                    borderRadius: 'var(--radius-lg)',
+                    color: 'var(--color-success-700)',
+                    fontSize: 'var(--font-size-sm)',
+                  }}>
+                     <strong>Freed up {currentFreedMin} min</strong> — will automatically become bookable by other clients on your public page.
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                    Completed on schedule. Remaining calendar slots remain as currently scheduled.
+                  </p>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowCompleteModal(false); }}>Cancel</button>
+                <button className="btn btn-success" disabled={actionBusy} onClick={() => handleConfirmComplete(target)}>
+                  Confirm & Complete
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* Cancel Modal */}
+        {showCancelModal && (
+          <AccessibleModal label="Cancel appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Cancel Appointment?</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <p style={{ marginBottom: 'var(--space-3)' }}>
+                  Are you sure you want to cancel this appointment with <strong>{target.customerName}</strong>?
+                </p>
+                {target.price > 0 && (
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#991B1B',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                  }}>
+                    <strong>100% Refund Due ({formatCurrency(target.price)})</strong>:
+                    <div style={{ fontSize: '11.5px', marginTop: '4px', color: '#7F1D1D' }}>
+                      Under the cancellation policy, coach cancellations qualify for a full 100% refund. The slot will be freed immediately and an email sent to the client.
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowCancelModal(false); }}>Keep Appointment</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmCancel(target.id)}>
+                  Cancel Appointment & Issue Refund
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* No-show Modal */}
+        {showNoShowModal && (
+          <AccessibleModal label="Mark appointment as no-show" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Record No-show</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <p style={{ marginBottom: 'var(--space-4)' }}>
+                  Are you sure you want to mark this appointment with <strong>{target.customerName}</strong> as a no-show?
+                </p>
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  color: '#92400E',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                }}>
+                  <strong>Policy Enforcement (0% Refund)</strong>:
+                  <div style={{ fontSize: '11.5px', marginTop: '4px', color: '#78350F' }}>
+                    0% refund will be provided. The customer will receive an email notifying them that the session was marked as a no-show, with a 48-hour dispute window.
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowNoShowModal(false); }}>Cancel</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmNoShow(target.id)}>Confirm No-Show (0% Refund)</button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* Delete Modal */}
+        {showDeleteModal && (
+          <AccessibleModal label="Delete appointment" returnFocusRef={actionReturnFocus} onClose={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Delete Appointment</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <p style={{ marginBottom: 'var(--space-3)' }}>
+                  Are you sure you want to permanently delete the appointment for <strong>{target.customerName}</strong> ({target.serviceName})?
+                </p>
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-600)' }}>
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => { if (!actionBusyRef.current) setShowDeleteModal(false); }}>Cancel</button>
+                <button className="btn btn-danger" disabled={actionBusy} onClick={() => handleConfirmDelete(target.id)}>Delete</button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+      </>
+    );
+  }
+
+  // Helper to render payment verification modals (Reject reason modal, Screenshot preview modal)
+  function renderPaymentModals() {
+    return (
+      <>
+        {/* Reject Payment Modal */}
+        {rejectModalBooking && (
+          <AccessibleModal label="Reject payment" returnFocusRef={actionReturnFocus} onClose={() => !processingPaymentId && setRejectModalBooking(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 style={{ color: '#DC2626' }}>Reject Payment</h3>
+                <button
+                  type="button"
+                  aria-label="Close dialog"
+                  className="modal-close"
+                  onClick={() => !processingPaymentId && setRejectModalBooking(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="modal-body">
+                {actionError && <p role="alert" className="form-field-error">{actionError}</p>}
+                <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-md)' }}>{rejectModalBooking.customerName}</div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                    {rejectModalBooking.serviceName} · {formatCurrency(rejectModalBooking.price)}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--theme-text-muted)', marginTop: 4 }}>
+                     {formatDate(rejectModalBooking.date)} at {formatTime(rejectModalBooking.startTime)}
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '13px', color: '#B45309', background: '#FEF3C7', padding: '10px 12px', borderRadius: '8px', marginBottom: '14px' }}>
+                   <strong>Slot will be freed</strong>: Rejecting this payment will cancel the booking and immediately release the time slot so other clients can book it.
+                </p>
+
+                <div className="form-group">
+                  <label htmlFor="appointment-field-10" className="form-label" style={{ fontWeight: 600 }}>Reason for Rejection (Optional)</label>
+                  <textarea id="appointment-field-10"
+                    className="form-input"
+                    rows={3}
+                    placeholder="e.g., Payment not received in UPI account, incorrect reference ID, amount mismatch... (optional)"
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    disabled={processingPaymentId === rejectModalBooking.id}
+                  />
+                  <span className="form-hint">Optional. If provided, this reason will be included in the email sent to the customer.</span>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setRejectModalBooking(null)}
+                  disabled={processingPaymentId === rejectModalBooking.id}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleConfirmRejectPayment}
+                  disabled={processingPaymentId === rejectModalBooking.id}
+                >
+                  {processingPaymentId === rejectModalBooking.id ? 'Rejecting...' : 'Reject Payment & Free Slot'}
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* Screenshot Viewer Modal */}
+        {viewScreenshotUrl && (
+          <AccessibleModal label="Payment screenshot" onClose={() => setViewScreenshotUrl(null)}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', padding: '16px' }}>
+              <div className="modal-header" style={{ marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '16px' }}>Payment Proof Screenshot</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => setViewScreenshotUrl(null)}>✕</button>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', borderRadius: '8px', overflow: 'hidden', maxHeight: '70vh' }}>
+                <img
+                  src={viewScreenshotUrl}
+                  alt="Payment screenshot"
+                  style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setViewScreenshotUrl(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+
+        {/* Mark Refund Sent Modal */}
+        {showRefundModal && selectedRefundTarget && (
+          <AccessibleModal label="Record refund" onClose={() => !isSubmittingRefundSent && setShowRefundModal(false)}>
+            <div className="modal modal-md" onClick={e => e.stopPropagation()} style={{ borderRadius: '20px', padding: '24px', maxWidth: 480 }}>
+              <div className="modal-header">
+                <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Confirm Refund Sent</h3>
+                <button type="button" aria-label="Close dialog" className="modal-close" onClick={() => !isSubmittingRefundSent && setShowRefundModal(false)}>✕</button>
+              </div>
+              <div className="modal-body" style={{ marginTop: '12px' }}>
+                <div style={{ padding: '14px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748B', fontSize: '12.5px' }}>Customer</span>
+                    <strong style={{ fontSize: '13px' }}>{selectedRefundTarget.bookings?.customer_name || 'Customer'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748B', fontSize: '12.5px' }}>Contact</span>
+                    <span style={{ fontSize: '13px' }}>{selectedRefundTarget.bookings?.customer_phone || selectedRefundTarget.bookings?.customer_email || '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px dashed #CBD5E1' }}>
+                    <span style={{ fontWeight: 600, fontSize: '13px' }}>Refund Amount</span>
+                    <span style={{ fontWeight: 700, fontSize: '16px', color: '#16A34A' }}>{formatCurrency(selectedRefundTarget.amount)}</span>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label htmlFor="appointment-field-11" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>
+                    Payment Proof Screenshot (Optional)
+                  </label>
+                  <input id="appointment-field-11"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="form-input"
+                    onChange={e => setRefundProofFile(e.target.files?.[0] || null)}
+                    style={{ fontSize: '12px' }}
+                  />
+                  <span className="form-hint" style={{ fontSize: '11.5px', color: '#64748B', marginTop: 4 }}>
+                    Upload your UPI confirmation screenshot. The customer will be able to view this proof.
+                  </span>
+                </div>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRefundModal(false)}
+                  disabled={isSubmittingRefundSent}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleConfirmRefundSent}
+                  disabled={isSubmittingRefundSent}
+                  style={{ background: '#16A34A', color: '#FFFFFF', fontWeight: 600 }}
+                >
+                  {isSubmittingRefundSent ? 'Marking...' : 'Confirm Refund Sent'}
+                </button>
+              </div>
+            </div>
+          </AccessibleModal>
+        )}
+      </>
+    );
+  }
+}
+
+
+/* Disabled navigation enhancement (user request):
+              onChange={e => { navigate('/dashboard/appointments' + (searchQuery ? '?q=' + encodeURIComponent(searchQuery) : ''), { replace: true, state: { appointmentDatePreset: e.target.value } }); setFilterDatePreset(e.target.value); setCurrentPage(1); }}
+*/
+
+/* Disabled navigation enhancement (user request):
+              <option value="all">{routeFilters.from || routeFilters.to ? `Selected range: ${routeFilters.from || "start"} to ${routeFilters.to || "end"}` : "All dates"}</option>
+*/

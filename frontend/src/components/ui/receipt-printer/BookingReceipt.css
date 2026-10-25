@@ -1,0 +1,160 @@
+.booking-receipt-print-area {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.booking-receipt-print-area .rp[data-stage='complete'] .rp-output {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.booking-receipt-print-area .rp[data-stage='complete'] .rp-output:focus-visible {
+  outline: 3px solid rgba(198, 241, 53, 0.8);
+  outline-offset: 3px;
+}
+
+.booking-receipt__header,
+.booking-receipt__title,
+.booking-receipt__details > div,
+.booking-receipt__total,
+.booking-receipt__references > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.booking-receipt__header {
+  align-items: center;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px dashed #a1a1aa;
+}
+
+.booking-receipt__brand {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.04em;
+}
+
+.booking-receipt__paid {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #166534;
+  border-radius: var(--radius-sm);
+  color: #166534;
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
+}
+
+.booking-receipt__title {
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-5) 0;
+  text-align: center;
+}
+
+.booking-receipt__title p,
+.booking-receipt__details dt,
+.booking-receipt__references dt {
+  color: #71717a;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-receipt__title strong {
+  font-size: var(--font-size-lg);
+}
+
+.booking-receipt__title span {
+  color: #52525b;
+  font-size: var(--font-size-xs);
+}
+
+.booking-receipt__details,
+.booking-receipt__references {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.booking-receipt__details dd,
+.booking-receipt__references dd {
+  max-width: 68%;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.booking-receipt__total {
+  align-items: center;
+  margin: var(--space-5) 0;
+  padding: var(--space-4) 0;
+  border-top: 1px dashed #a1a1aa;
+  border-bottom: 1px dashed #a1a1aa;
+}
+
+.booking-receipt__total strong {
+  font-size: var(--font-size-xl);
+}
+
+.booking-receipt__footer {
+  margin-top: var(--space-5);
+  color: #71717a;
+  font-size: 0.625rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 420px) {
+  .rp-output {
+    height: 34rem;
+    padding-inline: var(--space-3);
+  }
+
+  .rp-paper {
+    padding-inline: var(--space-4);
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .booking-receipt-print-area,
+  .booking-receipt-print-area * {
+    visibility: visible;
+  }
+
+  .booking-receipt-print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  .booking-receipt-print-area .rp-machine {
+    display: none;
+  }
+
+  .booking-receipt-print-area .rp-output {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .booking-receipt-print-area .rp-sheet {
+    translate: 0 0 !important;
+  }
+
+  .booking-receipt-print-area .rp-paper {
+    max-width: 25rem;
+    margin: 0 auto;
+    background-image: none;
+  }
+}

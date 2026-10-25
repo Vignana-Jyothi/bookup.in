@@ -2,36 +2,35 @@ name: Deploy Main
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: college-production
+  cancel-in-progress: false
+
 jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
   deploy:
+    needs: validate
+    if: github.repository == 'Vignana-Jyothi/bookup.in' && github.ref == 'refs/heads/main'
     runs-on: gamma
+    timeout-minutes: 30
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Create .env file from secrets
-        run: |
-          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
-          echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" >> .env
-          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" >> .env
-          echo "VITE_APP_URL=${{ secrets.VITE_APP_URL }}" >> .env
-          echo "VITE_DEMO_SLUG=${{ secrets.VITE_DEMO_SLUG }}" >> .env
-          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
-          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
-          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
-          echo "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" >> .env
-          echo "TOKEN_ENCRYPTION_KEY=${{ secrets.TOKEN_ENCRYPTION_KEY }}" >> .env
-          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}" >> .env
-          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
-          echo "RICH_AUTOMATE_API_KEY=${{ secrets.RICH_AUTOMATE_API_KEY }}" >> .env
-          echo "INTERNAL_CRON_SECRET=${{ secrets.INTERNAL_CRON_SECRET }}" >> .env
-          echo "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
-          echo "RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}" >> .env
-
-      - name: Build and deploy containers
-        run: |
-          docker compose -f docker-compose.yml up -d --build
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and write separate build/runtime settings
+        run: node backend/scripts/college-env.mjs
+        env:
+          CALUP_DEPLOY_SECRETS: ${{ toJSON(secrets) }}
+          CALUP_DEPLOY_VARIABLES: ${{ toJSON(vars) }}
+      - name: Build, deploy, verify and restore previous images on failure
+        run: bash backend/scripts/college-deploy.sh

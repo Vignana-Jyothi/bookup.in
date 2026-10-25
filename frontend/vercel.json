@@ -1,0 +1,41 @@
+{
+  "routes": [
+    {
+      "src": "/(.*)",
+      "headers": { "Cache-Control": "no-store, max-age=0" },
+      "continue": true
+    },
+    {
+      "src": "/assets/(.*)",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
+      "continue": true
+    },
+    {
+      "src": "/api/v1/admin/(.*)",
+      "dest": "/api/admin-proxy?__calup_admin_path=$1"
+    },
+    {
+      "src": "/api/v1/public/(.*)",
+      "dest": "/api/customer-proxy?__calup_public_path=$1"
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/(?:assets|src|api)(?:/.*)?$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "/.*\\.(?:js|mjs|css|json|svg|png|jpg|jpeg|webp|ico|woff|woff2)$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "buildCommand": "npm --prefix .. run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "installCommand": "npm --prefix .. ci"
+}

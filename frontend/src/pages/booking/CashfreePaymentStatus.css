@@ -1,0 +1,151 @@
+.payment-status-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--theme-bg-page);
+}
+
+.payment-status-card {
+  width: min(34rem, 100%);
+  padding: var(--space-8);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  background: var(--theme-bg-card);
+  box-shadow: var(--shadow-xl);
+}
+
+.payment-status-page--receipt .payment-status-card {
+  display: grid;
+  width: min(64rem, 100%);
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+  gap: var(--space-10);
+  align-items: start;
+}
+
+.payment-status-summary { min-width: 0; }
+
+.payment-status-icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  margin-top: var(--space-8);
+  place-items: center;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.payment-status-icon.is-success { color: #166534; background: var(--color-success-100); }
+.payment-status-icon.is-failed { color: var(--color-error-600); background: var(--color-error-100); }
+.payment-status-icon.is-pending { color: #854d0e; background: var(--color-warning-50); }
+
+.payment-status-summary h1 {
+  margin-top: var(--space-4);
+  font-size: clamp(var(--font-size-2xl), 5vw, var(--font-size-4xl));
+}
+
+.payment-status-copy {
+  margin-top: var(--space-3);
+  color: var(--theme-text-secondary);
+  line-height: 1.7;
+}
+
+.payment-status-booking-id {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-bg-card-subtle);
+}
+
+.payment-status-booking-id span {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--theme-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payment-status-booking-id strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-sm);
+}
+
+.payment-status-meta { display: grid; gap: var(--space-3); margin-top: var(--space-5); }
+.payment-status-meta > div { display: flex; justify-content: space-between; gap: var(--space-4); }
+.payment-status-meta dt { color: var(--theme-text-muted); }
+.payment-status-meta dd { text-align: right; font-weight: var(--font-weight-semibold); }
+
+.payment-status-notice,
+.payment-status-error {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.payment-status-notice { color: #7a4d00; background: var(--color-warning-50); }
+.payment-status-error { color: var(--color-error-600); background: var(--color-error-50); }
+
+.payment-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.payment-status-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--theme-text-primary);
+  background: var(--theme-bg-card);
+  font-weight: var(--font-weight-semibold);
+}
+
+.payment-status-button--primary {
+  border-color: var(--color-black);
+  color: var(--color-white);
+  background: var(--color-black);
+}
+
+.payment-status-button:focus-visible {
+  outline: 3px solid rgba(198, 241, 53, 0.8);
+  outline-offset: 3px;
+}
+
+.payment-status-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.payment-status-receipt { min-width: 0; }
+
+@media (max-width: 800px) {
+  .payment-status-page--receipt { place-items: start center; }
+  .payment-status-page--receipt .payment-status-card { grid-template-columns: 1fr; gap: var(--space-6); }
+}
+
+@media (max-width: 480px) {
+  .payment-status-page { padding: var(--space-3); }
+  .payment-status-card { padding: var(--space-5); border-radius: var(--radius-lg); }
+  .payment-status-actions, .payment-status-button { width: 100%; }
+}
+
+@media print {
+  .payment-status-summary { display: none !important; }
+  .payment-status-page,
+  .payment-status-card,
+  .payment-status-receipt {
+    display: block;
+    min-height: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+}

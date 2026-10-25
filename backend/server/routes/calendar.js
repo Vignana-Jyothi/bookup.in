@@ -1,0 +1,179 @@
+import { Router } from 'express';
+import { googleCalendarService } from '../services/googleCalendar.js';
+import { createClient } from '@supabase/supabase-js';
+import { config } from '../config.js';
+import { requireProviderAuth } from '../middleware/auth.js';
+
+const router = Router();
+
+const serverSupabase = (config.supabaseUrl && config.supabaseKey)
+  ? createClient(config.supabaseUrl, config.supabaseKey)
+  : null;
+
+// In-process deduplication cache fallback (bookingId -> eventId)
+const eventDeduplicationCache = new Map();
+
+/**
+ * GET /api/calendar/busy
+ * Fetch busy time intervals for a provider on a specific date (YYYY-MM-DD)
+ * Public endpoint used by /book/:slug and dashboard availability.
+ * Returns only { connected, busyTimes: [{ start, end }] } with zero private event information.
+ */
+router.get('/busy', async (req, res) => {
+  const { providerId, date, timeZone = 'Asia/Kolkata' } = req.query;
+
+  if (!providerId) {
+    return res.status(400).json({ success: false, error: 'providerId parameter is required' });
+  }
+
+  if (!date) {
+    return res.status(400).json({ success: false, error: 'date parameter is required (YYYY-MM-DD)' });
+  }
+
+  try {
+    const result = await googleCalendarService.getBusyIntervals(providerId, date, timeZone);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error fetching calendar busy intervals:', err.message);
+    res.status(500).json({ success: false, error: err.message, busyTimes: [] });
+  }
+});
+
+/**
+ * POST /api/calendar/events
+ * Create an event on the provider's Google Calendar for a confirmed booking.
+ * Idempotent with persistent database deduplication.
+ */
+router.post('/events', requireProviderAuth, async (req, res) => {
+  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
+  // Use authenticated provider's ID instead of client-supplied value
+  const providerId = req.providerId;
+
+  if (!booking || !booking.id || !booking.date || !booking.startTime || !booking.endTime) {
+    return res.status(400).json({ success: false, error: 'Complete booking object with id, date, startTime, and endTime is required' });
+  }
+
+  // 1. Check if booking payload already has event ID (client-side deduplication)
+  if (booking.googleEventId || booking.google_event_id) {
+    return res.json({
+      success: true,
+      eventId: booking.googleEventId || booking.google_event_id,
+      duplicatePrevented: true,
+    });
+  }
+
+  // 2. Check in-process deduplication cache
+  if (eventDeduplicationCache.has(booking.id)) {
+    return res.json({
+      success: true,
+      eventId: eventDeduplicationCache.get(booking.id),
+      duplicatePrevented: true,
+    });
+  }
+
+  // 3. Check Supabase database for existing event ID & provider ownership
+  if (serverSupabase && booking.id && !booking.id.startsWith('booking-')) {
+    try {
+      const { data: existingBooking } = await serverSupabase
+        .from('bookings')
+        .select('id, provider_id, google_event_id')
+        .eq('id', booking.id)
+        .maybeSingle();
+
+      if (existingBooking) {
+        // Ownership check: booking must belong to authenticated provider
+        if (existingBooking.provider_id && existingBooking.provider_id !== providerId) {
+          return res.status(403).json({ success: false, error: 'You do not own this booking' });
+        }
+
+        if (existingBooking.google_event_id) {
+          eventDeduplicationCache.set(booking.id, existingBooking.google_event_id);
+          return res.json({
+            success: true,
+            eventId: existingBooking.google_event_id,
+            duplicatePrevented: true,
+          });
+        }
+      }
+    } catch (dbErr) {
+      console.warn('DB check before event creation failed (non-fatal):', dbErr.message);
+    }
+  }
+
+  // 4. Create event on Google Calendar
+  try {
+    const result = await googleCalendarService.createEvent(providerId, booking, timeZone);
+
+    if (result.success && result.eventId) {
+      eventDeduplicationCache.set(booking.id, result.eventId);
+
+      // Persist google_event_id and meet_link to database if real booking
+      if (serverSupabase && booking.id && !booking.id.startsWith('booking-')) {
+        const updatePayload = { google_event_id: result.eventId };
+        if (result.meetLink) updatePayload.meet_link = result.meetLink;
+        serverSupabase
+          .from('bookings')
+          .update(updatePayload)
+          .eq('id', booking.id)
+          .then(({ error }) => {
+            if (error) console.warn('Could not persist calendar details to Supabase (column may be pending):', error.message);
+          })
+          .catch(e => console.warn('Supabase update error (non-fatal):', e.message));
+      }
+    }
+
+    if (!result.success) {
+      console.error(`[CalendarRoutes] Google Calendar event creation failed. Provider: "${providerId}", Recipient: "${booking?.customerEmail || booking?.customerName || 'N/A'}", Error: ${result.error || result.reason || 'Unknown error'}`);
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error(`[CalendarRoutes] Error creating Google Calendar event. Provider: "${providerId}", Recipient: "${booking?.customerEmail || booking?.customerName || 'N/A'}", Error: ${err.message || err}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/calendar/events/:eventId
+ * Update event on Google Calendar (e.g. Reschedule)
+ */
+router.patch('/events/:eventId', requireProviderAuth, async (req, res) => {
+  const { eventId } = req.params;
+  const providerId = req.providerId;
+  const { booking, timeZone = 'Asia/Kolkata' } = req.body;
+
+  if (!eventId || !booking) {
+    return res.status(400).json({ success: false, error: 'eventId and booking details required' });
+  }
+
+  try {
+    const result = await googleCalendarService.updateEvent(providerId, eventId, booking, timeZone);
+    res.json(result);
+  } catch (err) {
+    console.error('Error updating Google Calendar event:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/calendar/events/:eventId
+ * Delete event from Google Calendar (e.g. Cancellation)
+ */
+router.delete('/events/:eventId', requireProviderAuth, async (req, res) => {
+  const { eventId } = req.params;
+  const providerId = req.providerId;
+
+  if (!eventId) {
+    return res.status(400).json({ success: false, error: 'eventId parameter is required' });
+  }
+
+  try {
+    const result = await googleCalendarService.deleteEvent(providerId, eventId);
+    res.json(result);
+  } catch (err) {
+    console.error('Error deleting Google Calendar event:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+export default router;

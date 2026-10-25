@@ -1,0 +1,771 @@
+/**
+ * CalUp — Services Management Page
+ * Enhanced with input validation and content quality nudges
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useStore, generateId, formatCurrency } from '../../data/store';
+import { ACTIONS } from '../../data/actions';
+import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
+import { dbService } from '../../services/supabase/dbService';
+import { merchantSchedulingService } from '../../services/booking/merchantSchedulingService';
+import PillButton from '../../components/ui/PillButton';
+import AccessibleModal from '../../components/ui/AccessibleModal.jsx';
+/* Disabled navigation enhancement (user request):
+import PageLinks from '../../components/ui/PageLinks';
+*/
+import InstructorPanel from '../../components/dashboard/InstructorPanel.jsx';
+import './Services.css';
+import { usePopupFeedback } from '../../hooks/usePopupFeedback.js';
+import { getServiceBookingUrl } from '../../utils/url.js';
+
+const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAY_LABELS = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+
+// Helper to detect obvious keyboard-mash gibberish
+function isGibberish(str) {
+  const clean = str.trim().toLowerCase();
+  if (clean.length < 3) return true;
+  // All consonants or repetition of meaningless short tokens
+  if (/^[bcdfghjklmnpqrstvwxyz]+$/i.test(clean) && clean.length >= 3) return true;
+  if (/^(fdg|ghd|gfh|asdf|qwerty|zxcv|test1|aaa|bbb)+$/i.test(clean)) return true;
+  return false;
+}
+
+export default function Services() {
+  const { state, dispatch, addToast } = useStore();
+  const modalBodyRef = useRef(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [form, setForm] = useState({ name: '', description: '', price: '', duration: 60, instructorId: '', availableWeekdays: WEEKDAYS });
+  const [instructors, setInstructors] = useState([]);
+  const [instructorsLoading, setInstructorsLoading] = useState(true);
+  const [instructorsError, setInstructorsError] = useState('');
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [, setSubmitError] = usePopupFeedback();
+  const [servicesError, setServicesError] = usePopupFeedback(null);
+  const [copyingServiceId, setCopyingServiceId] = useState(null);
+  const [copyFallback, setCopyFallback] = useState(null);
+  const copyBusy = useRef(false);
+  const copyInputRef = useRef(null);
+
+  useEffect(() => {
+    if (copyFallback) {
+      copyInputRef.current?.focus();
+      copyInputRef.current?.select();
+    }
+  }, [copyFallback]);
+
+  const copyServiceLink = async service => {
+    const url = getServiceBookingUrl(state.provider?.slug, service.id);
+    if (!url || !service.isActive || copyBusy.current) return;
+    copyBusy.current = true;
+    setCopyingServiceId(service.id);
+    setCopyFallback(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      addToast('Service booking link copied.');
+    } catch {
+      setCopyFallback({ id: service.id, url });
+    } finally {
+      copyBusy.current = false;
+      setCopyingServiceId(null);
+    }
+  };
+
+  // Authoritative database hydration on mount
+  const fetchServices = useCallback(async () => {
+    if (state.auth?.isDemoMode || !isSupabaseConfigured()) return;
+
+    let provId = state.provider?.id;
+    if (!provId) {
+      const prov = await dbService.getCurrentProvider();
+      if (prov?.id) {
+        provId = prov.id;
+        dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: prov });
+      }
+    }
+
+    if (provId) {
+      try {
+        setServicesError(null);
+        const svcs = await dbService.getServices(provId, false);
+        dispatch({ type: ACTIONS.SET_SERVICES, payload: svcs });
+      } catch (err) {
+        console.error('[Services] Failed to load services:', err);
+        setServicesError('Failed to load services from server. Please refresh.');
+      }
+    }
+  }, [state.auth?.isDemoMode, state.provider?.id, dispatch, setServicesError]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  const fetchInstructors = useCallback(async () => {
+    if (state.auth?.isDemoMode || !isSupabaseConfigured()) { setInstructorsLoading(false); return; }
+    setInstructorsLoading(true);
+    setInstructorsError('');
+    try {
+      const result = await merchantSchedulingService.load();
+      setInstructors(result.instructors || []);
+    } catch (err) {
+      console.error('[Services] Failed to load instructors:', err);
+      setInstructorsError('Could not load instructors. Please try again.');
+      addToast('Could not load instructors. Please try again.', 'error');
+    } finally {
+      setInstructorsLoading(false);
+    }
+  }, [state.auth?.isDemoMode, addToast]);
+
+  useEffect(() => {
+    fetchInstructors();
+  }, [fetchInstructors]);
+
+  const instructorDays = (instructorId) => {
+    const instructor = instructors.find(item => item.id === instructorId);
+    return WEEKDAYS.filter(day => instructor?.schedule?.[day]?.available);
+  };
+
+  const openCreate = () => {
+    const defaultInstructorId = instructors.find(item => item.isOwner && item.active)?.id || instructors.find(item => item.active)?.id || '';
+    setForm({
+      name: '',
+      description: '',
+      price: '1000',
+      duration: 60,
+      meetingType: 'online',
+      locationAddress: state.provider?.defaultLocationAddress || '',
+      mapsLink: '',
+      instructorId: defaultInstructorId,
+      availableWeekdays: instructorDays(defaultInstructorId),
+    });
+    setEditingService(null);
+    setErrors({});
+    setSubmitError('');
+    setShowForm(true);
+  };
+
+  const openEdit = (service) => {
+    const assignedInstructorId = service.instructorId || instructors.find(item => item.isOwner)?.id || '';
+    const activeInstructorDays = instructorDays(assignedInstructorId);
+    setForm({
+      name: service.name,
+      description: service.description || '',
+      price: service.price,
+      duration: service.duration,
+      meetingType: service.meetingType || 'online',
+      locationAddress: service.locationAddress || '',
+      mapsLink: service.mapsLink || '',
+      instructorId: assignedInstructorId,
+      availableWeekdays: (service.availableWeekdays?.length ? service.availableWeekdays : activeInstructorDays)
+        .filter(day => activeInstructorDays.includes(day)),
+    });
+    setEditingService(service);
+    setErrors({});
+    setSubmitError('');
+    setShowForm(true);
+  };
+
+  const validateForm = () => {
+    const errs = {};
+    const trimmedName = form.name.trim();
+    const trimmedDesc = form.description.trim();
+
+    if (!trimmedName || trimmedName.length < 3) {
+      errs.name = 'Service name must be at least 3 characters.';
+    } else if (isGibberish(trimmedName)) {
+      errs.name = 'Please enter a clear service name (e.g. "Personal Consultation", "Posture Analysis").';
+    }
+
+    if (!trimmedDesc || trimmedDesc.length < 15) {
+      errs.description = 'Description must be at least 15 characters to explain what clients get.';
+    } else if (isGibberish(trimmedDesc)) {
+      errs.description = 'Please provide a clear description instead of placeholder text.';
+    }
+
+    if (form.price === '' || Number(form.price) < 0) {
+      errs.price = 'Please enter a valid price.';
+    }
+
+    if (form.meetingType === 'in-person' && !form.locationAddress?.trim() && !state.provider?.defaultLocationAddress) {
+      errs.locationAddress = 'Please enter a location address for in-person appointments.';
+    }
+    if (!form.instructorId) errs.instructorId = 'Assign an instructor.';
+    if (!form.availableWeekdays?.length) errs.availableWeekdays = 'Select at least one day.';
+
+    setErrors(errs);
+    if (Object.keys(errs).length) {
+      requestAnimationFrame(() => {
+        const invalidField = modalBodyRef.current?.querySelector('[aria-invalid="true"]');
+        invalidField?.focus();
+      });
+    }
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm() || submitting) return;
+
+    setSubmitError('');
+    setSubmitting(true);
+
+    try {
+      const resolvedAddress = form.meetingType === 'online'
+        ? null
+        : (form.locationAddress?.trim() || state.provider?.defaultLocationAddress || null);
+      const resolvedMaps = form.meetingType === 'online'
+        ? null
+        : (form.mapsLink?.trim() || (resolvedAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedAddress)}` : null));
+
+      if (editingService) {
+        if (!state.auth?.isDemoMode && isSupabaseConfigured() && !editingService.id.startsWith('svc-')) {
+          await merchantSchedulingService.updateService(editingService.id, {
+            name: form.name.trim(),
+            description: form.description.trim(),
+            price: Number(form.price),
+            duration: Number(form.duration),
+            depositAmount: 0,
+            meetingType: form.meetingType || 'online',
+            instructorId: form.instructorId,
+            availableWeekdays: form.availableWeekdays,
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
+            active: editingService.isActive,
+          });
+        }
+
+        dispatch({
+          type: ACTIONS.UPDATE_SERVICE,
+          payload: {
+            id: editingService.id,
+            name: form.name.trim(),
+            description: form.description.trim(),
+            price: Number(form.price),
+            duration: Number(form.duration),
+            depositAmount: 0,
+            meetingType: form.meetingType || 'online',
+            instructorId: form.instructorId,
+            availableWeekdays: form.availableWeekdays,
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
+          }
+        });
+        addToast('Service updated ✓');
+        setShowForm(false);
+      } else {
+        let createdService = null;
+
+        if (!state.auth?.isDemoMode && isSupabaseConfigured()) {
+          // 1. Resolve authoritative provider identity
+          let authoritativeProviderId = state.provider?.id;
+
+          const currentProvider = await dbService.getCurrentProvider();
+          if (currentProvider?.id) {
+            authoritativeProviderId = currentProvider.id;
+            if (state.provider?.id !== currentProvider.id) {
+              dispatch({ type: ACTIONS.UPDATE_PROVIDER, payload: currentProvider });
+            }
+          }
+
+          if (!authoritativeProviderId) {
+            throw new Error('Could not resolve provider profile. Please check your connection or log in again.');
+          }
+
+          // 2. Insert service into Supabase
+          createdService = await merchantSchedulingService.createService({
+            name: form.name.trim(),
+            description: form.description.trim(),
+            price: Number(form.price),
+            duration: Number(form.duration),
+            depositAmount: 0,
+            active: true,
+            meetingType: form.meetingType || 'online',
+            instructorId: form.instructorId,
+            availableWeekdays: form.availableWeekdays,
+            locationAddress: resolvedAddress,
+            mapsLink: resolvedMaps,
+          });
+
+          // Confirm the insert succeeded
+          if (!createdService || !createdService.id) {
+            throw new Error('Database insert did not return a valid service.');
+          }
+        }
+
+        // 3. ONLY THEN update local application state
+        const newServicePayload = createdService || {
+          id: generateId('svc'),
+          providerId: state.provider?.id,
+          name: form.name.trim(),
+          description: form.description.trim(),
+          price: Number(form.price),
+          duration: Number(form.duration),
+          depositAmount: 0,
+          isActive: true,
+          meetingType: form.meetingType || 'online',
+          instructorId: form.instructorId,
+          availableWeekdays: form.availableWeekdays,
+          locationAddress: resolvedAddress,
+          mapsLink: resolvedMaps,
+          createdAt: new Date().toISOString(),
+        };
+
+        dispatch({
+          type: ACTIONS.ADD_SERVICE,
+          payload: newServicePayload,
+        });
+
+        // 4. ONLY THEN show success toast and close modal
+        addToast('Service created ✓');
+        setShowForm(false);
+      }
+    } catch (err) {
+      console.error('[Services] Service operation failed:', err);
+      const friendlyMsg = err.message || 'Failed to save service. Please try again.';
+      setSubmitError(friendlyMsg);
+      addToast(friendlyMsg, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('svc-')) {
+      try {
+        await merchantSchedulingService.deleteService(id);
+      } catch (err) {
+        console.error('[Services] Failed to delete service in Supabase:', err);
+        addToast('Failed to delete service from database.', 'error');
+        return;
+      }
+    }
+
+    dispatch({ type: ACTIONS.DELETE_SERVICE, payload: id });
+    addToast('Service deleted');
+  };
+
+  const handleToggle = async (id) => {
+    const service = state.services.find(s => s.id === id);
+    const nextState = !service?.isActive;
+
+    if (!state.auth?.isDemoMode && isSupabaseConfigured() && id && !id.startsWith('svc-')) {
+      try {
+        await merchantSchedulingService.updateService(id, { active: nextState });
+      } catch (err) {
+        console.error('[Services] Failed to toggle service in Supabase:', err);
+        addToast('Failed to update service status in database.', 'error');
+        return;
+      }
+    }
+
+    dispatch({ type: ACTIONS.TOGGLE_SERVICE, payload: id });
+    addToast(nextState ? 'Service activated ✓' : 'Service deactivated');
+  };
+
+  return (
+    <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+{/* Disabled navigation enhancement (user request):
+<PageLinks links={[{ to: '/dashboard/availability', label: 'Configure availability' }, { to: '/dashboard/booking-page', label: 'View booking link' }]} />
+*/}
+      {/* Top Action Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
+            Service Offerings
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '3px 0 0' }}>
+            Edit your services, check their availability, and share a booking link.
+          </p>
+        </div>
+        <PillButton variant="primary" size="md" onClick={openCreate}>
+          + Add Service
+        </PillButton>
+      </div>
+
+      <div className="services-workspace">
+      <div className="services-workspace-main">
+      {servicesError && (
+        <button type="button" className="btn btn-secondary" onClick={fetchServices}>Retry loading services</button>
+      )}
+
+      {state.services.length > 0 ? (
+        <div className="service-list" aria-label="Your services">
+          {state.services.map(service => {
+            const bookingUrl = getServiceBookingUrl(state.provider?.slug, service.id);
+            const canShare = Boolean(service.isActive && bookingUrl);
+            const instructor = instructors.find(item => item.id === service.instructorId);
+            const days = (service.availableWeekdays || WEEKDAYS).filter(day => instructorDays(service.instructorId).includes(day)).map(day => DAY_LABELS[day]).join(', ');
+            return (
+              <article key={service.id} className="service-list-item" aria-label={service.name}>
+                <div className="service-list-heading">
+                  <h3>{service.name}</h3>
+                  <span className={`service-status ${service.isActive ? 'is-active' : ''}`}>{service.isActive ? 'Active' : 'Inactive'}</span>
+                </div>
+                {service.description && <p className="service-description">{service.description}</p>}
+                <dl className="service-facts">
+                  <div><dt>Price</dt><dd>{formatCurrency(service.price)}</dd></div>
+                  <div><dt>Duration</dt><dd>{service.duration} min</dd></div>
+                  <div><dt>Meeting</dt><dd>{service.meetingType === 'in-person' ? 'In-person' : service.meetingType === 'both' ? 'Online / In-person' : 'Online'}</dd></div>
+                  <div><dt>Instructor</dt><dd>{instructor?.name || (instructorsLoading ? 'Loading...' : 'Not available')}</dd></div>
+                </dl>
+                <p className="service-days">Days: {instructorsLoading ? 'Loading...' : days || 'No available days'}</p>
+                <div className="service-row-actions">
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => openEdit(service)} aria-label={`Edit ${service.name}`}>Edit service</button>
+                  {canShare ? <a className="btn btn-secondary btn-sm" href={bookingUrl} target="_blank" rel="noopener noreferrer" aria-label={`Preview ${service.name} (opens in new tab)`}>Preview</a>
+                    : <button type="button" className="btn btn-secondary btn-sm" disabled>Preview</button>}
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={!canShare || copyingServiceId !== null} onClick={() => copyServiceLink(service)} aria-label={`Copy booking link for ${service.name}`}>
+                    {copyingServiceId === service.id ? 'Copying...' : 'Copy link'}
+                  </button>
+                  <details className="service-more">
+                    <summary aria-label={`More actions for ${service.name}`}>More actions</summary>
+                    <div className="service-more-actions">
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleToggle(service.id)}>{service.isActive ? 'Deactivate' : 'Activate'}</button>
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(service.id)}>Delete</button>
+                    </div>
+                  </details>
+                </div>
+                {!canShare && <p className="service-share-note">{!service.isActive ? 'Activate this service to preview or share its public booking link.' : 'Your booking page address is not available yet. Reload your profile before sharing.'}</p>}
+                {copyFallback?.id === service.id && <div className="service-copy-fallback">
+                  <label htmlFor="service-copy-link">Copy this booking link manually</label>
+                  <p role="status">Clipboard access is unavailable. Select and copy the link below.</p>
+                  <input ref={copyInputRef} id="service-copy-link" className="form-input" readOnly value={copyFallback.url} onFocus={event => event.target.select()} />
+                </div>}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}></div>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: '0 0 6px' }}>
+            No services configured
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', margin: '0 0 20px' }}>
+            Add your first service so clients can book appointments online.
+          </p>
+          <PillButton variant="primary" onClick={openCreate}>
+            + Add Service
+          </PillButton>
+        </div>
+      )}
+
+      </div>
+      {!state.auth?.isDemoMode && (
+        <InstructorPanel instructors={instructors} loading={instructorsLoading} error={instructorsError} onRetry={fetchInstructors} onChange={setInstructors} />
+      )}
+      </div>
+
+      {/* Create/Edit Modal */}
+      {showForm && (
+        <AccessibleModal label="Service details" onClose={() => !submitting && setShowForm(false)}>
+          <div
+            className="modal modal-lg"
+            onClick={e => e.stopPropagation()}
+            style={{
+              borderRadius: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 'min(90vh, 720px)',
+              background: 'var(--theme-bg-card)',
+              border: '1px solid var(--theme-border)',
+              boxShadow: 'var(--shadow-xl)',
+              overflow: 'hidden',
+              width: '100%',
+              maxWidth: '580px',
+            }}
+          >
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--theme-border)', padding: '18px 24px', flexShrink: 0 }}>
+              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 700, margin: 0 }}>
+                {editingService ? 'Edit Service' : 'Create Service'}
+              </h3>
+              <button type="button" aria-label="Close dialog" className="modal-close" disabled={submitting} onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div 
+                ref={modalBodyRef}
+                className="modal-body custom-scrollbar" 
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: 'var(--space-4)', 
+                  padding: '24px',
+                  overflowY: 'auto',
+                  flex: 1,
+                  minHeight: 0,
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'var(--theme-border, #cbd5e1) transparent',
+                }}
+              >
+                <fieldset className="service-editor-section">
+                  <legend>Service details</legend>
+                  <p className="service-section-hint">Describe the session and set its price and duration.</p>
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <label htmlFor="service-field-1" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service name</label>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: form.name.length >= 3 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+                      min 3 chars
+                    </span>
+                  </div>
+                  <input id="service-field-1"
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={errors.name ? 'service-name-error' : 'service-name-hint'}
+                    className={`form-input ${errors.name ? 'form-input-error' : ''}`}
+                    placeholder="e.g. 1-on-1 Fitness Assessment"
+                    value={form.name}
+                    onChange={e => {
+                      setForm({ ...form, name: e.target.value });
+                      if (errors.name) setErrors({ ...errors, name: null });
+                    }}
+                    required
+                    autoFocus
+                    style={{ borderRadius: '12px' }}
+                  />
+                  <span id="service-name-hint" className="sr-only">Enter at least 3 characters.</span>
+                  {errors.name && <span id="service-name-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.name}</span>}
+                </div>
+
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <label htmlFor="service-field-2" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Description</label>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: form.description.length >= 15 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+                      {form.description.length}/15 min chars
+                    </span>
+                  </div>
+                  <textarea id="service-field-2"
+                    aria-invalid={Boolean(errors.description)}
+                    aria-describedby={errors.description ? 'service-description-error' : 'service-description-hint'}
+                    className={`form-input form-textarea ${errors.description ? 'form-input-error' : ''}`}
+                    placeholder="e.g. Comprehensive 1-on-1 fitness checkup including posture analysis, body metrics, and customized workout recommendations."
+                    value={form.description}
+                    onChange={e => {
+                      setForm({ ...form, description: e.target.value });
+                      if (errors.description) setErrors({ ...errors, description: null });
+                    }}
+                    rows={3}
+                    style={{ borderRadius: '12px' }}
+                  />
+                  {errors.description ? (
+                    <span id="service-description-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.description}</span>
+                  ) : (
+                    <span id="service-description-hint" className="form-hint">Use at least 15 characters to explain what this session includes.</span>
+                  )}
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="service-field-3" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Price (₹)</label>
+                    <input id="service-field-3"
+                      aria-invalid={Boolean(errors.price)}
+                      aria-describedby={errors.price ? 'service-price-error' : undefined}
+                      className="form-input"
+                      type="number"
+                      min="0"
+                      placeholder="1000"
+                      value={form.price}
+                      onChange={e => setForm({ ...form, price: e.target.value })}
+                      required
+                      style={{ borderRadius: '12px' }}
+                    />
+                    {errors.price && <span id="service-price-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.price}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="service-field-4" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Duration (minutes)</label>
+                    <input id="service-field-4"
+                      className="form-input"
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={form.duration}
+                      onChange={e => setForm({ ...form, duration: e.target.value })}
+                      required
+                      style={{ borderRadius: '12px' }}
+                    />
+                  </div>
+                </div>
+
+                </fieldset>
+                <fieldset className="service-editor-section">
+                  <legend>Availability</legend>
+                  <p className="service-section-hint">Assign an instructor and choose their working days. Hours are managed on the Availability page.</p>
+                <div className="form-group">
+                  <label htmlFor="service-field-5" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service provider</label>
+                  <select id="service-field-5"
+                    aria-invalid={Boolean(errors.instructorId)}
+                    aria-describedby={errors.instructorId ? 'service-instructor-error' : undefined}
+                    className={`form-input ${errors.instructorId ? 'form-input-error' : ''}`}
+                    value={form.instructorId || ''}
+                    onChange={e => setForm({
+                      ...form,
+                      instructorId: e.target.value,
+                      availableWeekdays: instructorDays(e.target.value),
+                    })}
+                  >
+                    <option value="">Select instructor</option>
+                    {instructors.filter(item => item.active).map(item => (
+                      <option key={item.id} value={item.id}>{item.name}{item.isOwner ? ' (merchant default)' : ''}</option>
+                    ))}
+                  </select>
+                  {errors.instructorId && <span id="service-instructor-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.instructorId}</span>}
+                </div>
+
+                <div className="form-group">
+                  <span id="service-days-label" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Service days</span>
+                  <div role="group" aria-labelledby="service-days-label" aria-describedby={errors.availableWeekdays ? 'service-days-error' : undefined} style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+                    {WEEKDAYS.map(day => {
+                      const checked = form.availableWeekdays?.includes(day);
+                      const instructorAvailable = instructorDays(form.instructorId).includes(day);
+                      return (
+                        <label
+                          key={day}
+                          title={instructorAvailable ? 'Service can be offered on this day' : 'Instructor is unavailable'}
+                          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 9px', border: '1px solid var(--theme-border)', borderRadius: '10px', cursor: instructorAvailable ? 'pointer' : 'not-allowed', background: checked ? 'var(--theme-badge-bg)' : 'transparent', opacity: instructorAvailable ? 1 : 0.45 }}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-invalid={Boolean(errors.availableWeekdays)}
+                            aria-describedby={errors.availableWeekdays ? 'service-days-error' : undefined}
+                            checked={Boolean(checked && instructorAvailable)}
+                            disabled={!instructorAvailable}
+                            onChange={() => setForm({
+                              ...form,
+                              availableWeekdays: checked
+                                ? form.availableWeekdays.filter(item => item !== day)
+                                : [...(form.availableWeekdays || []), day],
+                            })}
+                          />
+                          <span style={{ fontSize: '12px', fontWeight: 600 }}>{DAY_LABELS[day]}{!instructorAvailable ? ' — unavailable' : ''}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {errors.availableWeekdays && <span id="service-days-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.availableWeekdays}</span>}
+                </div>
+
+                </fieldset>
+                <fieldset className="service-editor-section">
+                  <legend>Meeting location</legend>
+                  <p className="service-section-hint">Choose how customers attend this session.</p>
+                <div className="form-group">
+                  <span id="service-mode-label" className="form-label" style={{ fontWeight: 600, fontSize: '13px' }}>Meeting Mode</span>
+                  <div role="group" aria-labelledby="service-mode-label" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {[
+                      { value: 'online', label: ' Online', desc: 'Google Meet' },
+                      { value: 'in-person', label: ' In-person', desc: 'Physical location' },
+                      { value: 'both', label: ' Both', desc: 'Customer chooses' },
+                    ].map(opt => {
+                      const isSel = (form.meetingType || 'online') === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={isSel}
+                          onClick={() => {
+                            setForm({ ...form, meetingType: opt.value });
+                            if (opt.value === 'in-person' || opt.value === 'both') {
+                              setTimeout(() => {
+                                if (modalBodyRef.current) {
+                                  modalBodyRef.current.scrollTo({
+                                    top: modalBodyRef.current.scrollHeight,
+                                    behavior: 'smooth',
+                                  });
+                                }
+                              }, 60);
+                            }
+                          }}
+                          style={{
+                            padding: '10px 8px',
+                            borderRadius: '12px',
+                            border: isSel ? '2px solid var(--color-lime, #22c55e)' : '1px solid var(--theme-border, #e2e8f0)',
+                            background: isSel ? 'var(--theme-bg-subtle, #f0fdf4)' : 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '3px',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>{opt.label}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--theme-text-muted)' }}>{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(form.meetingType === 'in-person' || form.meetingType === 'both') && (
+                  <div className="form-group animate-fade-in-up">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label htmlFor="service-location" className="form-label" style={{ fontWeight: 600, fontSize: '13px', margin: 0 }}>Location Address</label>
+                      {state.provider?.defaultLocationAddress && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, locationAddress: state.provider.defaultLocationAddress })}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--color-primary, #2563eb)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: 0,
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Use my default address
+                        </button>
+                      )}
+                    </div>
+                    <input id="service-location"
+                      aria-invalid={Boolean(errors.locationAddress)}
+                      aria-describedby={errors.locationAddress ? 'service-location-error service-location-hint' : 'service-location-hint'}
+                      className={`form-input ${errors.locationAddress ? 'form-input-error' : ''}`}
+                      placeholder="e.g. 42 MG Road, Koramangala, Bengaluru"
+                      value={form.locationAddress || ''}
+                      onChange={e => {
+                        setForm({ ...form, locationAddress: e.target.value });
+                        if (errors.locationAddress) setErrors({ ...errors, locationAddress: null });
+                      }}
+                      style={{ borderRadius: '12px' }}
+                    />
+                    {errors.locationAddress && (
+                      <span id="service-location-error" role="alert" className="form-hint" style={{ color: 'var(--color-error-600)' }}>{errors.locationAddress}</span>
+                    )}
+                    <span id="service-location-hint" className="form-hint">Physical location where in-person sessions take place. Clients will get a Google Maps directions link.</span>
+                  </div>
+                )}
+                </fieldset>
+              </div>
+
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--theme-border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexShrink: 0, background: 'var(--theme-bg-card)' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  disabled={submitting}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--theme-border)',
+                    borderRadius: 'var(--radius-pill)',
+                    padding: '8px 18px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: 'var(--color-text)',
+                  }}
+                >
+                  Cancel
+                </button>
+                <PillButton type="submit" variant="primary" size="sm" disabled={submitting}>
+                  {submitting ? 'Saving...' : (editingService ? 'Save Changes' : 'Create Service')}
+                </PillButton>
+              </div>
+            </form>
+          </div>
+        </AccessibleModal>
+      )}
+    </div>
+  );
+}

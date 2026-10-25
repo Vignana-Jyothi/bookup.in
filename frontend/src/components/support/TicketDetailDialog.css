@@ -1,0 +1,12 @@
+.calup-ticket-detail-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(800px,calc(100vw - 32px)); max-width: none; max-height: 90vh; max-height: 90dvh; overflow: hidden; border: 1px solid var(--color-border,#dedfd6); border-radius: 20px; background: var(--theme-card-bg,#fff); color: var(--color-text,#20251c); box-shadow: 0 24px 80px #0004; font: 14px/1.6 var(--font-body,sans-serif); }
+.calup-ticket-detail-dialog[open] { display: flex; flex-direction: column; }
+.calup-ticket-detail-dialog::backdrop { background: #0005; }
+.calup-ticket-detail-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--color-border,#dedfd6); }
+.calup-ticket-detail-header h2 { margin: 0; font-size: 18px; }
+.calup-ticket-detail-header button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.calup-ticket-detail-header button:focus-visible { outline: 3px solid #a3cc28; outline-offset: 2px; }
+.calup-ticket-detail-body.support-panel { margin: 0; padding: 24px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border: 0; border-radius: 0; }
+.calup-ticket-detail-body .support-detail { margin: 0; padding: 0; border: 0; }
+.calup-ticket-detail-body .support-detail h3 { margin-top: 0; overflow-wrap: anywhere; }
+.calup-ticket-detail-body .support-conversation { max-height: none; overflow: visible; }
+@media (max-width: 600px) { .calup-ticket-detail-header { padding: 12px 16px; } .calup-ticket-detail-body.support-panel { padding: 16px; } }

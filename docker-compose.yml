@@ -1,25 +1,54 @@
-version: '3.8'
-
 services:
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Set the public Supabase URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:?Set the browser-safe Supabase key}
+        VITE_APP_URL: ${VITE_APP_URL:-https://calup.app}
+        VITE_API_URL: /api
+        VITE_SUPPORT_EMAIL: ${VITE_SUPPORT_EMAIL:-support@calup.app}
+        VITE_DEMO_SLUG: ${VITE_DEMO_SLUG:-}
+        VITE_CASHFREE_V1_ENABLED: ${VITE_CASHFREE_V1_ENABLED:-false}
+        VITE_LEGAL_NAME: ${VITE_LEGAL_NAME:-Calup}
+        VITE_BUSINESS_ADDRESS: ${VITE_BUSINESS_ADDRESS:-}
+        VITE_GRIEVANCE_CONTACT_NAME: ${VITE_GRIEVANCE_CONTACT_NAME:-}
+        VITE_GRIEVANCE_EMAIL: ${VITE_GRIEVANCE_EMAIL:-}
     ports:
-      - "4242:4242"
+      - '${FRONTEND_BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-4242}:4242'
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
-
+    init: true
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:4242/healthz || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "5252:5252"
     env_file:
-      - .env
+      - path: ${BACKEND_ENV_FILE:-.env.backend}
+        format: raw
     environment:
-      - PORT=5252
-      - NODE_ENV=production
+      PORT: '5252'
+      NODE_ENV: production
+      BACKGROUND_WORKERS_ENABLED: ${BACKGROUND_WORKERS_ENABLED:-false}
+      ENABLE_TEST_ROUTES: 'false'
+      DEBUG_ROUTES: 'false'
+    expose:
+      - '5252'
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:5252/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
