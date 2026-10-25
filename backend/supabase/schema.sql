@@ -78,6 +78,7 @@ create table if not exists public.bookings (
   price numeric not null default 0,
   deposit_amount numeric default 0,
   deposit_status text default 'paid',
+  payment_status text default 'awaiting_payment',
   status text not null default 'confirmed', -- 'confirmed', 'completed', 'cancelled', 'no-show', 'late-cancellation'
   notes text,
   google_event_id text,
@@ -243,6 +244,7 @@ returns table (
 )
 language sql
 security definer
+set search_path = pg_catalog, public
 as $$
   select start_time, end_time, actual_end_time, status
   from public.bookings

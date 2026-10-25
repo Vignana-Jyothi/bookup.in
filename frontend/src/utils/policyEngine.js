@@ -4,6 +4,8 @@
  * Used identically across server and client.
  */
 
+import { bookingStartMillis } from './bookingTime.js';
+
 export const DEFAULT_POLICY = {
   full_refund_hours: 24,
   partial_refund_hours: 2,
@@ -71,9 +73,7 @@ export function generatePolicyText(policy = {}) {
 export function getHoursUntilSession(bookingDate, startTime, timezone = 'Asia/Kolkata') {
   if (!bookingDate || !startTime) return 0;
   try {
-    const sessionDateStr = `${bookingDate}T${startTime}:00`;
-    // Create Date representing appointment in specified timezone
-    const sessionTime = new Date(sessionDateStr).getTime();
+    const sessionTime = bookingStartMillis({ booking_date: bookingDate, start_time: startTime }, timezone);
     const now = Date.now();
     return (sessionTime - now) / (1000 * 60 * 60);
   } catch (_e) {
@@ -108,7 +108,7 @@ export function calculateCancellationRefund({
 
   let hoursNotice = 0;
   try {
-    const sessionTime = new Date(`${booking.booking_date || booking.date}T${booking.start_time || booking.startTime}:00`).getTime();
+    const sessionTime = bookingStartMillis({ booking_date: booking.booking_date || booking.date, start_time: booking.start_time || booking.startTime }, timezone);
     const now = currentTime instanceof Date ? currentTime.getTime() : new Date(currentTime).getTime();
     hoursNotice = (sessionTime - now) / (1000 * 60 * 60);
   } catch (_e) {

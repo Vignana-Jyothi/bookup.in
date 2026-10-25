@@ -87,7 +87,8 @@ function RouteLoading() {
 }
 
 function useDurableOnboardingStatus(userId, localCompleted) {
-  const [result, setResult] = useState({ userId: null, status: null });
+  const [result, setResult] = useState({ userId: null, status: null, retry: -1 });
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (!userId || !isSupabaseConfigured()) return undefined;
@@ -95,25 +96,33 @@ function useDurableOnboardingStatus(userId, localCompleted) {
     onboardingService.load()
       .then(onboarding => {
         const identityReady = Boolean(onboarding?.identity?.emailVerified && onboarding?.identity?.phoneVerified);
-        if (active) setResult({ userId, status: onboarding?.status === 'completed' && identityReady ? 'completed' : 'incomplete' });
+        if (active) setResult({ userId, retry, status: onboarding?.status === 'completed' && identityReady ? 'completed' : 'incomplete' });
       })
       .catch(error => {
         console.error('Could not verify onboarding access:', error);
-        if (active) setResult({ userId, status: 'incomplete' });
+        if (active) setResult({ userId, retry, status: 'unavailable' });
       });
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, retry]);
 
-  if (!isSupabaseConfigured()) return localCompleted ? 'completed' : 'incomplete';
-  return result.userId === userId ? result.status : null;
+  const status = !isSupabaseConfigured() ? (localCompleted ? 'completed' : 'incomplete') : result.userId === userId && result.retry === retry ? result.status : null;
+  return { status, retry: () => setRetry(value => value + 1) };
+}
+
+function OnboardingUnavailable({ onRetry }) {
+  return <main role="alert" style={{ minHeight: '100vh', display: 'grid', placeContent: 'center', gap: '1rem', padding: '2rem' }}>
+    <p>We could not verify your account setup. Please try again.</p>
+    <button type="button" onClick={onRetry}>Try again</button>
+  </main>;
 }
 
 function AuthRoute({ children }) {
   const auth = useAuth();
   const { state } = useStore();
-  const onboardingStatus = useDurableOnboardingStatus(isCalupAdmin(auth.user) ? null : auth.user?.id, state.onboarding.completed);
+  const { status: onboardingStatus, retry } = useDurableOnboardingStatus(isCalupAdmin(auth.user) ? null : auth.user?.id, state.onboarding.completed);
   if (!auth.loading && isCalupAdmin(auth.user)) return <Navigate to="/admin" replace />;
   if (auth.loading || (auth.isAuthenticated && !onboardingStatus)) return <RouteLoading />;
+  if (auth.isAuthenticated && onboardingStatus === 'unavailable') return <OnboardingUnavailable onRetry={retry} />;
   if (auth.isAuthenticated && !auth.isDemoMode) {
     return <Navigate to={onboardingStatus === 'completed' ? '/dashboard' : '/onboarding'} replace />;
   }
@@ -123,9 +132,10 @@ function AuthRoute({ children }) {
 function DashboardRoute({ children }) {
   const auth = useAuth();
   const { state } = useStore();
-  const onboardingStatus = useDurableOnboardingStatus(isCalupAdmin(auth.user) ? null : auth.user?.id, state.onboarding.completed);
+  const { status: onboardingStatus, retry } = useDurableOnboardingStatus(isCalupAdmin(auth.user) ? null : auth.user?.id, state.onboarding.completed);
   if (!auth.loading && isCalupAdmin(auth.user)) return <Navigate to="/admin" replace />;
   if (auth.loading || (auth.isAuthenticated && !onboardingStatus)) return <RouteLoading />;
+  if (auth.isAuthenticated && onboardingStatus === 'unavailable') return <OnboardingUnavailable onRetry={retry} />;
   if (!auth.isAuthenticated) return <Navigate to="/login" replace />;
   if (onboardingStatus !== 'completed') return <Navigate to="/onboarding" replace />;
   return children;

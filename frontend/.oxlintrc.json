@@ -1,8 +1,36 @@
 {
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "oxc"],
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "oxc",
+    "import"
+  ],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "no-constant-binary-expression": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/src/**",
+        "**/server/**",
+        "**/scripts/**",
+        "**/api/**",
+        "run-dev.js"
+      ],
+      "env": {
+        "browser": true,
+        "node": true
+      },
+      "rules": {
+        "no-undef": "error"
+      }
+    }
+  ]
 }

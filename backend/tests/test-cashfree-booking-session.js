@@ -3,16 +3,16 @@ import { reconcileAttempt, restoreBookingCheckout } from '../server/routes/cashf
 import { bookingPaymentIntent, shouldResetBookingPaymentIntent } from '../../frontend/src/services/payments/bookingPaymentIntent.js';
 
 const attempt = { attemptId: 'attempt-1', holdExpiresAt: new Date(Date.now() + 60000).toISOString(), paymentSessionId: 'cached-session' };
-let order = { order_amount: 100, order_currency: 'INR', order_status: 'ACTIVE', payment_session_id: 'current-session' };
+let order = { order_id: 'gateway-order', order_amount: 100, order_currency: 'INR', order_status: 'ACTIVE', payment_session_id: 'current-session' };
 let lookedUp = 0;
 let reconciled = 0;
 const dependencies = {
   database: { async rpc(name, args) {
     assert.equal(name, 'get_cashfree_reconciliation_context_v1');
     assert.equal(args.p_attempt_id, attempt.attemptId);
-    return { data: { attemptId: attempt.attemptId, providerOrderId: 'gateway-order', amountPaise: 10000, currency: 'INR' } };
+    return { data: { attemptId: attempt.attemptId, providerOrderId: 'gateway-order', amountPaise: 10000, currency: 'INR', environment: 'sandbox', gatewayAccount: 'calup_primary', purpose: 'service_booking', paymentPath: 'cashfree' } };
   } },
-  client: { async getOrder(id) { assert.equal(id, 'gateway-order'); lookedUp += 1; return order; } },
+  client: { environment: 'sandbox', async getOrder(id) { assert.equal(id, 'gateway-order'); lookedUp += 1; return order; } },
   async reconcile(id) { assert.equal(id, attempt.attemptId); reconciled += 1; return { attemptId: id, paymentStatus: 'succeeded' }; },
 };
 
@@ -27,13 +27,14 @@ order = { ...order, order_amount: 100, order_status: 'PAID' };
 const paid = await restoreBookingCheckout(attempt, dependencies);
 assert.equal(paid.paymentSessionId, null, 'Paid orders cannot be reopened for payment');
 assert.equal(reconciled, 1, 'Non-active gateway orders enter authoritative reconciliation');
-const context = { ...attempt, providerOrderId: 'gateway-order', amountPaise: 10000, currency: 'INR', paymentStatus: 'pending', attemptStatus: 'hold_active' };
+const context = { ...attempt, environment: 'sandbox', gatewayAccount: 'calup_primary', purpose: 'service_booking', paymentPath: 'cashfree', providerOrderId: 'gateway-order', amountPaise: 10000, currency: 'INR', paymentStatus: 'pending', attemptStatus: 'hold_active' };
 let transactionStatuses = ['FAILED'];
 let paymentLookups = 0;
 const retryDependencies = {
   database: { async rpc(name) { assert.equal(name, 'get_cashfree_reconciliation_context_v1', 'Retry classification must not create or release a hold/order'); return { data: { ...context } }; } },
   client: {
-    async getOrder() { return { order_status: 'ACTIVE', order_amount: 100, order_currency: 'INR' }; },
+    environment: 'sandbox',
+    async getOrder() { return { order_id: 'gateway-order', order_status: 'ACTIVE', order_amount: 100, order_currency: 'INR' }; },
     async getOrderPayments() { paymentLookups++; return transactionStatuses.map(payment_status => ({ payment_status })); },
   },
 };
@@ -57,10 +58,10 @@ assert.equal(paymentLookups, before + 1, 'Expired holds still check for a proces
 context.holdExpiresAt = attempt.holdExpiresAt; context.amountPaise = 20000;
 await assert.rejects(reconcileAttempt(attempt.attemptId, retryDependencies), /amount or currency mismatch/);
 context.amountPaise = 10000;
-retryDependencies.client.getOrder = async () => ({ order_status: 'PAID', order_amount: 100, order_currency: 'INR' });
+retryDependencies.client.getOrder = async () => ({ order_id: 'gateway-order', order_status: 'PAID', order_amount: 100, order_currency: 'INR' });
 transactionStatuses = ['FAILED'];
 assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).gatewayPaymentInProgress, true, 'PAID without matching SUCCESS stays uncertain and cannot be closed unpaid');
-retryDependencies.client.getOrder = async () => ({ order_status: 'UNKNOWN', order_amount: 100, order_currency: 'INR' });
+retryDependencies.client.getOrder = async () => ({ order_id: 'gateway-order', order_status: 'UNKNOWN', order_amount: 100, order_currency: 'INR' });
 assert.equal((await reconcileAttempt(attempt.attemptId, retryDependencies)).gatewayPaymentInProgress, true, 'Unknown gateway state cannot authorize cancellation');
 console.log('PASS: current booking sessions, immutable hold deadline, amount checks, and paid-order reconciliation.');
 console.log('PASS: failed/dropped payments reuse an active checkout; pending, successful, unknown, closed and expired outcomes do not offer an unsafe retry.');

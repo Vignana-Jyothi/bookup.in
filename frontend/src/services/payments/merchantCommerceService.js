@@ -1,10 +1,11 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { supabase } from '../supabase/supabaseClient.js';
 import { getApiBase } from '../../utils/api.js';
 
 async function request(path = '',body,signal) {
   const {data,error} = await supabase.auth.getSession();
   if (error || !data?.session?.access_token) throw new Error('Sign in to manage your products.');
-  const response = await fetch(`${getApiBase()}/v1/merchant/commerce${path}`,{method:body === undefined ? 'GET' : 'POST',
+  const response = await boundedFetch(`${getApiBase()}/v1/merchant/commerce${path}`,{method:body === undefined ? 'GET' : 'POST',
     credentials:'include',cache:'no-store',signal,headers:{Authorization:`Bearer ${data.session.access_token}`,...(body === undefined ? {} : {'Content-Type':'application/json'})},
     ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   const result = await response.json().catch(() => ({}));
@@ -41,7 +42,7 @@ export const merchantCommerceService = {
   },
   async asset(id) {
     const asset = await request(`/products/${id}/asset`);
-    const response = await fetch(asset.url,{cache:'no-store',referrerPolicy:'no-referrer'});
+    const response = await boundedFetch(asset.url,{cache:'no-store',referrerPolicy:'no-referrer'});
     if (!response.ok) throw new Error('Encrypted download failed. Request a new download link.');
     return {envelope:asset.envelope,ciphertext:await response.arrayBuffer()};
   },

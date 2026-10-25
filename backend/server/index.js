@@ -11,7 +11,7 @@ import { resetAllLimiters, setLimiterOverride } from './middleware/rateLimiter.j
 try {
   dns.setDefaultResultOrder('ipv4first');
 } catch {}
-import { createClient } from '@supabase/supabase-js';
+import { createHealthHandler } from './routes/health.js';
 import { config, validateConfig } from './config.js';
 import authRoutes from './routes/auth.js';
 import { createAdminAuthRouter } from './routes/adminAuth.js';
@@ -39,6 +39,7 @@ import { createBookingRefundRequestsRouter } from './routes/bookingRefundRequest
 import { createMerchantCommerceRouter } from './routes/merchantCommerce.js';
 import { createPublicCommerceRouter, createCommerceWebhookRouter } from './routes/publicCommerce.js';
 import { startCommercePaymentWorker } from './services/commerceOrderPayments.js';
+import { startPaymentNotificationWorker } from './services/paymentNotifications.js';
 
 // Validate required environment variables at startup (fails loudly if missing)
 validateConfig();
@@ -129,59 +130,10 @@ app.use('/api/public/bookings/manage', refundsRoutes);             // customer: 
 app.use('/api/public/bookings/booking-status', refundsRoutes);      // customer alias
 
 // Health check endpoint
-app.get('/api/health', async (req, res) => {
-  let supabaseStatus = 'unconfigured';
-  let supabaseError = null;
-  let serviceCheck = null;
-
-  const key = config.supabaseServiceRoleKey || config.supabaseKey;
-  if (config.supabaseUrl && key) {
-    try {
-      const client = createClient(config.supabaseUrl, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      const { data, error } = await client.from('services').select('id, name, active').limit(3);
-      if (error) {
-        supabaseStatus = 'error';
-        supabaseError = { message: error.message, code: error.code, details: error.details, hint: error.hint };
-      } else {
-        supabaseStatus = 'connected';
-        serviceCheck = { count: data?.length, sample: data?.map(s => s.id) };
-      }
-    } catch (e) {
-      supabaseStatus = 'exception';
-      supabaseError = e.message;
-    }
-  }
-
-  res.json({
-    status: 'ok',
-    version: 'phase4b-diagnostic-v2',
-    service: 'CalUp Backend',
-    uptimeSeconds: Math.floor(process.uptime()),
-    googleConfigured: config.isGoogleConfigured(),
-    emailConfigured: config.isEmailConfigured(),
-    resendEnvKeys: Object.keys(process.env).filter(k => /resend/i.test(k)),
-    richAutomateConfigured: config.isRichAutomateConfigured(),
-    cashfree: {
-      enabled: config.cashfreeEnabled,
-      configured: config.isCashfreeConfigured(),
-      environment: config.cashfreeEnvironment,
-    },
-    supabase: {
-      status: supabaseStatus,
-      host: config.supabaseUrl ? new URL(config.supabaseUrl).host : null,
-      keyType: config.supabaseServiceRoleKey ? 'service_role' : (config.supabaseKey ? 'anon/publishable' : 'none'),
-      keyPrefix: key ? key.substring(0, 10) + '...' : null,
-      error: supabaseError,
-      services: serviceCheck,
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get('/api/health', createHealthHandler());
 
 // Test-only endpoints for rate limiter control (opt-in only, never available in production)
-if (process.env.ENABLE_TEST_ROUTES === 'true') {
+if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_TEST_ROUTES === 'true') {
   app.post('/__test__/reset-rate-limits', (_req, res) => {
     resetAllLimiters();
     res.json({ success: true, message: 'All rate limiters reset' });
@@ -217,6 +169,7 @@ if (process.env.BACKGROUND_WORKERS_ENABLED !== 'false') {
   startAppointmentWhatsAppWorker();
   startBookingRefundWorker();
   startCommercePaymentWorker();
+  startPaymentNotificationWorker();
 }
 
 export default app;

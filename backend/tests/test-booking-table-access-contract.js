@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const sql = readFileSync(new URL('../supabase/20261025_booking_table_access.sql', import.meta.url), 'utf8');
+assert.match(sql, /revoke insert on public\.bookings from public, anon, authenticated/);
+assert.match(sql, /revoke select, update, delete on public\.bookings from public, anon/);
+assert.match(sql, /grant select, update, delete on public\.bookings to authenticated/);
+assert.match(sql, /revoke all on public\.customers from public, anon, authenticated/);
+assert.match(sql, /grant select on public\.customers to authenticated/);
+assert.match(sql, /where p\.user_id = auth\.uid\(\)/);
+assert.match(sql, /alter table public\.customers enable row level security/);
+assert.match(sql, /grant all on public\.bookings to service_role/);
+assert.match(sql, /grant all on public\.customers to service_role/);
+console.log('Booking/customer table access source contract passed (no database accessed).');

@@ -1,3 +1,4 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 /**
  * BookUp — Real Google Calendar Provider
  * Communicates with backend endpoints (/api/auth/google/*, /api/calendar/*)
@@ -37,7 +38,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
   async getStatus(_providerId) {
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch(`${this.apiBase}/auth/google/status`, {
+      const res = await boundedFetch(`${this.apiBase}/auth/google/status`, {
         headers: { ...authHeaders },
       });
       if (!res.ok) return { isConnected: false, email: null };
@@ -66,7 +67,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
   async connect(options = {}) {
     const authHeaders = await getAuthHeader();
     const returnTo = options.returnTo === 'onboarding' ? 'onboarding' : 'settings';
-    const res = await fetch(`${this.apiBase}/auth/google/url?returnTo=${encodeURIComponent(returnTo)}${options.popup ? '&popup=true' : ''}`, {
+    const res = await boundedFetch(`${this.apiBase}/auth/google/url?returnTo=${encodeURIComponent(returnTo)}${options.popup ? '&popup=true' : ''}`, {
       headers: { ...authHeaders },
     });
     const data = await res.json();
@@ -130,7 +131,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
    */
   async testConnection() {
     const authHeaders = await getAuthHeader();
-    const res = await fetch(`${this.apiBase}/auth/google/test`, {
+    const res = await boundedFetch(`${this.apiBase}/auth/google/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
     });
@@ -146,7 +147,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
    */
   async disconnect(_providerId) {
     const authHeaders = await getAuthHeader();
-    const res = await fetch(`${this.apiBase}/auth/google/disconnect`, {
+    const res = await boundedFetch(`${this.apiBase}/auth/google/disconnect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
     });
@@ -173,15 +174,11 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
   async getBusyTimes(dateStr, providerId, timeZone = 'Asia/Kolkata') {
     if (!dateStr || !providerId) return [];
 
-    try {
-      const res = await fetch(`${this.apiBase}/calendar/busy?providerId=${encodeURIComponent(providerId)}&date=${encodeURIComponent(dateStr)}&timeZone=${encodeURIComponent(timeZone)}`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return Array.isArray(data.busyTimes) ? data.busyTimes : [];
-    } catch (err) {
-      console.warn('Error fetching Google Calendar busy times:', err.message);
-      return [];
-    }
+    const res = await boundedFetch(`${this.apiBase}/calendar/busy?providerId=${encodeURIComponent(providerId)}&date=${encodeURIComponent(dateStr)}&timeZone=${encodeURIComponent(timeZone)}`);
+    if (!res.ok) throw new Error('Calendar availability is temporarily unavailable.');
+    const data = await res.json();
+    if (!Array.isArray(data.busyTimes)) throw new Error('Calendar availability response is invalid.');
+    return data.busyTimes;
   }
 
   /**
@@ -195,7 +192,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
 
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch(`${this.apiBase}/calendar/events`, {
+      const res = await boundedFetch(`${this.apiBase}/calendar/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ providerId, booking, timeZone }),
@@ -227,7 +224,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
 
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}`, {
+      const res = await boundedFetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ providerId, booking }),
@@ -251,7 +248,7 @@ export class RealGoogleCalendarProvider extends CalendarProvider {
 
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}?providerId=${encodeURIComponent(providerId)}`, {
+      const res = await boundedFetch(`${this.apiBase}/calendar/events/${encodeURIComponent(eventId)}?providerId=${encodeURIComponent(providerId)}`, {
         method: 'DELETE',
         headers: { ...authHeaders },
       });

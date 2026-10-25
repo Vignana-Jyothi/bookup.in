@@ -6,6 +6,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { hashManagementToken } from '../../utils/token.js';
 import { getApiBase } from '../../utils/api.js';
+import { boundedFetch } from '../../utils/boundedFetch.js';
 
 const DAYS_LIST = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -67,7 +68,8 @@ export const dbService = {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) throw new Error('Unable to load your merchant profile. Please try again.');
+    if (!data) {
       return null;
     }
 
@@ -650,7 +652,7 @@ export const dbService = {
       reschedule_min_hours_before: data.reschedule_min_hours_before ?? 24,
       payment_verification_timeout_hours: data.payment_verification_timeout_hours ?? 24,
       cancellationWindow: data.full_refund_hours ?? data.cancellation_window ?? 24,
-      depositAmount: Number(data.fee) ?? 200,
+      depositAmount: data.fee != null && Number.isFinite(Number(data.fee)) ? Number(data.fee) : 200,
       policyText: data.policy_text || '',
     };
   },
@@ -695,7 +697,7 @@ export const dbService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Please log in again to load appointments.');
 
-    const response = await fetch(`${getApiBase()}/v1/merchant/appointments`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/merchant/appointments`, {
       signal,
       credentials: 'include',
       headers: {
@@ -712,7 +714,7 @@ export const dbService = {
     if (!isSupabaseConfigured()) throw new Error('Appointment storage is unavailable.');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Please sign in again to save appointments.');
-    const response = await fetch(`${getApiBase()}/v1/merchant/appointments`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/merchant/appointments`, {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, 'Idempotency-Key': requestKey },
       body: JSON.stringify(payload),
@@ -1169,7 +1171,7 @@ export const dbService = {
   /**
    * Get provider busy time intervals without exposing customer PII
    */
-  async getBusySlots(providerId, date, excludeBookingId = null, serviceId = null) {
+  async getBusySlots(providerId, date, excludeBookingId = null, serviceId = null, { strict = false } = {}) {
     if (!providerId || !date) return [];
 
     // 1. Fetch from backend endpoint (service-role backed, highly reliable)
@@ -1180,7 +1182,7 @@ export const dbService = {
       if (excludeBookingId) {
         url += `&excludeBookingId=${encodeURIComponent(excludeBookingId)}`;
       }
-      const res = await fetch(url);
+      const res = await boundedFetch(url);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.busySlots)) {
@@ -1211,6 +1213,7 @@ export const dbService = {
         // Fallback
       }
     }
+    if (strict) throw new Error('Unable to verify booking availability. Please try again.');
     return [];
   },
 
@@ -1318,7 +1321,7 @@ export const dbService = {
       console.warn('Could not retrieve Supabase session token:', err);
     }
 
-    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/confirm-payment`, {
+    const res = await boundedFetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/confirm-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1352,7 +1355,7 @@ export const dbService = {
       console.warn('Could not retrieve Supabase session token:', err);
     }
 
-    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/reject-payment`, {
+    const res = await boundedFetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/reject-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1387,7 +1390,7 @@ export const dbService = {
       console.warn('Could not retrieve Supabase session token:', err);
     }
 
-    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/coach-cancel`, {
+    const res = await boundedFetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/coach-cancel`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1421,7 +1424,7 @@ export const dbService = {
       console.warn('Could not retrieve Supabase session token:', err);
     }
 
-    const res = await fetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/mark-no-show`, {
+    const res = await boundedFetch(`${apiBase}/bookings/${encodeURIComponent(bookingId)}/mark-no-show`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -9,6 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config.js';
+import { boundedFetch } from '../utils/boundedFetch.js';
 
 function isServiceRoleKey(key) {
   if (!key || typeof key !== 'string') return false;
@@ -32,6 +33,7 @@ const effectiveServiceRoleKey = rawServiceKey ? rawServiceKey.trim().replace(/^[
 // Service-role client that bypasses RLS (server-side only, never exposed to frontend)
 export const serviceRoleClient = (config.supabaseUrl && effectiveServiceRoleKey)
   ? createClient(config.supabaseUrl, effectiveServiceRoleKey, {
+      global: { fetch: boundedFetch },
       auth: { persistSession: false, autoRefreshToken: false },
     })
   : null;
@@ -48,6 +50,7 @@ const generalKey = (
 // General server client for verifying user JWTs
 export const authClient = (config.supabaseUrl && generalKey)
   ? createClient(config.supabaseUrl, generalKey, {
+      global: { fetch: boundedFetch },
       auth: { persistSession: false, autoRefreshToken: false },
     })
   : null;
@@ -92,7 +95,7 @@ export async function requireProviderAuth(req, res, next) {
       config.supabaseUrl,
       config.supabaseAnonKey || config.supabaseKey || generalKey,
       {
-        global: { headers: { Authorization: `Bearer ${token}` } },
+        global: { fetch: boundedFetch, headers: { Authorization: `Bearer ${token}` } },
         auth: { persistSession: false, autoRefreshToken: false },
       }
     );
@@ -109,48 +112,21 @@ export async function requireProviderAuth(req, res, next) {
 
     // If not found with primary queryClient and userClient is different, try userClient
     if (!provider && userClient && queryClient !== userClient) {
-      const { data: provUser } = await userClient
+      const { data: provUser, error: userLookupError } = await userClient
         .from('providers')
         .select('id, user_id, name, slug, timezone, email, phone')
         .eq('user_id', user.id)
         .maybeSingle();
       if (provUser) provider = provUser;
+      lookupErr ||= userLookupError;
     }
 
     console.log(`[AUTH] Provider lookup by user_id result:`, provider ? `Found ID ${provider.id}` : 'None', `| Lookup error:`, lookupErr ? lookupErr.message : 'none');
 
-    // 4. If not found by user_id, search by email to link existing profile
-    if (!provider && user.email) {
-      console.log(`[AUTH] Searching providers by email for: ${user.email}`);
-      const { data: emailMatch, error: emailMatchErr } = await queryClient
-        .from('providers')
-        .select('id, user_id, name, slug, timezone, email, phone')
-        .eq('email', user.email.trim().toLowerCase())
-        .maybeSingle();
-
-      console.log(`[AUTH] Provider match by email:`, emailMatch ? `Found ID ${emailMatch.id} (user_id: ${emailMatch.user_id})` : 'None', `| Error:`, emailMatchErr ? emailMatchErr.message : 'none');
-
-      if (emailMatch) {
-        if (emailMatch.user_id !== user.id) {
-          const updateClient = serviceRoleClient || userClient || authClient;
-          const { data: updated, error: updateErr } = await updateClient
-            .from('providers')
-            .update({ user_id: user.id })
-            .eq('id', emailMatch.id)
-            .select('id, user_id, name, slug, timezone, email, phone')
-            .maybeSingle();
-
-          if (!updateErr && updated) {
-            provider = updated;
-            console.log(`[AUTH] Provider update succeeded: linked provider ${provider.id} to user_id ${user.id}`);
-          } else {
-            console.warn(`[AUTH] Provider link update note:`, updateErr ? updateErr.message : 'using in-memory link');
-            provider = { ...emailMatch, user_id: user.id };
-          }
-        } else {
-          provider = emailMatch;
-        }
-      }
+    // Provider contact email is editable and is never proof of account ownership.
+    // Only a persisted user_id match can authorize an existing provider.
+    if (!provider && lookupErr) {
+      return res.status(503).json({ success: false, error: 'Your merchant profile could not be loaded. Please try again.' });
     }
 
     // 5. If still not found, auto-provision minimal provider record

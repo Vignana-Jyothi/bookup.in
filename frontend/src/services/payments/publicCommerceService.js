@@ -1,8 +1,9 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { getPublicSessionApiBase as getApiBase } from '../../utils/api.js';
 
 export function publicCommerceService(slug) {
   async function request(path,body,signal) {
-    const response=await fetch(`${getApiBase()}/v1/public/commerce/${encodeURIComponent(slug)}${path}`,{
+    const response=await boundedFetch(`${getApiBase()}/v1/public/commerce/${encodeURIComponent(slug)}${path}`,{
       method:body===undefined?'GET':'POST',credentials:'include',cache:'no-store',signal,
       headers:{Accept:'application/json',...(body===undefined?{}:{'Content-Type':'application/json'})},
       ...(body===undefined?{}:{body:JSON.stringify(body)}),

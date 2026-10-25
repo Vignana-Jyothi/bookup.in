@@ -1,3 +1,4 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { getPublicSessionApiBase as getApiBase } from '../../utils/api.js';
 import { installCheckoutRecovery } from './checkoutRecovery.js';
 
@@ -64,7 +65,7 @@ export const cashfreeCheckoutService = {
   },
 
   async createBookingAttempt(payload, idempotencyKey) {
-    const response = await fetch(`${getApiBase()}/v1/public/booking-attempts`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/public/booking-attempts`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -120,7 +121,7 @@ export const cashfreeCheckoutService = {
   },
 
   async getAttempt() {
-    const response = await fetch(`${getApiBase()}/v1/public/checkout-sessions/current`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/public/checkout-sessions/current`, {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
@@ -130,7 +131,7 @@ export const cashfreeCheckoutService = {
   },
 
   async getCheckoutSession() {
-    const response = await fetch(`${getApiBase()}/v1/public/checkout-sessions/current/open`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/public/checkout-sessions/current/open`, {
       method: 'POST',
       credentials: 'include',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -142,7 +143,7 @@ export const cashfreeCheckoutService = {
   },
 
   async refreshPayment() {
-    const response = await fetch(`${getApiBase()}/v1/public/checkout-sessions/current/refresh`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/public/checkout-sessions/current/refresh`, {
       method: 'POST',
       credentials: 'include',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -154,7 +155,7 @@ export const cashfreeCheckoutService = {
   },
 
   async finishCheckoutReturn() {
-    const response = await fetch(`${getApiBase()}/v1/public/checkout-sessions/current/complete`, {
+    const response = await boundedFetch(`${getApiBase()}/v1/public/checkout-sessions/current/complete`, {
       method: 'POST',
       credentials: 'include',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },

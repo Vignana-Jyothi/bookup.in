@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "node run-dev.js",
+    "dev:audit": "node backend/scripts/run-audit-dev.mjs",
     "client": "vite frontend --configLoader native",
     "server": "node backend/server/index.js",
     "start": "node backend/server/index.js",
     "build": "vite build frontend --configLoader native",
-    "lint": "oxlint --config frontend/.oxlintrc.json frontend/src backend run-dev.js guides/tools guides/assets/app.js",
-    "lint:ci": "oxlint --config frontend/.oxlintrc.json frontend/src backend run-dev.js",
+    "lint": "oxlint --config frontend/.oxlintrc.json frontend/src frontend/server frontend/api frontend/vite.config.js backend run-dev.js guides/tools guides/assets/app.js",
+    "lint:ci": "oxlint --config frontend/.oxlintrc.json frontend/src frontend/server frontend/api frontend/vite.config.js backend run-dev.js",
     "test:isolated": "node backend/tests/run-isolated-tests.js",
     "deploy:env": "node backend/scripts/college-env.mjs",
     "test": "node backend/tests/run-all-tests.js",
@@ -20,7 +21,9 @@
     "test:oauth": "node backend/tests/test-provider-save-and-oauth.js",
     "preview": "vite preview frontend --configLoader native",
     "guides": "node guides/tools/serve.mjs",
-    "guides:check": "node guides/tools/verify.mjs"
+    "guides:check": "node guides/tools/verify.mjs",
+    "test:database:audit": "node backend/scripts/verify-audit-database.mjs",
+    "test:deployment:containers": "node backend/scripts/verify-deployment-containers.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

@@ -1,10 +1,11 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { supabase } from '../supabase/supabaseClient.js';
 import { getApiBase } from '../../utils/api.js';
 
 async function request(path, options = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Sign in to manage refund requests.');
-  const response = await fetch(`${getApiBase()}/v1/merchant/refund-requests${path}`, {
+  const response = await boundedFetch(`${getApiBase()}/v1/merchant/refund-requests${path}`, {
     ...options, headers: { Accept: 'application/json', Authorization: `Bearer ${session.access_token}`,
       ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
   });

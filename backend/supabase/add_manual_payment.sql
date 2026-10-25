@@ -100,9 +100,10 @@ on conflict (id) do update set
   allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
 
 -- Storage Policies: service_role can upload (server-side only; customers upload via backend API)
--- Authenticated providers can read screenshots for their own bookings
-create policy if not exists "Service role can manage payment screenshots"
-  on storage.objects for all
+-- Clients obtain any authorized evidence access through backend routes.
+drop policy if exists "Service role can manage payment screenshots" on storage.objects;
+create policy "Service role can manage payment screenshots"
+  on storage.objects for all to service_role
   using (bucket_id = 'payment-screenshots')
   with check (bucket_id = 'payment-screenshots');
 

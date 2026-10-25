@@ -127,6 +127,10 @@ router.post(['/current/mark-paid', '/:token/mark-paid'], markPaidLimiter, upload
       return res.status(404).json({ success: false, error: 'Appointment not found or invalid management link' });
     }
 
+    if (!['pending', 'pending_payment'].includes(booking.status)) {
+      return res.status(409).json({ success: false, error: 'This booking is no longer awaiting payment.' });
+    }
+
     // Guard: only allowed from 'awaiting_payment'
     if (booking.payment_status !== 'awaiting_payment') {
       return res.status(400).json({
@@ -134,6 +138,11 @@ router.post(['/current/mark-paid', '/:token/mark-paid'], markPaidLimiter, upload
         error: `Payment cannot be marked as paid. Current payment status: ${booking.payment_status}`,
         currentPaymentStatus: booking.payment_status,
       });
+    }
+
+    const createdAt = Date.parse(booking.created_at);
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt >= 30 * 60 * 1000) {
+      return res.status(409).json({ success: false, error: 'This unpaid reservation has expired. Please book a new appointment.' });
     }
 
     // Handle optional screenshot upload to Supabase Storage
@@ -192,10 +201,14 @@ router.post(['/current/mark-paid', '/:token/mark-paid'], markPaidLimiter, upload
       updatePayload.payment_screenshot_url = screenshotUrl;
     }
 
-    const { error: updateErr } = await supabase
+    const { data: updatedBooking, error: updateErr } = await supabase
       .from('bookings')
       .update(updatePayload)
-      .eq('id', booking.id);
+      .eq('id', booking.id)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to update payment status:', updateErr);
@@ -203,6 +216,10 @@ router.post(['/current/mark-paid', '/:token/mark-paid'], markPaidLimiter, upload
         success: false,
         error: `Failed to update payment status: ${updateErr.message}`,
       });
+    }
+
+    if (!updatedBooking) {
+      return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
     }
 
     console.log(`[PaymentVerification] Booking ${booking.id} marked as paid by customer`);
@@ -299,6 +316,10 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
+    if (!['pending', 'pending_payment'].includes(booking.status)) {
+      return res.status(409).json({ success: false, error: 'This booking is no longer awaiting payment.' });
+    }
+
     // Guard: only allowed from 'verification_pending'
     if (booking.payment_status !== 'verification_pending') {
       return res.status(400).json({
@@ -309,7 +330,7 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
     }
 
     // Update booking status to confirmed and commit to DB before sending emails
-    const { error: updateErr } = await supabase
+    const { data: updatedBooking, error: updateErr } = await supabase
       .from('bookings')
       .update({
         status: 'confirmed',
@@ -317,7 +338,12 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
         payment_confirmed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', bookingId);
+      .eq('id', bookingId)
+      .eq('provider_id', providerId)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to confirm payment:', updateErr);
@@ -325,6 +351,10 @@ router.post('/:id/confirm-payment', requireProviderAuth, async (req, res) => {
         success: false,
         error: `Failed to confirm payment in database: ${updateErr.message}`,
       });
+    }
+
+    if (!updatedBooking) {
+      return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
     }
 
     console.log(`[PaymentVerification] Booking ${bookingId} payment confirmed by provider ${providerId}`);
@@ -585,6 +615,10 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
       });
     }
 
+    if (!['pending', 'pending_payment'].includes(booking.status)) {
+      return res.status(409).json({ success: false, error: 'This booking is no longer awaiting payment.' });
+    }
+
     // Guard: allowed from 'verification_pending' or 'awaiting_payment'
     if (!['verification_pending', 'awaiting_payment'].includes(booking.payment_status)) {
       return res.status(400).json({
@@ -595,7 +629,7 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
     }
 
     // Update booking status to 'rejected' and commit to DB before sending emails
-    const { error: updateErr } = await supabase
+    const { data: updatedBooking, error: updateErr } = await supabase
       .from('bookings')
       .update({
         status: 'rejected',
@@ -604,7 +638,12 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
         payment_rejected_reason: trimmedReason || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', bookingId);
+      .eq('id', bookingId)
+      .eq('provider_id', providerId)
+      .eq('status', booking.status)
+      .eq('payment_status', booking.payment_status)
+      .select('id')
+      .maybeSingle();
 
     if (updateErr) {
       console.error('[PaymentVerification] Failed to reject payment:', updateErr);
@@ -612,6 +651,10 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
         success: false,
         error: `Failed to reject payment in database: ${updateErr.message}`,
       });
+    }
+
+    if (!updatedBooking) {
+      return res.status(409).json({ success: false, error: 'Booking changed. Refresh before trying again.' });
     }
 
     console.log(`[PaymentVerification] Booking ${bookingId} payment rejected by provider ${providerId}. Reason: "${trimmedReason}". Slot freed.`);
@@ -677,7 +720,7 @@ router.post('/:id/reject-payment', requireProviderAuth, async (req, res) => {
         paymentStatus: 'rejected',
         paymentRejectedAt: new Date().toISOString(),
         paymentRejectedReason: trimmedReason || null,
-        status: 'cancelled',
+        status: 'rejected',
       },
     });
   } catch (err) {

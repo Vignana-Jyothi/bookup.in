@@ -1,3 +1,4 @@
+import { boundedFetch } from '../../utils/boundedFetch.js';
 import { supabase } from '../supabase/supabaseClient.js';
 import { getApiBase, getAdminApiBase, getPublicSessionApiBase } from '../../utils/api.js';
 
@@ -13,7 +14,7 @@ export function createTicketService(scope = 'customer', context = 'booking') {
     }
     const apiBase = scope === 'admin' ? getAdminApiBase()
       : scope === 'customer' && context === 'payment' ? getPublicSessionApiBase() : getApiBase();
-    const response = await fetch(`${apiBase}/v1/${segment}/support/tickets${path}`, { ...options, credentials: 'include', headers });
+    const response = await boundedFetch(`${apiBase}/v1/${segment}/support/tickets${path}`, { ...options, credentials: 'include', headers });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(result.error?.message || result.error || 'Support is temporarily unavailable.');

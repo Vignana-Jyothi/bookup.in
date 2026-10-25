@@ -65,33 +65,25 @@ export class RefundService {
       return { success: true, refundAmount: 0, status: 'none' };
     }
 
+    if (booking.payment_status !== 'confirmed') throw new Error('Refund requires verified payment');
+    if (!Number.isFinite(refundAmount) || refundAmount > Math.round(Number(booking.price || 0))) throw new Error('Invalid refund amount');
+
     const providerId = booking.provider_id || booking.providerId;
     const bookingId = booking.id;
 
     // Idempotency: Check if refund row already exists
-    const { data: existingRefund } = await supabase
+    const { data: existingRefund, error: lookupError } = await supabase
       .from('refunds')
       .select('*')
       .eq('booking_id', bookingId)
       .maybeSingle();
 
+    if (lookupError) throw lookupError;
     let refundRecord = null;
 
     if (existingRefund) {
-      const { data: updated, error: updateErr } = await supabase
-        .from('refunds')
-        .update({
-          amount: refundAmount,
-          reason,
-          status: 'refund_due',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingRefund.id)
-        .select('*')
-        .single();
-
-      if (updateErr) throw updateErr;
-      refundRecord = updated;
+      // A retry must preserve sent, confirmed, disputed, and original due amounts.
+      return { success: true, refund: existingRefund, refundAmount: existingRefund.amount, status: existingRefund.status };
     } else {
       const { data: inserted, error: insertErr } = await supabase
         .from('refunds')
@@ -161,6 +153,9 @@ export class RefundService {
       throw new Error('Refund record not found');
     }
 
+    if (['refunded', 'confirmed'].includes(refund.status)) return refund;
+    if (!['refund_due', 'disputed'].includes(refund.status)) throw new Error('Refund cannot be marked sent from its current status');
+
     const refundedAt = new Date().toISOString();
 
     const { data: updatedRefund, error: updErr } = await supabase
@@ -172,6 +167,7 @@ export class RefundService {
         updated_at: refundedAt,
       })
       .eq('id', refundId)
+      .eq('status', refund.status)
       .select('*')
       .single();
 
@@ -245,6 +241,11 @@ export class RefundService {
       throw new Error('Refund record not found');
     }
 
+    if (!['confirm', 'dispute'].includes(action)) throw new Error('Invalid refund action');
+    if (action === 'confirm' && refund.status === 'confirmed') return refund;
+    if (action === 'dispute' && refund.status === 'disputed') return refund;
+    if (!['refunded', 'disputed'].includes(refund.status)) throw new Error('Refund must be marked sent before customer action');
+
     const nowIso = new Date().toISOString();
 
     if (action === 'confirm') {
@@ -256,6 +257,7 @@ export class RefundService {
           updated_at: nowIso,
         })
         .eq('id', refund.id)
+        .eq('status', refund.status)
         .select('*')
         .single();
 
@@ -289,6 +291,7 @@ export class RefundService {
           updated_at: nowIso,
         })
         .eq('id', refund.id)
+        .eq('status', refund.status)
         .select('*')
         .single();
 

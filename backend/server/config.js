@@ -87,6 +87,12 @@ export function validateConfig() {
     missing.push('TOKEN_ENCRYPTION_KEY (must be exactly 64 hexadecimal characters)');
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    for (const flag of ['ENABLE_TEST_ROUTES', 'DEBUG_ROUTES']) {
+      if (process.env[flag] === 'true') missing.push(`${flag} must be false in production`);
+    }
+  }
+
   // Google OAuth conditional validation
   if (config.googleClientId || config.googleClientSecret) {
     if (!config.googleClientId) missing.push('GOOGLE_CLIENT_ID');

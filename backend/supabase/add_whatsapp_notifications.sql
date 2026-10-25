@@ -36,25 +36,4 @@ comment on column public.bookings.provider_notification_sent_at is
 comment on column public.bookings.reminder_sent_at is
   'Timestamp when WhatsApp 2-hour reminder was dispatched to the customer via RichAutomate.';
 
--- 4. Supabase pg_cron & pg_net Setup for 2-Hour Reminders
--- Execute the following in Supabase SQL Editor if pg_cron and pg_net are enabled:
-/*
-create extension if not exists pg_cron;
-create extension if not exists pg_net;
-
--- Schedule reminder job every 10 minutes
-select cron.schedule(
-  'bookup-process-reminders',
-  '*/10 * * * *',
-  $$
-  select net.http_post(
-    url := 'https://bookup-in.onrender.com/api/internal/notifications/process-reminders',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'X-Internal-Secret', 'YOUR_INTERNAL_CRON_SECRET'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
-*/
+-- Reminder scheduling is owned by the backend worker; no database cron is installed.

@@ -79,6 +79,7 @@ returns table (
 )
 language sql
 security definer
+set search_path = pg_catalog, public
 as $$
   select start_time, end_time, actual_end_time, status
   from public.bookings

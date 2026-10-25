@@ -1,7 +1,7 @@
 /**
  * Calup Multi-Tenant Token Store
  * Securely stores encrypted Google OAuth tokens per provider in Supabase
- * with an in-memory process cache.
+ * with durable reads on every production lookup.
  *
  * Tokens are encrypted at rest with AES-256-GCM using TOKEN_ENCRYPTION_KEY.
  * Ephemeral Render redeployments and restarts recover tokens from Supabase seamlessly.
@@ -34,6 +34,15 @@ function writeLocalTokens(data) {
   Object.assign(tokenCache, data || {});
 }
 
+// A refresh token belongs to a Google identity, not merely to this merchant row.
+function requireRefreshTokenForAccountChange(email, refreshToken, existing) {
+  const normalize = value => String(value || '').trim().toLowerCase();
+  const hasStoredCredentials = existing.encryptedAccessToken || existing.encryptedRefreshToken;
+  if (!refreshToken && hasStoredCredentials && normalize(email || existing.email) !== normalize(existing.email)) {
+    throw new Error('A new Google account requires a new refresh token. Reconnect Google Calendar.');
+  }
+}
+
 export const tokenStore = {
   /**
    * Save newly authorized tokens for a provider.
@@ -45,6 +54,7 @@ export const tokenStore = {
     const all = readLocalTokens();
     if (memoryOnlyTestMode()) {
       const existing = all[providerId] || {};
+      requireRefreshTokenForAccountChange(email, refreshToken, existing);
       all[providerId] = {
         providerId,
         email: email || existing.email || '',
@@ -60,8 +70,8 @@ export const tokenStore = {
     }
     const supabase = getSupabaseClient();
     if (!supabase) throw new Error('Google token storage is unavailable');
-    let existing = all[providerId] || {};
-    if (!existing.encryptedRefreshToken) {
+    let existing = {};
+    {
       const { data: stored, error: readError } = await supabase
         .from('google_tokens')
         .select('email, encrypted_access_token, encrypted_refresh_token, expires_at, scope, connected_at')
@@ -80,6 +90,7 @@ export const tokenStore = {
       }
     }
 
+    requireRefreshTokenForAccountChange(email, refreshToken, existing);
     const encAccessToken = accessToken ? encryptToken(accessToken) : existing.encryptedAccessToken;
     const encRefreshToken = refreshToken ? encryptToken(refreshToken) : existing.encryptedRefreshToken;
     const effectiveExpiresAt = expiresAt || existing.expiresAt || 0;
@@ -127,11 +138,12 @@ export const tokenStore = {
   /**
    * Update access token after refresh.
    */
-  async updateAccessToken(providerId, newAccessToken, newExpiresAt) {
+  async updateAccessToken(providerId, newAccessToken, newExpiresAt, expectedVersion, newRefreshToken) {
     if (!providerId || !newAccessToken) return false;
 
     const all = readLocalTokens();
-    const existing = all[providerId] || {};
+    const existing = { ...(all[providerId] || {}) };
+    if (memoryOnlyTestMode() && (!all[providerId] || (expectedVersion !== undefined && existing.encryptedAccessToken !== expectedVersion))) return false;
 
     const encAccessToken = encryptToken(newAccessToken);
     const updatedAt = new Date().toISOString();
@@ -139,6 +151,7 @@ export const tokenStore = {
     existing.encryptedAccessToken = encAccessToken;
     existing.expiresAt = newExpiresAt;
     existing.updatedAt = updatedAt;
+    if (newRefreshToken) existing.encryptedRefreshToken = encryptToken(newRefreshToken);
 
     if (memoryOnlyTestMode()) {
       all[providerId] = existing;
@@ -148,17 +161,21 @@ export const tokenStore = {
 
     const supabase = getSupabaseClient();
     if (!supabase) throw new Error('Google token storage is unavailable');
-    const { data, error: gtErr } = await supabase
+    let query = supabase
       .from('google_tokens')
       .update({
         encrypted_access_token: encAccessToken,
+        ...(newRefreshToken ? { encrypted_refresh_token: existing.encryptedRefreshToken } : {}),
         expires_at: newExpiresAt,
         updated_at: updatedAt,
       })
-      .eq('provider_id', providerId)
+      .eq('provider_id', providerId);
+    if (expectedVersion !== undefined) query = query.eq('encrypted_access_token', expectedVersion);
+    const { data, error: gtErr } = await query
       .select('provider_id')
       .maybeSingle();
-    if (gtErr || !data) throw new Error(`Could not persist refreshed Google credentials: ${gtErr?.message || 'connection record not found'}`);
+    if (gtErr) throw new Error(`Could not persist refreshed Google credentials: ${gtErr.message}`);
+    if (!data) return false;
 
     all[providerId] = existing;
     writeLocalTokens(all);
@@ -168,8 +185,8 @@ export const tokenStore = {
 
   /**
    * Get decrypted tokens for server-side Google Calendar operations.
-   * Checks local cache first; if empty (after Render redeploy or cold start),
-   * retrieves encrypted tokens from Supabase google_tokens table and restores them into local cache.
+   * Reads durable credentials on every production lookup to observe other instances.
+   * Only explicit memory-only tests use the local cache as authoritative storage.
    */
   async getDecryptedTokens(providerId) {
     if (!providerId) return null;
@@ -177,7 +194,7 @@ export const tokenStore = {
     let record = null;
     const all = readLocalTokens();
 
-    if (all[providerId]?.encryptedAccessToken || all[providerId]?.encryptedRefreshToken) {
+    if (memoryOnlyTestMode() && (all[providerId]?.encryptedAccessToken || all[providerId]?.encryptedRefreshToken)) {
       record = all[providerId];
     }
 
@@ -185,6 +202,7 @@ export const tokenStore = {
     if (!record) {
       if (memoryOnlyTestMode()) return null;
       const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Google token storage is unavailable');
       if (supabase) {
         const { data: gtData, error: gtErr } = await supabase
           .from('google_tokens')
@@ -205,6 +223,7 @@ export const tokenStore = {
           };
         }
 
+        if (!record) delete tokenCache[providerId];
         // Restore recovered record to local cache
         if (record) {
           all[providerId] = record;
@@ -218,6 +237,7 @@ export const tokenStore = {
     try {
       return {
         providerId: record.providerId,
+        credentialVersion: record.encryptedAccessToken,
         email: record.email,
         accessToken: record.encryptedAccessToken ? decryptToken(record.encryptedAccessToken) : null,
         refreshToken: record.encryptedRefreshToken ? decryptToken(record.encryptedRefreshToken) : null,
@@ -226,7 +246,7 @@ export const tokenStore = {
       };
     } catch (err) {
       console.error(`[TokenStore] Failed to decrypt tokens for ${providerId}:`, err.message);
-      return null;
+      throw new Error('Stored Google credentials could not be decrypted');
     }
   },
 
@@ -238,17 +258,8 @@ export const tokenStore = {
       return { isConnected: false, email: null, connectedAt: null };
     }
 
-    const all = readLocalTokens();
-    let record = all[providerId];
-
-    if (!record || (!record.encryptedAccessToken && !record.encryptedRefreshToken)) {
-      // Check Supabase
-      const recovered = await this.getDecryptedTokens(providerId);
-      if (recovered) {
-        const cached = readLocalTokens()[providerId];
-        record = cached;
-      }
-    }
+    await this.getDecryptedTokens(providerId);
+    const record = readLocalTokens()[providerId];
 
     if (!record || (!record.encryptedAccessToken && !record.encryptedRefreshToken)) {
       return { isConnected: false, email: null, connectedAt: null };
@@ -265,11 +276,12 @@ export const tokenStore = {
   /**
    * Remove tokens on disconnect from local cache and Supabase.
    */
-  async deleteTokens(providerId) {
+  async deleteTokens(providerId, expectedVersion) {
     if (!providerId) return false;
 
     if (memoryOnlyTestMode()) {
       const all = readLocalTokens();
+      if (expectedVersion !== undefined && all[providerId]?.encryptedAccessToken !== expectedVersion) return false;
       delete all[providerId];
       writeLocalTokens(all);
       return true;
@@ -277,9 +289,12 @@ export const tokenStore = {
 
     const supabase = getSupabaseClient();
     if (!supabase) throw new Error('Google token storage is unavailable');
-    const { error } = await supabase.from('google_tokens').delete().eq('provider_id', providerId);
+    let query = supabase.from('google_tokens').delete().eq('provider_id', providerId);
+    if (expectedVersion !== undefined) query = query.eq('encrypted_access_token', expectedVersion);
+    const { data, error } = await query.select('provider_id');
     if (error) throw new Error(`Could not remove Google credentials: ${error.message}`);
 
+    if (!data?.length) return false;
     const all = readLocalTokens();
     delete all[providerId];
     writeLocalTokens(all);

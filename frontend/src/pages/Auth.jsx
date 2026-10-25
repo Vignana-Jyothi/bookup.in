@@ -240,8 +240,8 @@ export function Login() {
             navigate(destination === '/dashboard' && returnTo ? returnTo : destination);
 */
             navigate(onboarding?.status === 'completed' ? '/dashboard' : '/onboarding');
-          } catch {
-            navigate('/onboarding');
+          } catch (setupError) {
+            setErrorMsg(setupError.message || 'Could not verify your account setup. Please try signing in again.');
           }
         } else {
           navigate('/onboarding');

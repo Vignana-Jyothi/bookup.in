@@ -17,9 +17,9 @@ export class CashfreeError extends Error {
 
 function safeJson(text) {
   try {
-    return text ? JSON.parse(text) : {};
+    return text ? JSON.parse(text) : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -51,41 +51,49 @@ export class CashfreeClient {
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timer;
     try {
-      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-        method,
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'x-api-version': this.apiVersion,
-          'x-client-id': this.clientId,
-          'x-client-secret': this.clientSecret,
-          ...(idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : {}),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: controller.signal,
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new CashfreeError('Cashfree request timed out', { code: 'CASHFREE_UNREACHABLE', outcome: 'unknown' }));
+        }, this.timeoutMs);
       });
-      const raw = await response.text();
-      const payload = safeJson(raw);
-      if (!response.ok) {
-        const outcome = response.status >= 500 || response.status === 408 || response.status === 429
-          ? 'unknown'
-          : 'definitive';
-        throw new CashfreeError('Cashfree request was not accepted', {
-          status: response.status,
-          code: typeof payload.code === 'string' ? payload.code : 'CASHFREE_REJECTED',
-          outcome,
-          details: {
-            type: typeof payload.type === 'string' ? payload.type : null,
-            message: typeof payload.message === 'string' ? payload.message : null,
+      return await Promise.race([(async () => {
+        const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+          method,
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'x-api-version': this.apiVersion,
+            'x-client-id': this.clientId,
+            'x-client-secret': this.clientSecret,
+            ...(idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : {}),
           },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller.signal,
         });
-      }
-      if (!payload || typeof payload !== 'object') {
-        throw new CashfreeError('Cashfree returned an invalid response', { outcome: 'unknown' });
-      }
-      return payload;
+        const raw = await response.text();
+        const payload = safeJson(raw);
+        if (!response.ok) {
+          const outcome = response.status >= 500 || response.status === 408 || response.status === 429
+            ? 'unknown'
+            : 'definitive';
+          throw new CashfreeError('Cashfree request was not accepted', {
+            status: response.status,
+            code: typeof payload?.code === 'string' ? payload.code : 'CASHFREE_REJECTED',
+            outcome,
+            details: {
+              type: typeof payload?.type === 'string' ? payload.type : null,
+              message: typeof payload?.message === 'string' ? payload.message : null,
+            },
+          });
+        }
+        if (!payload || typeof payload !== 'object') {
+          throw new CashfreeError('Cashfree returned an invalid response', { outcome: 'unknown' });
+        }
+        return payload;
+      })(), deadline]);
     } catch (error) {
       if (error instanceof CashfreeError) throw error;
       const message = error?.name === 'AbortError' ? 'Cashfree request timed out' : 'Cashfree request failed';
@@ -175,6 +183,37 @@ export function findSuccessfulPayment(payments) {
   return payments
     .filter(payment => payment && payment.payment_status === 'SUCCESS')
     .sort((a, b) => String(a.payment_time || '').localeCompare(String(b.payment_time || '')))[0] || null;
+}
+
+export function assertCashfreeOrder(context, order) {
+  if (!context?.providerOrderId || typeof context.providerOrderId !== 'string'
+    || !Number.isSafeInteger(context.amountPaise) || context.amountPaise <= 0 || !context.currency
+    || order?.order_id !== context.providerOrderId
+    || amountToPaise(order?.order_amount) !== context.amountPaise || order?.order_currency !== context.currency) {
+    throw new Error('Authoritative Cashfree order identity, amount or currency mismatch');
+  }
+}
+
+export function assertCashfreeScope(context, client, { purpose = 'service_booking', gatewayAccount = 'calup_primary' } = {}) {
+  if (!context || !['sandbox', 'production'].includes(context.environment) || context.environment !== client.environment
+    || context.gatewayAccount !== gatewayAccount || context.purpose !== purpose || context.paymentPath !== 'cashfree') {
+    throw new Error('Cashfree stored payment environment or account mismatch');
+  }
+}
+
+export function verifiedSuccessfulPayment(context, order, payments) {
+  assertCashfreeOrder(context, order);
+  if (!Array.isArray(payments)) throw new Error('Authoritative Cashfree payment evidence is invalid');
+  const successful = payments.filter(payment => payment?.payment_status === 'SUCCESS');
+  if (!successful.length) return null;
+  const payment = findSuccessfulPayment(successful.filter(value => {
+    const id = value.cf_payment_id;
+    const validId = typeof id === 'number' ? Number.isSafeInteger(id) && id > 0
+      : typeof id === 'string' && id.trim() === id && id.length > 0 && !['undefined', 'null'].includes(id);
+    return validId && amountToPaise(value.payment_amount) === context.amountPaise && value.payment_currency === context.currency;
+  }));
+  if (!payment) throw new Error('Authoritative Cashfree payment identity, amount or currency mismatch');
+  return payment;
 }
 
 export const cashfreeClient = new CashfreeClient();
