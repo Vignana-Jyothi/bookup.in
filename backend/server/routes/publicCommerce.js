@@ -23,7 +23,11 @@ function cookie(req,name) {
   try {return pair ? decodeURIComponent(pair.trim().slice(name.length+1)) : '';} catch {return '';}
 }
 function setCookie(res,name,value,seconds) {
-  res.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/api/v1/public/commerce; HttpOnly; Max-Age=${seconds}; SameSite=${process.env.NODE_ENV==='production' ? 'None; Secure' : 'Lax'}`);
+  const security = process.env.NODE_ENV==='production' ? 'None; Secure' : 'Lax';
+  // Retire the old narrower access cookie before sharing verified identity with bookings.
+  const path = name === 'calup_commerce_access' ? '/api/v1/public' : '/api/v1/public/commerce';
+  res.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=${path}; HttpOnly; Max-Age=${seconds}; SameSite=${security}`);
+  if (name === 'calup_commerce_access') res.append('Set-Cookie',`${name}=; Path=/api/v1/public/commerce; HttpOnly; Max-Age=0; SameSite=${security}`);
 }
 const check=result=>{if(result.error) throw result.error;return result.data;};
 export function createPublicCommerceRouter({client=serviceRoleClient,otp=twoFactorOtpService,trusted=customerRequestIsTrusted,payments=commerceOrderPayments}={}) {

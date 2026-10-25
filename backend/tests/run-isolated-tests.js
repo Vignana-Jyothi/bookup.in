@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 // Full npm test includes real database/notification suites and is intentionally separate.
 const tests = [
+  'test-booking-phone-verification.js',
   'test-booking-calendar-preflight-contract.js',
   'test-calendar-invites.js',
   'test-calendar-route-authorization.js',

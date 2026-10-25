@@ -22,6 +22,8 @@ import { customerBookingService } from '../../services/booking/customerBookingSe
 import { cashfreeCheckoutService, isCashfreeV1Enabled } from '../../services/payments/cashfreeCheckout';
 import { bookingPaymentIntent, shouldResetBookingPaymentIntent } from '../../services/payments/bookingPaymentIntent.js';
 import PendingPayments from '../../components/booking/PendingPayments.jsx';
+import BookingPhoneVerification from '../../components/booking/BookingPhoneVerification.jsx';
+import { currentBookingPhoneVerification } from '../../services/payments/bookingPhoneVerification.js';
 import { isSupabaseConfigured } from '../../services/supabase/supabaseClient';
 import { dbService } from '../../services/supabase/dbService';
 import {
@@ -219,6 +221,7 @@ export default function PublicBookingPage() {
   const [liveDbBusySlots, setLiveDbBusySlots] = useState([]);
   const [customerMeetingType, setCustomerMeetingType] = useState('online');
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '', notes: '' });
+  const [phoneVerification, setPhoneVerification] = useState(null);
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [submittingBooking, setSubmittingBooking] = useState(false);
   const cashfreeIntentRef = useRef(null);
@@ -559,6 +562,11 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
       return;
     }
 
+    if (isCashfreeV1Enabled() && Number(selectedService?.price || 0) > 0 &&
+        !currentBookingPhoneVerification(phoneVerification, slug, customerInfo.phone)) {
+      addToast('Use Send SMS code and Verify phone before continuing to payment.', 'error');
+      return;
+    }
     setSubmittingBooking(true);
     setBookingError(null);
 
@@ -652,6 +660,7 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
         return;
       } catch (err) {
         console.error('Cashfree booking error:', err);
+        if (err.code === 'OTP_REQUIRED') setPhoneVerification(null);
         // A lost response may already have created the hold. Replay exactly the
         // same request/key until the server gives a definitive outcome.
         if (shouldResetBookingPaymentIntent(err)) cashfreeIntentRef.current = null;
@@ -1206,10 +1215,12 @@ const bookingNavigation = <PageLinks label="Booking navigation" links={[{ to: '/
                   placeholder="+91 98765 43210"
                   required
                   value={customerInfo.phone}
-                  onChange={e => { setCustomerInfo({ ...customerInfo, phone: e.target.value }); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: '' })); }}
+                  onChange={e => { setPhoneVerification(null); setCustomerInfo({ ...customerInfo, phone: e.target.value }); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: '' })); }}
                   onBlur={() => handleFieldBlur('phone')}
                 />
                 {fieldErrors.phone && <div id="booking-error-phone" className="form-field-error">{fieldErrors.phone}</div>}
+                {isCashfreeV1Enabled() && Number(selectedService?.price || 0) > 0 && <BookingPhoneVerification
+                  key={`${slug}:${customerInfo.phone}`} slug={slug} phone={customerInfo.phone} verification={phoneVerification} onVerified={setPhoneVerification} />}
               </div>
 
               <div className="form-group">

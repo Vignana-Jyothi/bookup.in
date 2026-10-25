@@ -44,6 +44,8 @@ try {
   assert.equal((await post('/public/test/otp/verify',{challengeId:id,code:'000000'},challengeCookie)).status,400);
   response=await post('/public/test/otp/verify',{challengeId:id,code:'123456'},challengeCookie);
   assert.equal(response.status,200);const accessCookie=response.headers.getSetCookie().find(value=>value.startsWith('calup_commerce_access=')).split(';')[0];
+  assert(response.headers.getSetCookie().some(value=>value.startsWith('calup_commerce_access=') && /Path=\/api\/v1\/public;/.test(value) && /Max-Age=1800/.test(value)),'Verified phone proof reaches booking routes');
+  assert(response.headers.getSetCookie().some(value=>/Path=\/api\/v1\/public\/commerce;/.test(value) && /Max-Age=0/.test(value)),'Legacy narrower proof is retired');
   const token=accessCookie.split('=')[1];assert.equal(crypto.createHash('sha256').update(token).digest('hex'),tokenHash);
   assert.match(response.headers.getSetCookie().join(';'),/HttpOnly/);
   assert.equal((await post(`/public/test/items/${item}/access`,{},'')).status,401);

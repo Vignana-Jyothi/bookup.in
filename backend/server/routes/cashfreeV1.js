@@ -10,6 +10,7 @@ import { decryptToken, encryptToken } from '../utils/crypto.js';
 import { reconcileSubscriptionOrder } from './merchantSubscription.js';
 import { bookingRefundsEnabled, recordBookingRefundWebhook } from '../services/bookingRefundExecution.js';
 import { assertCalendarAvailability } from '../services/calendarAvailability.js';
+import { verifiedBookingContact } from '../services/bookingPhoneVerification.js';
 
 const ATTEMPT_COOKIE = 'calup_attempt_v1';
 const ATTEMPT_REFERENCE_COOKIE = 'calup_attempt_reference_v1';
@@ -388,8 +389,11 @@ export function createCashfreeV1Router() {
     if (input.verificationGrantId && !/^[0-9a-f-]{36}$/i.test(String(input.verificationGrantId))) {
       return sendError(res, 422, 'VALIDATION_FAILED', 'Verification grant is invalid.', reqId);
     }
-    if (!input.verificationGrantId && !config.cashfreeAllowUnverifiedContact) {
-      return sendError(res, 401, 'OTP_REQUIRED', 'Phone verification is required before payment.', reqId);
+    let verificationGrantId = null;
+    if (!config.cashfreeAllowUnverifiedContact) {
+      try { verificationGrantId = await verifiedBookingContact(req, serviceRoleClient, input.providerId, phone); }
+      catch { return sendError(res, 503, 'PHONE_VERIFICATION_UNAVAILABLE', 'Phone verification is temporarily unavailable. Please retry.', reqId); }
+      if (!verificationGrantId) return sendError(res, 401, 'OTP_REQUIRED', 'Verify this phone number using the SMS code before payment.', reqId);
     }
 
     const canonicalInput = {
@@ -439,7 +443,7 @@ export function createCashfreeV1Router() {
       p_idempotency_key: idempotencyKey,
       p_request_hash: requestHash,
       p_environment: config.cashfreeEnvironment,
-      p_verification_grant_id: input.verificationGrantId || null,
+      p_verification_grant_id: verificationGrantId,
       p_policy_accepted_at: input.policyAcceptedAt || null,
       p_meeting_type: canonicalInput.meetingType,
     });
