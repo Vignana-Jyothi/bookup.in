@@ -7,6 +7,7 @@ process.env.NODE_ENV = 'test';
 process.env.TOKEN_STORE_MEMORY_ONLY = 'true';
 
 const testFiles = [
+  'backend/tests/test-college-deployment.js',
   'backend/tests/test-onboarding-flow.js',
   'backend/tests/test-service-links.js',
   'backend/tests/test-accessibility-ui.js',

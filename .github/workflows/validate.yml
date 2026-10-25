@@ -1,0 +1,48 @@
+name: Validate release
+
+on:
+  pull_request:
+  push:
+    branches: [dev, 'migration/**']
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_SUPABASE_URL: https://fixture.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture
+      VITE_APP_URL: https://calup.app
+      VITE_API_URL: /api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: bash -n backend/scripts/college-deploy.sh
+      - run: npm run lint:ci
+      - run: npm run test:isolated
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Write isolated Docker fixtures (no production secrets)
+        run: node backend/scripts/college-env.mjs --fixture
+      - name: Build and start isolated containers
+        run: docker compose -p calup-ci -f docker-compose.yml up -d --build --wait --wait-timeout 180
+        env:
+          FRONTEND_PORT: '14242'
+          FRONTEND_BIND_ADDRESS: 127.0.0.1
+      - run: node backend/scripts/verify-docker.mjs http://127.0.0.1:14242
+      - name: Remove only CI fixture containers
+        if: always()
+        run: docker compose -p calup-ci -f docker-compose.yml down --remove-orphans
+        env:
+          FRONTEND_PORT: '14242'
+          FRONTEND_BIND_ADDRESS: 127.0.0.1

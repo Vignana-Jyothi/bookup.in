@@ -207,13 +207,17 @@ const server = app.listen(config.port, '0.0.0.0', error => {
   console.log(`==================================================\n`);
 });
 
-startCashfreeReconciliationWorker();
-startGoogleCalendarSyncWorker();
-startSubscriptionLifecycleWorker();
-startSupportLifecycleWorker();
-startAppointmentWhatsAppWorker();
-startBookingRefundWorker();
-startCommercePaymentWorker();
+// Docker starts without job ownership until its database/Render split is verified.
+// Existing Render/local installations retain their default behavior.
+if (process.env.BACKGROUND_WORKERS_ENABLED !== 'false') {
+  startCashfreeReconciliationWorker();
+  startGoogleCalendarSyncWorker();
+  startSubscriptionLifecycleWorker();
+  startSupportLifecycleWorker();
+  startAppointmentWhatsAppWorker();
+  startBookingRefundWorker();
+  startCommercePaymentWorker();
+}
 
 export default app;
 export { app, server };

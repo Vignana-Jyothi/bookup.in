@@ -1,4 +1,4 @@
-# BookUp
+# Calup
 
 Appointment booking with a React frontend, Express API, Supabase persistence, Google Calendar, and manual UPI payment verification.
 
@@ -22,6 +22,12 @@ package.json           Shared dependencies and repository commands
 ```
 
 Run commands from the repository root. Dependencies and the lockfile are shared; there is one installation for both applications. Local `node_modules/` and `.venv/` are ignored tooling environments, not source folders.
+
+## College deployment and retained test hosts
+
+The college repository deploys `main` through its existing `gamma` runner to `https://calup.app`. Docker builds the current frontend/backend layout and Nginx routes same-origin API traffic. Vercel and Render remain configured for testing; the Vercel workflow runs only in the original source repository.
+
+Follow the tracked [college deployment runbook](guides/project/college-deployment.md) for settings, first-deployment checks, worker ownership, promotion and rollback. `npm run lint:ci` and `npm run test:isolated` work without the local-only documentation tooling. The full `npm test` additionally needs an isolated integration database/API.
 
 ## Local Development
 

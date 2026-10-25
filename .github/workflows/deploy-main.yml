@@ -1,0 +1,36 @@
+name: Deploy Main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: college-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+  deploy:
+    needs: validate
+    if: github.repository == 'Vignana-Jyothi/bookup.in' && github.ref == 'refs/heads/main'
+    runs-on: gamma
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and write separate build/runtime settings
+        run: node backend/scripts/college-env.mjs
+        env:
+          CALUP_DEPLOY_SECRETS: ${{ toJSON(secrets) }}
+          CALUP_DEPLOY_VARIABLES: ${{ toJSON(vars) }}
+      - name: Build, deploy, verify and restore previous images on failure
+        run: bash backend/scripts/college-deploy.sh
