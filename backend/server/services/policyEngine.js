@@ -3,6 +3,8 @@
  * Core defaults, validations, plain-language formatting, and refund calculations.
  */
 
+import { bookingStartMillis } from '../utils/bookingTime.js';
+
 export const DEFAULT_POLICY = {
   full_refund_hours: 24,
   partial_refund_hours: 2,
@@ -82,7 +84,7 @@ export function calculateCancellationRefund({
   try {
     const sessionDate = booking.booking_date || booking.date;
     const sessionTimeStr = booking.start_time || booking.startTime;
-    const sessionTime = new Date(`${sessionDate}T${sessionTimeStr}:00`).getTime();
+    const sessionTime = bookingStartMillis({ booking_date: sessionDate, start_time: sessionTimeStr }, timezone);
     const now = currentTime instanceof Date ? currentTime.getTime() : new Date(currentTime).getTime();
     hoursNotice = (sessionTime - now) / (1000 * 60 * 60);
   } catch (_e) {
