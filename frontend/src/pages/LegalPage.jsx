@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import PublicSiteHeader from '../components/landing/PublicSiteHeader';
 import PublicSiteFooter from '../components/landing/PublicSiteFooter';
-import { LEGAL_DETAILS, LEGAL_DETAILS_PENDING, LEGAL_PAGES, LEGAL_UPDATED } from '../data/legalContent';
+import { LEGAL_DETAILS, LEGAL_PAGES, LEGAL_UPDATED } from '../data/legalContent';
 import './LegalPage.css';
 
 export default function LegalPage({ slug }) {
@@ -30,11 +30,6 @@ export default function LegalPage({ slug }) {
           <p>{page.summary}</p>
           <p className="legal-updated">Last updated: {LEGAL_UPDATED}</p>
         </div>
-        {LEGAL_DETAILS_PENDING && slug !== 'terms-and-conditions' && (
-          <aside className="legal-review-note" aria-label="Policy review status">
-            Draft for review before commercial launch. Business identity and grievance contact details are still being finalised.
-          </aside>
-        )}
         <div className="legal-layout">
           <nav className="legal-sidebar" aria-label="Policy navigation">
             <h2>Policies and help</h2>

@@ -6,7 +6,6 @@
 .legal-intro h1 { font-family: var(--font-heading); font-size: clamp(30px, 5vw, 48px); line-height: 1.15; margin: 0 0 18px; }
 .legal-intro > p:not(.legal-eyebrow) { line-height: 1.7; color: #575b50; }
 .legal-updated { font-size: 12px; margin-top: 16px; }
-.legal-review-note { border: 1px solid #dccb91; background: #fff9e6; border-radius: 12px; padding: 16px 20px; margin-bottom: 28px; color: #655015; font-size: 13px; line-height: 1.6; }
 .legal-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start; gap: 36px; }
 .legal-sidebar { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 100px; }
 .legal-sidebar h2 { font-size: 13px; font-weight: 700; margin: 12px 0 8px; }

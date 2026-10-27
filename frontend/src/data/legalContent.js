@@ -10,7 +10,6 @@ export const LEGAL_DETAILS = {
   grievanceEmail: env.VITE_GRIEVANCE_EMAIL || SUPPORT_EMAIL || 'support@calup.app',
 };
 export const LEGAL_UPDATED = '16 October 2026';
-export const LEGAL_DETAILS_PENDING = !LEGAL_DETAILS.address || !LEGAL_DETAILS.supportEmail || !LEGAL_DETAILS.grievanceName || !LEGAL_DETAILS.grievanceEmail;
 
 export const LEGAL_PAGES = [
   {
