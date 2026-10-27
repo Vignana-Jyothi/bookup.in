@@ -30,7 +30,7 @@ export default function LegalPage({ slug }) {
           <p>{page.summary}</p>
           <p className="legal-updated">Last updated: {LEGAL_UPDATED}</p>
         </div>
-        {LEGAL_DETAILS_PENDING && (
+        {LEGAL_DETAILS_PENDING && slug !== 'terms-and-conditions' && (
           <aside className="legal-review-note" aria-label="Policy review status">
             Draft for review before commercial launch. Business identity and grievance contact details are still being finalised.
           </aside>

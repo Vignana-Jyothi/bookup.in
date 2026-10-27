@@ -5,6 +5,7 @@ export const LEGAL_DETAILS = {
   name: env.VITE_LEGAL_NAME || 'Calup',
   address: env.VITE_BUSINESS_ADDRESS || '',
   supportEmail: SUPPORT_EMAIL || 'support@calup.app',
+  supportPhone: '+91 9381325063',
   grievanceName: env.VITE_GRIEVANCE_CONTACT_NAME || '',
   grievanceEmail: env.VITE_GRIEVANCE_EMAIL || SUPPORT_EMAIL || 'support@calup.app',
 };
@@ -162,6 +163,7 @@ export const LEGAL_PAGES = [
         `Operator: ${LEGAL_DETAILS.name}.`,
         ...(LEGAL_DETAILS.address ? [`Business address: ${LEGAL_DETAILS.address}`] : []),
         `Support email: ${LEGAL_DETAILS.supportEmail || 'Pending confirmation before commercial launch.'}`,
+        `Contact number: ${LEGAL_DETAILS.supportPhone}`,
         `Grievance contact: ${LEGAL_DETAILS.grievanceName || 'Pending appointment before commercial launch.'}`,
         `Grievance email: ${LEGAL_DETAILS.grievanceEmail || 'Pending confirmation before commercial launch.'}`,
       ] },
